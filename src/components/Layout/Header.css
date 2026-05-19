@@ -1,0 +1,157 @@
+/* src/components/Layout/Header.css */
+/* Local keyframes — self-contained, no dependency on global.css load order */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.app-header {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: var(--header-height);
+  /* background: rgba(13, 19, 32, 0.8); */
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  z-index: 50;
+  transition: left var(--transition-slow);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-page-title {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.header-breadcrumb {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.role-badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.role-badge.superadmin {
+  background: rgba(0, 212, 255, 0.1);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  color: var(--accent-primary);
+}
+
+.role-badge.admin {
+  background: rgba(124, 58, 237, 0.1);
+  border: 1px solid rgba(124, 58, 237, 0.3);
+  color: #a78bfa;
+}
+
+.role-badge.viewer {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #fbbf24;
+}
+
+.header-time {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.refresh-btn {
+  width: 32px;
+  height: 32px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.refresh-btn:hover {
+  background: var(--bg-hover);
+  color: var(--accent-primary);
+  border-color: var(--border-accent);
+  transform: rotate(90deg);
+}
+
+/* ── Theme toggle ── */
+.theme-toggle-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+}
+
+.theme-toggle-track {
+  width: 52px;
+  height: 28px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-medium);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  padding: 3px;
+  transition: all var(--transition-base);
+  position: relative;
+}
+
+[data-theme="dark"] .theme-toggle-track  { background: var(--bg-raised); }
+[data-theme="light"] .theme-toggle-track { background: #e0f2fe; border-color: #7dd3fc; }
+
+.theme-toggle-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-base);
+  position: absolute;
+}
+
+[data-theme="dark"] .theme-toggle-thumb {
+  background: var(--bg-hover);
+  color: var(--accent-primary);
+  left: 3px;
+}
+
+[data-theme="light"] .theme-toggle-thumb {
+  background: #0284c7;
+  color: #fff;
+  left: 27px;
+}
+
+.theme-toggle-btn:hover .theme-toggle-track {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}

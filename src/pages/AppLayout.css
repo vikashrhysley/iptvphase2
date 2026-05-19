@@ -1,0 +1,10 @@
+/* src/pages/AppLayout.css */
+.app-layout {
+  min-height: 100vh;
+  background: var(--bg-void);
+}
+.app-main {
+  padding-top: var(--header-height);
+  min-height: 100vh;
+  transition: margin-left var(--transition-slow);
+}
