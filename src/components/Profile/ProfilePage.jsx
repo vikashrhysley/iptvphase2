@@ -1,6 +1,7 @@
 // src/components/Profile/ProfilePage.js
 import React, { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
+import { apiGetProfile } from '../../services/api';
 import './ProfilePage.css';
 
 // ── Icons ─────────────────────────────────────────────────
@@ -9,62 +10,31 @@ const UserIcon   = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="n
 const ShieldIcon = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>;
 const KeyIcon    = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>;
 const SaveIcon   = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>;
-const CheckIcon  = () => <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>;
-const XIcon      = () => <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+const CheckIcon  = () => <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>;
+const XIcon      = () => <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+const RefreshIcon= () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>;
 
-// ── Role config ────────────────────────────────────────────
-const ROLE_CONFIG = {
-  superadmin: {
-    label:       'Super Admin',
-    description: 'Full system access — can manage all users, devices, licenses and system settings.',
-    permissions: [
-      { label: 'View Dashboard',        allowed: true  },
-      { label: 'Edit Users',            allowed: true  },
-      { label: 'Revoke Accounts',       allowed: true  },
-      { label: 'Manage Devices',        allowed: true  },
-      { label: 'Manage Licenses',       allowed: true  },
-      { label: 'Renew Licenses',        allowed: true  },
-      { label: 'Revoke Licenses',       allowed: true  },
-      { label: 'View Account Column',   allowed: true  },
-      { label: 'System Settings',       allowed: true  },
-      { label: 'User Management',       allowed: true  },
-    ],
-  },
-  admin: {
-    label:       'Admin',
-    description: 'Read-only access to all data. Cannot edit, revoke or manage users.',
-    permissions: [
-      { label: 'View Dashboard',        allowed: true  },
-      { label: 'Edit Users',            allowed: false },
-      { label: 'Revoke Accounts',       allowed: false },
-      { label: 'Manage Devices',        allowed: false },
-      { label: 'Manage Licenses',       allowed: false },
-      { label: 'Renew Licenses',        allowed: false },
-      { label: 'Revoke Licenses',       allowed: false },
-      { label: 'View Account Column',   allowed: true  },
-      { label: 'System Settings',       allowed: false },
-      { label: 'User Management',       allowed: false },
-    ],
-  },
-  viewer: {
-    label:       'Viewer',
-    description: 'View-only access. Account column is hidden. No management capabilities.',
-    permissions: [
-      { label: 'View Dashboard',        allowed: true  },
-      { label: 'Edit Users',            allowed: false },
-      { label: 'Revoke Accounts',       allowed: false },
-      { label: 'Manage Devices',        allowed: false },
-      { label: 'Manage Licenses',       allowed: false },
-      { label: 'Renew Licenses',        allowed: false },
-      { label: 'Revoke Licenses',       allowed: false },
-      { label: 'View Account Column',   allowed: false },
-      { label: 'System Settings',       allowed: false },
-      { label: 'User Management',       allowed: false },
-    ],
-  },
+// ── Permission resource labels ─────────────────────────────
+const RESOURCE_LABELS = {
+  devices:       '📱 Devices',
+  licenses:      '🔑 Licenses',
+  subscriptions: '📋 Subscriptions',
+  payments:      '💳 Payments',
+  users:         '👥 Users',
+  admin_users:   '🛡️ Admin Users',
+  audit_logs:    '📝 Audit Logs',
+  system_config: '⚙️ System Config',
+  risk:          '⚠️ Risk',
 };
 
-// ── Field row ─────────────────────────────────────────────
+const ACTION_COLORS = {
+  read:    { bg: 'rgba(16,185,129,0.1)',  border: 'rgba(16,185,129,0.3)',  color: '#34d399' },
+  write:   { bg: 'rgba(0,212,255,0.1)',   border: 'rgba(0,212,255,0.3)',   color: '#00d4ff' },
+  delete:  { bg: 'rgba(239,68,68,0.1)',   border: 'rgba(239,68,68,0.3)',   color: '#f87171' },
+  execute: { bg: 'rgba(124,58,237,0.1)',  border: 'rgba(124,58,237,0.3)',  color: '#a78bfa' },
+};
+
+// ── Field ──────────────────────────────────────────────────
 function Field({ label, value, className = '' }) {
   return (
     <div className="pp-field">
@@ -74,48 +44,37 @@ function Field({ label, value, className = '' }) {
   );
 }
 
-// ── Edit Modal ────────────────────────────────────────────
-function EditModal({ user, onClose, onSave }) {
+// ── Edit Modal ─────────────────────────────────────────────
+function EditModal({ profile, onClose, onSave }) {
   const [form, setForm] = useState({
-    name:     user?.name     || '',
-    email:    user?.email    || '',
-    username: user?.username || '',
-    phone:    user?.phone    || '',
+    full_name: profile?.full_name || '',
+    email:     profile?.email    || '',
   });
-  const [saving, setSaving] = useState(false);
-  const [showToast, setShowToast] = useState(false);
+  const [saving, setSaving]     = useState(false);
+  const [toast,  setToast]      = useState(false);
 
   const handleSave = async () => {
     setSaving(true);
-    await new Promise(r => setTimeout(r, 600)); // simulate API
+    await new Promise(r => setTimeout(r, 600));
     setSaving(false);
     onSave(form);
-    setShowToast(true);
-    setTimeout(() => { setShowToast(false); onClose(); }, 1200);
+    setToast(true);
+    setTimeout(() => { setToast(false); onClose(); }, 1200);
   };
-
   const onKey = e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') onClose(); };
 
   return (
     <>
-      {showToast && (
-        <div className="pp-toast"><CheckIcon /> Profile updated successfully</div>
-      )}
+      {toast && <div className="pp-toast"><CheckIcon /> Profile updated successfully</div>}
       <div className="pp-modal-overlay" onClick={onClose}>
         <div className="pp-modal" onClick={e => e.stopPropagation()}>
           <div className="pp-modal-title"><EditIcon /> Edit Profile</div>
           <div className="pp-modal-grid">
-            <div className="pp-modal-field">
+            <div className="pp-modal-field full">
               <label className="pp-modal-label">Full Name</label>
-              <input className="pp-modal-input" value={form.name}
-                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                onKeyDown={onKey} autoFocus />
-            </div>
-            <div className="pp-modal-field">
-              <label className="pp-modal-label">Username</label>
-              <input className="pp-modal-input" value={form.username}
-                onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
-                onKeyDown={onKey} />
+              <input className="pp-modal-input" value={form.full_name}
+                onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
+                onKeyDown={onKey} autoFocus placeholder="Enter your full name" />
             </div>
             <div className="pp-modal-field full">
               <label className="pp-modal-label">Email</label>
@@ -123,17 +82,13 @@ function EditModal({ user, onClose, onSave }) {
                 onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
                 onKeyDown={onKey} />
             </div>
-            <div className="pp-modal-field full">
-              <label className="pp-modal-label">Phone</label>
-              <input className="pp-modal-input" value={form.phone}
-                onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-                onKeyDown={onKey} />
-            </div>
           </div>
           <div className="pp-modal-actions">
             <button className="pp-cancel-btn" onClick={onClose}>Cancel</button>
             <button className="pp-save-btn" onClick={handleSave} disabled={saving}>
-              {saving ? <span className="pp-mini-spin" /> : <><SaveIcon /> Save Changes</>}
+              {saving
+                ? <span className="pp-mini-spin" />
+                : <><SaveIcon /> Save Changes</>}
             </button>
           </div>
         </div>
@@ -142,48 +97,74 @@ function EditModal({ user, onClose, onSave }) {
   );
 }
 
-// ── Main Page ─────────────────────────────────────────────
+// ── Main ───────────────────────────────────────────────────
 export default function ProfilePage() {
-  const { user: authUser } = useSelector(s => s.auth);
-  const [showEdit, setShowEdit] = useState(false);
-  const [localUser, setLocalUser] = useState(null);
+  const { accessToken } = useSelector(s => s.auth);
+  const [profile,   setProfile]   = useState(null);
+  const [loading,   setLoading]   = useState(true);
+  const [error,     setError]     = useState(null);
+  const [showEdit,  setShowEdit]  = useState(false);
 
-  // Build full user profile from auth state + sensible defaults
-  useEffect(() => {
-    const role = authUser?.role || 'viewer';
-    setLocalUser({
-      name:     authUser?.name     || authUser?.email?.split('@')[0] || 'System User',
-      email:    authUser?.email    || '—',
-      username: authUser?.username || authUser?.email?.split('@')[0] || '—',
-      phone:    authUser?.phone    || '—',
-      roleId:   authUser?.roleId   || authUser?.role_id || '—',
-      role,
-      joinedDate: new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' }),
-      lastLogin:  new Date().toLocaleString('en-US', { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }),
-      status:     'Active',
-      twoFAEnabled: true,
-    });
-  }, [authUser]);
-
-  if (!localUser) return null;
-
-  const role       = localUser.role;
-  const roleConfig = ROLE_CONFIG[role] || ROLE_CONFIG.viewer;
-  const initials   = localUser.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '??';
-
-  const handleSave = (updated) => {
-    setLocalUser(prev => ({ ...prev, ...updated }));
+  const loadProfile = async () => {
+    if (!accessToken) {
+      setError('No access token available. Please log in again.');
+      setLoading(false);
+      return;
+    }
+    setLoading(true); setError(null);
+    try {
+      const data = await apiGetProfile(accessToken);
+      setProfile(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => { loadProfile(); }, [accessToken]);
+
+  const handleSave = (updated) => setProfile(p => ({ ...p, ...updated }));
+
+  if (loading) return (
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'60vh', gap:14, color:'var(--text-muted)', flexDirection:'column' }}>
+      <div style={{ width:32, height:32, border:'3px solid var(--border-medium)', borderTopColor:'var(--accent-primary)', borderRadius:'50%', animation:'spin 0.7s linear infinite' }} />
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      Loading profile…
+    </div>
+  );
+
+  if (error) return (
+    <div className="profile-page-wrap">
+      <div style={{ background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.25)', borderRadius:'var(--radius-md)', padding:'20px 24px', color:'#f87171', display:'flex', alignItems:'center', gap:12 }}>
+        <span style={{ fontSize:'1.2rem' }}>⚠️</span>
+        <div>
+          <div style={{ fontWeight:600, marginBottom:4 }}>Failed to load profile</div>
+          <div style={{ fontSize:'0.82rem', opacity:0.8 }}>{error}</div>
+        </div>
+        <button onClick={loadProfile} style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6, padding:'7px 14px', background:'rgba(239,68,68,0.12)', border:'1px solid rgba(239,68,68,0.3)', borderRadius:'var(--radius-sm)', color:'#f87171', cursor:'pointer', fontSize:'0.8rem', fontFamily:'var(--font-body)' }}>
+          <RefreshIcon /> Retry
+        </button>
+      </div>
+    </div>
+  );
+
+  if (!profile) return null;
+
+  const role     = profile.role || 'viewer';
+  const initials = profile.full_name
+    ? profile.full_name.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()
+    : profile.email?.slice(0,2).toUpperCase() || '??';
+
+  const roleLabel = role === 'superadmin' ? 'Super Admin' : role.charAt(0).toUpperCase() + role.slice(1);
+  const perms     = profile.permissions || {};
 
   return (
     <div className="profile-page-wrap">
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:0.3}}`}</style>
 
       {showEdit && (
-        <EditModal
-          user={localUser}
-          onClose={() => setShowEdit(false)}
-          onSave={handleSave}
-        />
+        <EditModal profile={profile} onClose={() => setShowEdit(false)} onSave={handleSave} />
       )}
 
       {/* ── Hero ── */}
@@ -196,16 +177,16 @@ export default function ProfilePage() {
         </div>
 
         <div className="pp-hero-info">
-          <div className="pp-name">{localUser.name}</div>
-          <div className="pp-email">{localUser.email}</div>
+          <div className="pp-name">{profile.full_name || profile.email?.split('@')[0] || 'User'}</div>
+          <div className="pp-email">{profile.email}</div>
           <div className="pp-badges">
             <span className={`pp-role-badge ${role}`}>
-              {role === 'superadmin' ? '★' : role === 'admin' ? '◆' : '●'} {roleConfig.label}
+              {role === 'superadmin' ? '★' : role === 'admin' ? '◆' : '●'} {roleLabel}
             </span>
             <span className="pp-status-badge">
               <span className="pp-status-dot" /> Active
             </span>
-            {localUser.twoFAEnabled && (
+            {profile.totp_enabled && (
               <span style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'5px 12px', borderRadius:20, fontSize:'0.72rem', fontWeight:500, background:'rgba(124,58,237,0.08)', border:'1px solid rgba(124,58,237,0.25)', color:'#a78bfa' }}>
                 🔐 2FA Enabled
               </span>
@@ -217,6 +198,11 @@ export default function ProfilePage() {
           <button className="pp-edit-btn" onClick={() => setShowEdit(true)}>
             <EditIcon /> Edit Profile
           </button>
+          <button onClick={loadProfile} title="Refresh" style={{ width:36, height:36, display:'flex', alignItems:'center', justifyContent:'center', background:'var(--bg-raised)', border:'1px solid var(--border-subtle)', borderRadius:'var(--radius-md)', cursor:'pointer', color:'var(--text-muted)', transition:'all 0.15s' }}
+            onMouseEnter={e=>e.currentTarget.style.color='var(--accent-primary)'}
+            onMouseLeave={e=>e.currentTarget.style.color='var(--text-muted)'}>
+            <RefreshIcon />
+          </button>
         </div>
       </div>
 
@@ -226,43 +212,59 @@ export default function ProfilePage() {
         {/* Personal Info */}
         <div className="pp-card">
           <div className="pp-card-title"><UserIcon /> Personal Information</div>
-          <Field label="Full Name"  value={localUser.name} />
-          <Field label="Username"   value={`@${localUser.username}`} className="accent" />
-          <Field label="Email"      value={localUser.email} className="muted" />
-          <Field label="Phone"      value={localUser.phone} className="muted" />
+          <Field label="Full Name" value={profile.full_name || '—'} />
+          <Field label="Email"     value={profile.email}     className="accent" />
+          <Field label="2FA"       value={profile.totp_enabled ? '✓ Enabled' : '✗ Not enabled'} className={profile.totp_enabled ? 'accent' : 'muted'} />
         </div>
 
-        {/* Account Info */}
+        {/* Account */}
         <div className="pp-card">
           <div className="pp-card-title"><KeyIcon /> Account Details</div>
-          <Field label="Role"        value={roleConfig.label} />
-          <Field label="Role ID"     value={localUser.roleId} className="mono" />
-          <Field label="Status"      value="Active" className="accent" />
-          <Field label="2FA"         value="Enabled" className="accent" />
-          <Field label="Last Login"  value={localUser.lastLogin} className="muted" />
+          <Field label="Role"    value={roleLabel} />
+          <Field label="Role ID" value={profile.role_id} className="mono" />
+          <Field label="User ID" value={profile.id}      className="mono" />
+          <Field label="Status"  value="Active"           className="accent" />
         </div>
 
       </div>
 
       {/* ── Permissions ── */}
-      <div className="pp-permissions">
-        <div className="pp-card-title" style={{ marginBottom:0 }}>
-          <ShieldIcon /> Access Permissions
-          <span style={{ marginLeft:'auto', fontSize:'0.78rem', color:'var(--text-muted)', fontWeight:400, textTransform:'none', letterSpacing:0 }}>
-            {roleConfig.description}
-          </span>
-        </div>
-        <div className="pp-perm-list">
-          {roleConfig.permissions.map((p, i) => (
-            <div key={i} className={`pp-perm-item ${p.allowed ? 'allowed' : 'denied'}`}>
-              <div className={`pp-perm-icon ${p.allowed ? 'allowed' : 'denied'}`}>
-                {p.allowed ? <CheckIcon /> : <XIcon />}
+      {Object.keys(perms).length > 0 && (
+        <div className="pp-permissions">
+          <div className="pp-card-title" style={{ marginBottom:16 }}>
+            <ShieldIcon /> Access Permissions
+          </div>
+
+          <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+            {Object.entries(perms).map(([resource, actions]) => (
+              <div key={resource} style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap', padding:'12px 16px', background:'var(--bg-surface)', borderRadius:'var(--radius-sm)', border:'1px solid var(--border-subtle)' }}>
+                {/* Resource name */}
+                <div style={{ minWidth:140, fontSize:'0.82rem', fontWeight:600, color:'var(--text-primary)' }}>
+                  {RESOURCE_LABELS[resource] || resource}
+                </div>
+                {/* Action badges */}
+                <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                  {Array.isArray(actions) && actions.map(action => {
+                    const cfg = ACTION_COLORS[action] || ACTION_COLORS.read;
+                    return (
+                      <span key={action} style={{
+                        padding:'3px 10px', borderRadius:20,
+                        fontSize:'0.7rem', fontWeight:600,
+                        background: cfg.bg,
+                        border: `1px solid ${cfg.border}`,
+                        color: cfg.color,
+                        textTransform:'capitalize',
+                      }}>
+                        {action}
+                      </span>
+                    );
+                  })}
+                </div>
               </div>
-              {p.label}
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
     </div>
   );

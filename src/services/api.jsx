@@ -130,6 +130,22 @@ export const apiLogout = async (accessToken) => {
   return { success: true };
 };
 
+// 6. Get Profile — GET /auth/me
+//    Header: access_token: <access_token>
+//    Response: { success, data: { id, email, full_name, role, role_id, totp_enabled, permissions } }
+export const apiGetProfile = async (accessToken) => {
+  // Try Authorization: Bearer first (standard), also send access_token header
+  // (Postman showed access_token header key, but server may require Bearer)
+  const res = await request(`${BASE}/auth/me`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'access_token':  accessToken,
+    },
+  });
+  return res.data || res;
+};
+
 // ─────────────────────────────────────────────────────────
 // DASHBOARD / DEVICES / LICENSES — dummyjson (mock data)
 // ─────────────────────────────────────────────────────────
