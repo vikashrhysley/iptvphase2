@@ -1,7 +1,7 @@
 // src/services/api.js
 // Real API — http://iptvapp.studyineurope.xyz/api/v1
 
-const BASE = 'http://iptvapp.studyineurope.xyz/api/v1';
+const BASE = 'https://iptvapp.studyineurope.xyz/api/v1';
 
 // Generic request helper
 const request = async (url, options = {}) => {

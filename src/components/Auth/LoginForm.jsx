@@ -177,21 +177,7 @@ function QRSetupStep() {
         )}
       </div>
 
-      {/* Manual secret */}
-      {secret && (
-        <div className="qr-uri-box">
-          <span className="qr-uri-label">Manual entry key</span>
-          <code className="qr-uri-text" style={{ letterSpacing: '0.1em', fontSize: '0.82rem' }}>{secret}</code>
-        </div>
-      )}
 
-      {/* Provisioning URI fallback */}
-      {!secret && provisioningUri && (
-        <div className="qr-uri-box">
-          <span className="qr-uri-label">Or copy this URI</span>
-          <code className="qr-uri-text">{provisioningUri}</code>
-        </div>
-      )}
 
       <p className="otp-note" style={{ marginTop: 18 }}>Enter the 6-digit code shown in the app</p>
 

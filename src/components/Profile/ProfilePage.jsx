@@ -206,62 +206,57 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* ── Info cards ── */}
-      <div className="pp-grid">
-
-        {/* Personal Info */}
-        <div className="pp-card">
-          <div className="pp-card-title"><UserIcon /> Personal Information</div>
+      {/* ── Personal Info card only ── */}
+      <div className="pp-card" style={{ marginBottom:20 }}>
+        <div className="pp-card-title"><UserIcon /> Personal Information</div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px,1fr))', gap:'0 28px' }}>
           <Field label="Full Name" value={profile.full_name || '—'} />
           <Field label="Email"     value={profile.email}     className="accent" />
+          <Field label="User ID"   value={profile.id}        className="mono" />
           <Field label="2FA"       value={profile.totp_enabled ? '✓ Enabled' : '✗ Not enabled'} className={profile.totp_enabled ? 'accent' : 'muted'} />
         </div>
-
-        {/* Account */}
-        <div className="pp-card">
-          <div className="pp-card-title"><KeyIcon /> Account Details</div>
-          <Field label="Role"    value={roleLabel} />
-          <Field label="Role ID" value={profile.role_id} className="mono" />
-          <Field label="User ID" value={profile.id}      className="mono" />
-          <Field label="Status"  value="Active"           className="accent" />
-        </div>
-
       </div>
 
       {/* ── Permissions ── */}
       {Object.keys(perms).length > 0 && (
         <div className="pp-permissions">
-          <div className="pp-card-title" style={{ marginBottom:16 }}>
+          <div className="pp-card-title" style={{ marginBottom:20 }}>
             <ShieldIcon /> Access Permissions
+            <span style={{ marginLeft:'auto', fontSize:'0.75rem', color:'var(--text-muted)', fontWeight:400, textTransform:'none', letterSpacing:0 }}>
+              {Object.keys(perms).length} resources
+            </span>
           </div>
 
-          <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-            {Object.entries(perms).map(([resource, actions]) => (
-              <div key={resource} style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap', padding:'12px 16px', background:'var(--bg-surface)', borderRadius:'var(--radius-sm)', border:'1px solid var(--border-subtle)' }}>
-                {/* Resource name */}
-                <div style={{ minWidth:140, fontSize:'0.82rem', fontWeight:600, color:'var(--text-primary)' }}>
-                  {RESOURCE_LABELS[resource] || resource}
+          <div className="pp-perm-grid">
+            {Object.entries(perms).map(([resource, actions]) => {
+              const ALL_ACTIONS = ['read','write','delete','execute'];
+              return (
+                <div key={resource} className="pp-perm-card">
+                  {/* Resource header */}
+                  <div className="pp-perm-card-header">
+                    <span className="pp-perm-card-icon">
+                      {RESOURCE_LABELS[resource]?.split(' ')[0] || '📁'}
+                    </span>
+                    <span className="pp-perm-card-name">
+                      {(RESOURCE_LABELS[resource]?.split(' ').slice(1).join(' ') || resource).replace(/_/g,' ')}
+                    </span>
+                  </div>
+                  {/* Action checkmarks */}
+                  <div className="pp-perm-actions">
+                    {ALL_ACTIONS.map(action => {
+                      const has = Array.isArray(actions) && actions.includes(action);
+                      const cfg = ACTION_COLORS[action];
+                      return (
+                        <div key={action} className={`pp-perm-action ${has ? 'has' : 'no'}`}>
+                          <span className="pp-perm-action-dot" style={has ? { background: cfg.color } : {}} />
+                          <span className="pp-perm-action-label">{action}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-                {/* Action badges */}
-                <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                  {Array.isArray(actions) && actions.map(action => {
-                    const cfg = ACTION_COLORS[action] || ACTION_COLORS.read;
-                    return (
-                      <span key={action} style={{
-                        padding:'3px 10px', borderRadius:20,
-                        fontSize:'0.7rem', fontWeight:600,
-                        background: cfg.bg,
-                        border: `1px solid ${cfg.border}`,
-                        color: cfg.color,
-                        textTransform:'capitalize',
-                      }}>
-                        {action}
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
