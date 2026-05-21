@@ -10,6 +10,7 @@ const PAGE_TITLES = {
   device:  'Device Management',
   license: 'License Center',
   profile: 'My Profile',
+  trial:   'Trial & Grace Policies',
 };
 
 const RefreshIcon = () => (

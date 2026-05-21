@@ -1,5 +1,5 @@
 // src/services/api.js
-// Real API — http://iptvapp.studyineurope.xyz/api/v1
+// Real API — https://iptvapp.studyineurope.xyz/api/v1
 
 const BASE = 'https://iptvapp.studyineurope.xyz/api/v1';
 
@@ -20,14 +20,45 @@ const request = async (url, options = {}) => {
   try { data = JSON.parse(text); } catch (_) { data = { message: text }; }
 
   if (!res.ok) {
-    // Try to get message from nested data object too
-    const msg =
-      data?.data?.message ||
-      data?.message       ||
-      data?.detail        ||
-      data?.error         ||
-      (typeof data === 'string' ? data : `Request failed (${res.status})`);
-    throw new Error(msg);
+    // Safely extract a string message from any API response shape
+    const extractMsg = (val) => {
+      if (!val) return null;
+      if (typeof val === 'string' && val.length < 300) return val;
+      if (typeof val === 'object') {
+        // Try common nested fields
+        const nested = val.message || val.msg || val.detail || val.error || val.text;
+        if (typeof nested === 'string') return nested;
+        if (Array.isArray(nested)) return nested.map(e => e?.msg || e).join(', ');
+        // Last resort: stringify but only if short
+        const str = JSON.stringify(val);
+        return str.length < 200 ? str : null;
+      }
+      return null;
+    };
+
+    const apiMsg =
+      extractMsg(data?.data?.message) ||
+      extractMsg(data?.data?.error)   ||
+      extractMsg(data?.message)       ||
+      extractMsg(data?.error)         ||
+      extractMsg(data?.detail)        ||
+      extractMsg(data?.errors?.[0]);
+
+    // User-friendly fallback messages per HTTP status
+    const statusMsg = {
+      400: 'Invalid request. Please check your input.',
+      401: 'Incorrect email or password. Please try again.',
+      403: 'Access denied. You do not have permission.',
+      404: 'Resource not found.',
+      409: 'Conflict — this resource already exists.',
+      422: 'Validation error. Please check your input.',
+      429: 'Too many attempts. Please wait and try again.',
+      500: 'Server error. Please try again in a moment.',
+      502: 'Service unavailable. Please try again.',
+      503: 'Service under maintenance. Please try again later.',
+    }[res.status];
+
+    throw new Error(apiMsg || statusMsg || `Request failed (${res.status})`);
   }
   return data;
 };
@@ -236,32 +267,105 @@ const LIC_TYPES  = ['Enterprise','Professional','Starter','Team','Developer'];
 const LIC_BILL   = ['Monthly','Quarterly','Annual','Biennial'];
 const LIC_STATUS = ['active','active','active','expired','expiring_soon'];
 
+// ── License APIs — Real endpoints ────────────────────────
+
+// GET /admin/licenses  — list all licenses
+// Header: Authorization: Bearer <access_token>
 export const apiFetchLicenses = async (accessToken) => {
   if (!accessToken) throw new Error('Unauthorized');
-  const res  = await fetch('https://dummyjson.com/users?limit=20');
-  const data = await res.json();
-  const now  = Date.now();
-  const licenses = data.users.map((u, i) => {
-    const status = LIC_STATUS[i % 5];
-    let expiry = status === 'expired' ? new Date(now-(i+1)*15*86400000)
-               : status === 'expiring_soon' ? new Date(now+(i%25+5)*86400000)
-               : new Date(now+(i+1)*90*86400000);
-    return {
-      id: `LIC-${String(i+1).padStart(4,'0')}`,
-      userId: `USR-${String(u.id).padStart(3,'0')}`,
-      userName: `${u.firstName} ${u.lastName}`,
-      userImage: u.image, userEmail: u.email, username: u.username,
-      licenseType: LIC_TYPES[i%5], seats: [5,10,25,50,100,200][i%6],
-      seatsUsed: Math.floor([5,10,25,50,100,200][i%6]*(0.4+(i%5)*0.1)),
-      expirationDate: expiry.toISOString(),
-      issueDate: new Date(now-(i+1)*120*86400000).toISOString(),
-      billingCycle: LIC_BILL[i%4], status,
-      licenseKey: `${LIC_TYPES[i%5].slice(0,3).toUpperCase()}-${Math.random().toString(36).substring(2,6).toUpperCase()}-${Math.random().toString(36).substring(2,6).toUpperCase()}-${String(u.id).padStart(4,'0')}`,
-    };
+  const res = await request(`${BASE}/admin/licenses`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
-  return { licenses };
+  // Response: { success, data: [ ...licenses ] } or { success, data: { items: [...] } }
+  const raw = res.data || res;
+  const list = Array.isArray(raw) ? raw
+             : Array.isArray(raw.items) ? raw.items
+             : Array.isArray(raw.licenses) ? raw.licenses
+             : [];
+  return { licenses: list.map(normalizeLicense) };
 };
 
-export const apiRenewLicense  = async (_, licenseId) => { await new Promise(r=>setTimeout(r,500)); return { success:true, licenseId, expirationDate: new Date(Date.now()+365*86400000).toISOString(), status:'active' }; };
-export const apiRevokeLicense = async (_, licenseId) => { await new Promise(r=>setTimeout(r,400)); return { success:true, licenseId }; };
-export const apiEditLicense   = async (_, licenseId, data) => { await new Promise(r=>setTimeout(r,400)); return { success:true, licenseId, ...data }; };
+// GET /admin/licenses/:id  — single license detail
+// Header: Authorization: Bearer <access_token>
+export const apiFetchLicenseDetail = async (accessToken, licenseId) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/licenses/${licenseId}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const raw = res.data || res;
+  return normalizeLicense(raw);
+};
+
+// Normalize any API shape → consistent license object for the UI
+const normalizeLicense = (l) => ({
+  id:             l.id             || l.license_id    || '',
+  userName:       l.user_name      || l.userName      || l.name || '—',
+  userEmail:      l.user_email     || l.email         || l.userEmail || '—',
+  userId:         l.user_id        || l.userId        || '—',
+  licenseType:    l.license_type   || l.licenseType   || l.type || '—',
+  status:         l.status         || 'active',
+  expirationDate: l.expiration_date|| l.expiry_date   || l.expires_at || l.expirationDate || null,
+  issueDate:      l.issue_date     || l.issued_at     || l.created_at || l.issueDate || null,
+  billingCycle:   l.billing_cycle  || l.billingCycle  || l.plan || '—',
+  licenseKey:     l.license_key    || l.key           || l.licenseKey || '—',
+  maxDevices:     l.max_devices    || l.maxDevices     || l.device_limit || null,
+  usedDevices:    l.used_devices   || l.usedDevices    || l.active_devices || 0,
+  features:       l.features       || [],
+  notes:          l.notes          || l.description   || '',
+  // keep raw for detail view
+  _raw: l,
+});
+
+export const apiRenewLicense = async (accessToken, licenseId) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/licenses/${licenseId}/renew`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return { success: true, licenseId, ...(res.data || res) };
+};
+
+export const apiRevokeLicense = async (accessToken, licenseId) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/licenses/${licenseId}/revoke`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return { success: true, licenseId, ...(res.data || res) };
+};
+
+export const apiEditLicense = async (accessToken, licenseId, data) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/licenses/${licenseId}`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(data),
+  });
+  return { success: true, licenseId, ...(res.data || res) };
+};
+
+// ── Trial & Grace Policy APIs ─────────────────────────────
+
+// GET /admin/system-config/trial
+// Header: Authorization: Bearer <access_token>
+export const apiGetTrialConfig = async (accessToken) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/system-config/trial`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+// PUT /admin/system-config/trial  — update trial period (superadmin only)
+export const apiUpdateTrialConfig = async (accessToken, data) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/system-config/trial`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(data),
+  });
+  return res.data || res;
+};

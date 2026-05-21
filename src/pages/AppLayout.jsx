@@ -6,6 +6,7 @@ import DashboardTable from '../components/Dashboard/DashboardTable';
 import DevicePage from '../components/Device/DevicePage';
 import LicensePage from '../components/License/LicensePage';
 import ProfilePage from '../components/Profile/ProfilePage';
+import TrialPage from '../components/Trial/TrialPage';
 import './AppLayout.css';
 
 function PlaceholderPage({ title, icon }) {
@@ -32,6 +33,7 @@ export default function AppLayout() {
       case 'device':  return <DevicePage />;
       case 'license': return <LicensePage />;
       case 'profile': return <ProfilePage />;
+      case 'trial':   return <TrialPage />;
       default:        return <DashboardTable />;
     }
   };

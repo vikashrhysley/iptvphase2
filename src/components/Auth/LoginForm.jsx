@@ -110,7 +110,7 @@ function CredentialsStep() {
         </div>
       </div>
 
-      {error && <div className="form-error"><AlertIcon /> {error}</div>}
+      {error && <div className="form-error"><AlertIcon /> {typeof error === 'string' ? error : 'An error occurred. Please try again.'}</div>}
 
       <button className="btn-primary" onClick={submit}
         disabled={loading || !form.email || !form.password} style={{ marginTop: 24 }}>
@@ -183,7 +183,7 @@ function QRSetupStep() {
 
       <OTPRow otp={otp} setOtp={setOtp} onSubmit={submit} dispatch={dispatch} />
 
-      {error && <div className="form-error" style={{ justifyContent:'center' }}><AlertIcon /> {error}</div>}
+      {error && <div className="form-error" style={{ justifyContent:'center' }}><AlertIcon /> {typeof error === 'string' ? error : 'Invalid code. Please try again.'}</div>}
 
       <button className="btn-primary" onClick={submit}
         disabled={loading || otp.join('').length !== 6} style={{ marginTop: 16 }}>
@@ -227,7 +227,7 @@ function OTPVerifyStep() {
 
       <OTPRow otp={otp} setOtp={setOtp} onSubmit={submit} dispatch={dispatch} />
 
-      {error && <div className="form-error" style={{ justifyContent:'center' }}><AlertIcon /> {error}</div>}
+      {error && <div className="form-error" style={{ justifyContent:'center' }}><AlertIcon /> {typeof error === 'string' ? error : 'Invalid code. Please try again.'}</div>}
 
       <button className="btn-primary" onClick={submit}
         disabled={loading || otp.join('').length !== 6} style={{ marginTop: 16 }}>

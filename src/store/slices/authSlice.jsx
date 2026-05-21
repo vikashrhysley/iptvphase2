@@ -6,7 +6,27 @@ import { apiLogin, api2FASetup, api2FAConfirm, apiVerifyTOTP, apiLogout } from '
 export const loginStep1 = createAsyncThunk('auth/loginStep1',
   async ({ email, password }, { rejectWithValue }) => {
     try { return await apiLogin(email, password); }
-    catch (err) { return rejectWithValue(err.message); }
+    catch (err) {
+      // err.message is always a string from our fixed api.js
+      const msg = (err.message || '').toLowerCase();
+      if (msg.includes('incorrect') || msg.includes('invalid') || msg.includes('401') || msg.includes('wrong') || msg.includes('unauthorized')) {
+        return rejectWithValue('Incorrect email or password. Please try again.');
+      }
+      if (msg.includes('not found') || msg.includes('404') || msg.includes('no account')) {
+        return rejectWithValue('No account found with this email address.');
+      }
+      if (msg.includes('429') || msg.includes('too many')) {
+        return rejectWithValue('Too many failed attempts. Please wait a few minutes and try again.');
+      }
+      if (msg.includes('network') || msg.includes('fetch') || msg.includes('failed to fetch')) {
+        return rejectWithValue('Unable to reach the server. Please check your internet connection.');
+      }
+      if (msg.includes('500') || msg.includes('server error')) {
+        return rejectWithValue('Server error. Please try again in a moment.');
+      }
+      // Always return a string — never an object
+      return rejectWithValue(typeof err.message === 'string' ? err.message : 'Login failed. Please try again.');
+    }
   }
 );
 
@@ -22,7 +42,16 @@ export const fetch2FASetup = createAsyncThunk('auth/fetch2FASetup',
 export const confirm2FASetup = createAsyncThunk('auth/confirm2FASetup',
   async ({ totpCode }, { getState, rejectWithValue }) => {
     try { return await api2FAConfirm(getState().auth.tempToken, totpCode); }
-    catch (err) { return rejectWithValue(err.message); }
+    catch (err) {
+      const msg = err.message?.toLowerCase();
+      if (msg?.includes('401') || msg?.includes('invalid') || msg?.includes('incorrect')) {
+        return rejectWithValue('Invalid verification code. Please check your authenticator app and try again.');
+      }
+      if (msg?.includes('expired') || msg?.includes('session')) {
+        return rejectWithValue('Session expired. Please log in again.');
+      }
+      return rejectWithValue(err.message);
+    }
   }
 );
 
@@ -30,7 +59,16 @@ export const confirm2FASetup = createAsyncThunk('auth/confirm2FASetup',
 export const verifyTOTP = createAsyncThunk('auth/verifyTOTP',
   async ({ totpCode }, { getState, rejectWithValue }) => {
     try { return await apiVerifyTOTP(getState().auth.tempToken, totpCode); }
-    catch (err) { return rejectWithValue(err.message); }
+    catch (err) {
+      const msg = err.message?.toLowerCase();
+      if (msg?.includes('401') || msg?.includes('invalid') || msg?.includes('incorrect')) {
+        return rejectWithValue('Invalid code. Please open your authenticator app and enter the current 6-digit code.');
+      }
+      if (msg?.includes('expired') || msg?.includes('session')) {
+        return rejectWithValue('Session expired. Please log in again.');
+      }
+      return rejectWithValue(err.message);
+    }
   }
 );
 
