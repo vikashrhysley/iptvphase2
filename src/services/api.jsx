@@ -15,9 +15,9 @@ const request = async (url, options = {}) => {
     },
   });
 
-  let data = {};
+  let data;
   const text = await res.text();
-  try { data = JSON.parse(text); } catch (_) { data = { message: text }; }
+  try { data = JSON.parse(text); } catch { data = { message: text }; }
 
   if (!res.ok) {
     // Safely extract a string message from any API response shape
@@ -155,7 +155,7 @@ export const apiLogout = async (accessToken) => {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}` },
     });
-  } catch (_) {
+  } catch {
     // Even if API call fails, we clear local state
   }
   return { success: true };
@@ -180,6 +180,15 @@ export const apiGetProfile = async (accessToken) => {
 // ─────────────────────────────────────────────────────────
 // DASHBOARD / DEVICES / LICENSES — dummyjson (mock data)
 // ─────────────────────────────────────────────────────────
+
+export const apiFetchDashboardStats = async (accessToken) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/dashboard/stats`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
 
 export const apiFetchUsers = async (accessToken) => {
   if (!accessToken) throw new Error('Unauthorized');
@@ -262,10 +271,59 @@ export const apiFetchDevices = async (accessToken) => {
 export const apiUpdateDeviceStatus = async (_, deviceId, status) => { await new Promise(r=>setTimeout(r,400)); return { success:true, deviceId, status }; };
 export const apiRevokeDevice       = async (_, deviceId)         => { await new Promise(r=>setTimeout(r,400)); return { success:true, deviceId }; };
 
-// License API
-const LIC_TYPES  = ['Enterprise','Professional','Starter','Team','Developer'];
-const LIC_BILL   = ['Monthly','Quarterly','Annual','Biennial'];
-const LIC_STATUS = ['active','active','active','expired','expiring_soon'];
+// Heartbeat Monitoring APIs
+const cleanParams = (params = {}) => {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') query.set(key, value);
+  });
+  const text = query.toString();
+  return text ? `?${text}` : '';
+};
+
+const normalizePagedResponse = (res) => {
+  const raw = res.data || res;
+  const meta = res.meta || raw.meta || {};
+  const items = Array.isArray(raw) ? raw
+    : Array.isArray(raw.data) ? raw.data
+    : Array.isArray(raw.items) ? raw.items
+    : Array.isArray(raw.results) ? raw.results
+    : [];
+
+  return {
+    items,
+    total: raw.total ?? raw.total_count ?? raw.count ?? meta.total ?? meta.total_count ?? items.length,
+    page: raw.page ?? raw.current_page ?? meta.page ?? null,
+    pageSize: raw.page_size ?? raw.pageSize ?? meta.page_size ?? null,
+  };
+};
+
+export const apiFetchHeartbeatStats = async (accessToken) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/heartbeat/stats`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+export const apiFetchHeartbeatLogs = async (accessToken, params = {}) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/heartbeat/logs${cleanParams(params)}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return normalizePagedResponse(res);
+};
+
+export const apiFetchRiskyHeartbeatDevices = async (accessToken, params = {}) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/heartbeat/risky${cleanParams(params)}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return normalizePagedResponse(res);
+};
 
 // ── License APIs — Real endpoints ────────────────────────
 
@@ -294,29 +352,94 @@ export const apiFetchLicenseDetail = async (accessToken, licenseId) => {
     method: 'GET',
     headers: { Authorization: `Bearer ${accessToken}` },
   });
+  // API response: { success, data: { id, plan_type, status, start_date, expires_at, device, history, snapshot, ... } }
   const raw = res.data || res;
   return normalizeLicense(raw);
 };
 
 // Normalize any API shape → consistent license object for the UI
-const normalizeLicense = (l) => ({
-  id:             l.id             || l.license_id    || '',
-  userName:       l.user_name      || l.userName      || l.name || '—',
-  userEmail:      l.user_email     || l.email         || l.userEmail || '—',
-  userId:         l.user_id        || l.userId        || '—',
-  licenseType:    l.license_type   || l.licenseType   || l.type || '—',
-  status:         l.status         || 'active',
-  expirationDate: l.expiration_date|| l.expiry_date   || l.expires_at || l.expirationDate || null,
-  issueDate:      l.issue_date     || l.issued_at     || l.created_at || l.issueDate || null,
-  billingCycle:   l.billing_cycle  || l.billingCycle  || l.plan || '—',
-  licenseKey:     l.license_key    || l.key           || l.licenseKey || '—',
-  maxDevices:     l.max_devices    || l.maxDevices     || l.device_limit || null,
-  usedDevices:    l.used_devices   || l.usedDevices    || l.active_devices || 0,
-  features:       l.features       || [],
-  notes:          l.notes          || l.description   || '',
-  // keep raw for detail view
-  _raw: l,
-});
+// Normalize API response → consistent UI model
+// Real API shape (from Raw API screenshots):
+// { id, plan_type, status, start_date, expires_at,
+//   device: { id, status, risk_score, device_type, device_brand, device_model, app_version, last_heartbeat_at, enrolled_at },
+//   history: [{ id, change_reason, status, plan_type, expires_at, revoked_at, changed_by, snapshot }],
+//   snapshot: "{...escaped JSON string...}"
+// }
+const parseSnapshot = (snapshot) => {
+  if (!snapshot) return {};
+  if (typeof snapshot === 'object') return snapshot;
+  if (typeof snapshot !== 'string') return {};
+
+  try {
+    const parsed = JSON.parse(snapshot);
+    return typeof parsed === 'string' ? JSON.parse(parsed) : parsed;
+  } catch {
+    return {};
+  }
+};
+
+const getPath = (obj, path) => path.split('.').reduce((val, key) => val?.[key], obj);
+const firstPresent = (...values) => values.find(v => v !== undefined && v !== null && v !== '' && v !== 'null') ?? null;
+
+const getLicenseDate = (source, fields) => firstPresent(
+  ...fields.flatMap(field => [
+    source?.[field],
+    getPath(source, `license.${field}`),
+    getPath(source, `subscription.${field}`),
+    getPath(source, `data.${field}`),
+  ])
+);
+
+const normalizeLicense = (l) => {
+  // snapshot is often an escaped JSON string, and sometimes contains nested license data.
+  const snap = parseSnapshot(l.snapshot);
+  const device = l.device || snap.device || null;
+  const history = Array.isArray(l.history)
+    ? l.history
+    : Array.isArray(snap.history) ? snap.history : [];
+
+  const startFields = [
+    'start_date', 'startDate',
+    'valid_from', 'validFrom',
+    'starts_at', 'startsAt',
+    'started_at', 'startedAt',
+    'activated_at', 'activatedAt',
+    'issue_date', 'issueDate',
+    'issued_at', 'issuedAt',
+    'created_at', 'createdAt',
+    'created',
+  ];
+
+  const expiryFields = [
+    'expires_at', 'expiresAt',
+    'expiration_date', 'expirationDate',
+    'expiry_date', 'expiryDate',
+    'valid_until', 'validUntil',
+    'ends_at', 'endsAt',
+  ];
+
+  const historyStart = history.find(h => getLicenseDate(h, startFields));
+
+  return {
+    id:               l.id                      || l.license_id       || l.uuid || snap.id || snap.license_id || '',
+    planType:         l.plan_type               || l.license_type     || l.licenseType || l.type || snap.plan_type || snap.license_type || '—',
+    status:           l.status                  || snap.status        || 'active',
+    startDate:        getLicenseDate(l, startFields)
+                    || getLicenseDate(snap, startFields)
+                    || getLicenseDate(historyStart, startFields)
+                    || device?.enrolled_at
+                    || null,
+    expiresAt:        getLicenseDate(l, expiryFields)
+                    || getLicenseDate(snap, expiryFields)
+                    || null,
+    // Device object
+    device,
+    // History array
+    history,
+    revocationReason: l.revocation_reason       || snap.revocation_reason || null,
+    notes:            l.notes                   || l.description || snap.notes || snap.description || null,
+  };
+};
 
 export const apiRenewLicense = async (accessToken, licenseId) => {
   if (!accessToken) throw new Error('Unauthorized');
@@ -339,11 +462,30 @@ export const apiRevokeLicense = async (accessToken, licenseId) => {
 export const apiEditLicense = async (accessToken, licenseId, data) => {
   if (!accessToken) throw new Error('Unauthorized');
   const res = await request(`${BASE}/admin/licenses/${licenseId}`, {
-    method: 'PUT',
+    method: 'PATCH',
     headers: { Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify(data),
   });
-  return { success: true, licenseId, ...(res.data || res) };
+  const raw = res.data || res;
+  const hasLicenseShape = raw && typeof raw === 'object' && (
+    raw.id || raw.license_id || raw.plan_type || raw.license_type ||
+    raw.status || raw.expires_at || raw.expiration_date || raw.snapshot
+  );
+
+  const fallback = {};
+  if (data.action === 'extend') fallback.expiresAt = data.expires_at;
+  if (data.action === 'revoke') {
+    fallback.status = 'revoked';
+    fallback.revocationReason = data.reason || null;
+  }
+
+  return {
+    success: true,
+    licenseId,
+    action: data.action,
+    ...fallback,
+    ...(hasLicenseShape ? normalizeLicense(raw) : {}),
+  };
 };
 
 // ── Trial & Grace Policy APIs ─────────────────────────────
@@ -362,10 +504,15 @@ export const apiGetTrialConfig = async (accessToken) => {
 // PUT /admin/system-config/trial  — update trial period (superadmin only)
 export const apiUpdateTrialConfig = async (accessToken, data) => {
   if (!accessToken) throw new Error('Unauthorized');
+  const payload = {
+    ...data,
+    trial_duration_days: data.trial_period_days,
+    max_devices_per_trial: data.max_trial_extensions,
+  };
   const res = await request(`${BASE}/admin/system-config/trial`, {
     method: 'PUT',
     headers: { Authorization: `Bearer ${accessToken}` },
-    body: JSON.stringify(data),
+    body: JSON.stringify(payload),
   });
   return res.data || res;
 };

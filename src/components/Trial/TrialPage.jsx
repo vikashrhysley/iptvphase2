@@ -1,8 +1,17 @@
 // src/components/Trial/TrialPage.jsx
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchTrialConfig, updateTrialConfig, clearToast } from '../../store/slices/trialSlice';
 import './TrialPage.css';
+
+const buildForm = (cfg) => ({
+  trial_period_days:      cfg.trial_duration_days    ?? cfg.trial_period_days  ?? cfg.trial_days           ?? cfg.trialPeriodDays ?? 14,
+  grace_period_days:      cfg.grace_period_days      ?? cfg.grace_days         ?? cfg.gracePeriodDays      ?? 7,
+  max_trial_extensions:   cfg.max_devices_per_trial  ?? cfg.max_trial_extensions ?? cfg.maxExtensions      ?? cfg.max_extensions  ?? 1,
+  extension_days:         cfg.extension_days         ?? cfg.extensionDays      ?? 7,
+  auto_convert:           cfg.auto_convert           ?? cfg.autoConvert        ?? false,
+  notify_before_days:     cfg.notify_before_days     ?? cfg.notifyBeforeDays   ?? 3,
+});
 
 // ── Icons ─────────────────────────────────────────────────
 const SaveIcon    = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>;
@@ -75,39 +84,30 @@ export default function TrialPage() {
   const { user: me } = useSelector(s => s.auth);
   const isSuperAdmin = me?.role === 'superadmin';
 
-  const [form, setForm] = useState(null);
+  const [formDraft, setFormDraft] = useState(null);
   const [dirty, setDirty] = useState(false);
+  const form = formDraft || (config ? buildForm(config) : null);
 
   useEffect(() => { dispatch(fetchTrialConfig()); }, [dispatch]);
 
-  // Sync form when config loads
-  useEffect(() => {
-    if (config && !form) {
-      setForm(buildForm(config));
-    }
-  }, [config]);
-
-  const buildForm = (cfg) => ({
-    trial_period_days:      cfg.trial_period_days      ?? cfg.trial_days         ?? cfg.trialPeriodDays      ?? 14,
-    grace_period_days:      cfg.grace_period_days      ?? cfg.grace_days         ?? cfg.gracePeriodDays      ?? 7,
-    max_trial_extensions:   cfg.max_trial_extensions   ?? cfg.maxExtensions      ?? cfg.max_extensions       ?? 1,
-    extension_days:         cfg.extension_days         ?? cfg.extensionDays      ?? 7,
-    auto_convert:           cfg.auto_convert           ?? cfg.autoConvert        ?? false,
-    notify_before_days:     cfg.notify_before_days     ?? cfg.notifyBeforeDays   ?? 3,
-  });
-
   const handleChange = (key, val) => {
-    setForm(f => ({ ...f, [key]: val }));
+    setFormDraft(f => ({ ...(f || form || {}), [key]: val }));
     setDirty(true);
   };
 
   const handleSave = () => {
-    dispatch(updateTrialConfig({ data: form }));
+    if (!form) return;
+    const currentConfig = config ? buildForm(config) : null;
+    dispatch(updateTrialConfig({
+      data: form,
+      previousConfig: currentConfig,
+    }));
     setDirty(false);
   };
 
   const handleReset = () => {
-    if (config) { setForm(buildForm(config)); setDirty(false); }
+    setFormDraft(null);
+    setDirty(false);
   };
 
   return (
@@ -234,13 +234,6 @@ export default function TrialPage() {
             )}
           </div>
 
-          {/* Raw API data — superadmin */}
-          {isSuperAdmin && config && (
-            <div className="tp-section">
-              <div className="tp-section-title">🔧 Raw API Response</div>
-              <pre className="tp-raw">{JSON.stringify(config, null, 2)}</pre>
-            </div>
-          )}
         </>
       )}
     </div>

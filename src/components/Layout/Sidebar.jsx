@@ -1,5 +1,4 @@
 // src/components/Layout/Sidebar.js
-import React from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { logoutUser } from '../../store/slices/authSlice';
 import './Sidebar.css';
@@ -15,6 +14,12 @@ const DeviceIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
     <line x1="12" y1="18" x2="12.01" y2="18" />
+  </svg>
+);
+
+const HeartbeatIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M22 12h-4l-3 8-6-16-3 8H2" />
   </svg>
 );
 
@@ -51,8 +56,9 @@ const LogoutIcon = () => (
 );
 
 const NAV_ITEMS = [
-  { id: 'home', label: 'Home', icon: <HomeIcon />, page: 'home' },
+  { id: 'home', label: 'Dashboard', icon: <HomeIcon />, page: 'home' },
   { id: 'device', label: 'Device', icon: <DeviceIcon />, page: 'device' },
+  { id: 'heartbeat', label: 'Heartbeat', icon: <HeartbeatIcon />, page: 'heartbeat' },
   { id: 'license', label: 'License', icon: <LicenseIcon />, page: 'license' },
   { id: 'trial', label: 'Trial & Grace', icon: <TrialIcon />, page: 'trial' },
 ];

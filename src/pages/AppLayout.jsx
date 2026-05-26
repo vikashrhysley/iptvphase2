@@ -1,25 +1,14 @@
 // src/pages/AppLayout.js
-import React, { useState } from 'react';
+import { useState } from 'react';
 import Sidebar from '../components/Layout/Sidebar';
 import Header from '../components/Layout/Header';
 import DashboardTable from '../components/Dashboard/DashboardTable';
 import DevicePage from '../components/Device/DevicePage';
+import HeartbeatPage from '../components/Heartbeat/HeartbeatPage';
 import LicensePage from '../components/License/LicensePage';
 import ProfilePage from '../components/Profile/ProfilePage';
 import TrialPage from '../components/Trial/TrialPage';
 import './AppLayout.css';
-
-function PlaceholderPage({ title, icon }) {
-  return (
-    <div className="dashboard-content">
-      <div className="placeholder-page">
-        <div className="placeholder-icon">{icon}</div>
-        <div className="placeholder-title">{title}</div>
-        <div className="placeholder-text">This section is under construction.</div>
-      </div>
-    </div>
-  );
-}
 
 export default function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
@@ -31,6 +20,7 @@ export default function AppLayout() {
     switch (activePage) {
       case 'home':    return <DashboardTable />;
       case 'device':  return <DevicePage />;
+      case 'heartbeat': return <HeartbeatPage />;
       case 'license': return <LicensePage />;
       case 'profile': return <ProfilePage />;
       case 'trial':   return <TrialPage />;

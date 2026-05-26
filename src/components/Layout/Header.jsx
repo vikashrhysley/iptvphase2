@@ -1,13 +1,15 @@
 // src/components/Layout/Header.js
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { fetchUsers } from '../../store/slices/dashboardSlice';
+import { fetchDashboardStats } from '../../store/slices/dashboardSlice';
+import { fetchHeartbeatStats } from '../../store/slices/heartbeatSlice';
 import { useTheme } from '../../context/ThemeContext';
 import './Header.css';
 
 const PAGE_TITLES = {
   home:    'Dashboard',
   device:  'Device Management',
+  heartbeat: 'Heartbeat Monitoring',
   license: 'License Center',
   profile: 'My Profile',
   trial:   'Trial & Grace Policies',
@@ -52,6 +54,13 @@ export default function Header({ activePage, sidebarCollapsed }) {
   }, []);
 
   const left = sidebarCollapsed ? 'var(--sidebar-collapsed)' : 'var(--sidebar-width)';
+  const handleRefresh = () => {
+    if (activePage === 'heartbeat') {
+      dispatch(fetchHeartbeatStats());
+      return;
+    }
+    dispatch(fetchDashboardStats());
+  };
 
   return (
     <header className="app-header" style={{ left }}>
@@ -81,7 +90,7 @@ export default function Header({ activePage, sidebarCollapsed }) {
           </span>
         </button>
 
-        <button className="refresh-btn" onClick={() => dispatch(fetchUsers())} title="Refresh data">
+        <button className="refresh-btn" onClick={handleRefresh} title="Refresh data">
           <RefreshIcon />
         </button>
       </div>

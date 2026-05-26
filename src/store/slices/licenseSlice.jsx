@@ -5,6 +5,12 @@ import {
   apiRenewLicense, apiRevokeLicense, apiEditLicense,
 } from '../../services/api';
 
+const licenseActionMessage = {
+  extend: 'License expiry extended successfully',
+  set_ttl: 'License token TTL updated successfully',
+  revoke: 'License revoked successfully',
+};
+
 export const fetchLicenses = createAsyncThunk('licenses/fetchAll',
   async (_, { getState, rejectWithValue }) => {
     try {
@@ -101,7 +107,8 @@ const licenseSlice = createSlice({
        s.actionLoading = null; s.editModal = null;
        const l = s.licenses.find(l => l.id === a.payload.licenseId);
        if (l) Object.assign(l, a.payload);
-       s.toast = { type: 'success', msg: 'License updated' };
+       if (s.selectedDetail?.id === a.payload.licenseId) Object.assign(s.selectedDetail, a.payload);
+       s.toast = { type: 'success', msg: licenseActionMessage[a.payload.action] || 'License updated' };
      })
      .addCase(editLicense.rejected, (s, a) => { s.actionLoading = null; s.toast = { type: 'error', msg: a.payload }; });
   },

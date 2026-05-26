@@ -1,9 +1,9 @@
 // src/components/License/LicensePage.jsx
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchLicenses, fetchLicenseDetail,
-  renewLicense, revokeLicense, editLicense,
+  editLicense,
   clearToast, openEditModal, closeEditModal, clearDetail,
 } from '../../store/slices/licenseSlice';
 import './LicensePage.css';
@@ -11,29 +11,78 @@ import './LicensePage.css';
 const PAGE_SIZE = 8;
 
 // ── Icons ────────────────────────────────────────────────
-const SearchIcon  = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
-const RefreshIcon = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>;
-const EditIcon    = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
-const RenewIcon   = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>;
-const RevokeIcon  = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>;
-const SaveIcon    = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>;
-const BackIcon    = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>;
-const ChevLeft    = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>;
-const ChevRight   = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>;
+const SearchIcon = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
+const RefreshIcon= () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>;
+const EditIcon   = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
+const RenewIcon  = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>;
+const RevokeIcon = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>;
+const SaveIcon   = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>;
+const BackIcon   = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>;
+const ChevLeft   = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>;
+const ChevRight  = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>;
 
 // ── Helpers ───────────────────────────────────────────────
-const fmt     = (iso) => iso ? new Date(iso).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }) : '—';
-const daysLeft = (iso) => iso ? Math.ceil((new Date(iso) - Date.now()) / 86400000) : null;
+const fmt = (iso) => {
+  if (!iso || iso === 'null') return '—';
+  try { return new Date(iso).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }); }
+  catch { return '—'; }
+};
+const fmtDateTime = (iso) => {
+  if (!iso || iso === 'null') return '—';
+  try { return new Date(iso).toLocaleString('en-US', { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }); }
+  catch { return '—'; }
+};
+const daysLeft = (iso) => {
+  if (!iso || iso === 'null') return null;
+  try { return Math.ceil((new Date(iso) - Date.now()) / 86400000); }
+  catch { return null; }
+};
 
 const ST = {
   active:        { bg:'rgba(16,185,129,0.1)',  border:'rgba(16,185,129,0.3)',  color:'#34d399' },
+  trial:         { bg:'rgba(124,58,237,0.1)',  border:'rgba(124,58,237,0.3)',  color:'#a78bfa' },
   expiring_soon: { bg:'rgba(245,158,11,0.1)',  border:'rgba(245,158,11,0.3)',  color:'#fbbf24' },
   expired:       { bg:'rgba(239,68,68,0.08)',  border:'rgba(239,68,68,0.25)',  color:'#f87171' },
   revoked:       { bg:'rgba(100,100,100,0.1)', border:'rgba(100,100,100,0.3)', color:'#94a3b8' },
-  trial:         { bg:'rgba(124,58,237,0.1)',  border:'rgba(124,58,237,0.3)',  color:'#a78bfa' },
+};
+const stStyle = (s) => ST[s] || ST.active;
+const stLabel = (s) => s === 'expiring_soon' ? 'Expiring Soon' : s ? s.charAt(0).toUpperCase()+s.slice(1) : 'Active';
+
+const DEVICE_ICONS = { phone:'📱', desktop:'🖥️', tablet:'📟', mobile:'📱', web:'🌐', tv:'📺', default:'📱' };
+
+const buildEditForm = (license) => ({
+  action: license?.defaultAction || 'extend',
+  expires_at: license?.expiresAt ? license.expiresAt.slice(0,10) : '',
+  token_ttl_seconds: '',
+  revoke_reason: '',
+});
+
+const buildLicensePatchPayload = (form) => {
+  if (form.action === 'extend') {
+    return {
+      action: 'extend',
+      expires_at: form.expires_at,
+    };
+  }
+
+  if (form.action === 'set_ttl') {
+    return {
+      action: 'set_ttl',
+      token_ttl_seconds: Number(form.token_ttl_seconds),
+    };
+  }
+
+  return {
+    action: 'revoke',
+    reason: form.revoke_reason?.trim() || undefined,
+  };
 };
 
-const DEVICE_ICONS = { phone:'📱', desktop:'🖥️', tablet:'📟', mobile:'📱', web:'🌐', tv:'📺' };
+const isLicensePatchValid = (form) => {
+  if (form.action === 'extend') return Boolean(form.expires_at);
+  if (form.action === 'set_ttl') return Number(form.token_ttl_seconds) > 0;
+  return true;
+};
 
 // ── Toast ─────────────────────────────────────────────────
 function Toast() {
@@ -43,65 +92,63 @@ function Toast() {
     if (toast) { const t = setTimeout(() => dispatch(clearToast()), 3200); return () => clearTimeout(t); }
   }, [toast, dispatch]);
   if (!toast) return null;
-  return (
-    <div className={`toast ${toast.type === 'success' ? 'success' : 'error'}`}>
-      {toast.type === 'success' ? '✓' : '✕'} {toast.msg}
-    </div>
-  );
+  return <div className={`toast ${toast.type === 'success' ? 'success' : 'error'}`}>{toast.type==='success'?'✓':'✕'} {toast.msg}</div>;
 }
 
 // ── Edit Modal ────────────────────────────────────────────
 function EditModal() {
   const dispatch = useDispatch();
   const { editModal, actionLoading } = useSelector(s => s.licenses);
-  const [form, setForm] = useState({ plan_type:'', status:'', expires_at:'' });
-
-  useEffect(() => {
-    if (editModal) setForm({
-      plan_type:  editModal.plan_type  || editModal.licenseType || '',
-      status:     editModal.status     || '',
-      expires_at: editModal.expires_at ? editModal.expires_at.slice(0,10)
-                : editModal.expirationDate ? editModal.expirationDate.slice(0,10) : '',
-    });
-  }, [editModal]);
+  const [form, setForm] = useState(() => buildEditForm(editModal));
 
   if (!editModal) return null;
   const busy = actionLoading === editModal.id;
-  const onKey = e => { if (e.key === 'Escape') dispatch(closeEditModal()); };
+  const canSave = isLicensePatchValid(form);
 
   return (
     <div className="lc-modal-overlay" onClick={() => dispatch(closeEditModal())}>
       <div className="lc-modal" onClick={e => e.stopPropagation()}>
-        <div className="lc-modal-title"><EditIcon /> Edit License</div>
+        <div className="lc-modal-title"><EditIcon /> Manage License</div>
         <div className="lc-modal-grid">
-          <div className="lc-modal-field">
-            <label className="lc-modal-label">Plan Type</label>
-            <input className="lc-modal-input" value={form.plan_type}
-              onChange={e => setForm(f => ({...f, plan_type: e.target.value}))}
-              onKeyDown={onKey} autoFocus />
-          </div>
-          <div className="lc-modal-field">
-            <label className="lc-modal-label">Status</label>
-            <select className="lc-modal-select" value={form.status}
-              onChange={e => setForm(f => ({...f, status: e.target.value}))}>
-              <option value="active">Active</option>
-              <option value="expired">Expired</option>
-              <option value="revoked">Revoked</option>
-              <option value="trial">Trial</option>
+          <div className="lc-modal-field full">
+            <label className="lc-modal-label">Action</label>
+            <select className="lc-modal-select" value={form.action}
+              onChange={e => setForm({...buildEditForm(editModal), action:e.target.value})}
+              autoFocus>
+              <option value="extend">Extend expiry</option>
+              <option value="set_ttl">Override token TTL</option>
+              <option value="revoke">Revoke license</option>
             </select>
           </div>
-          <div className="lc-modal-field full">
-            <label className="lc-modal-label">Expiration Date</label>
-            <input className="lc-modal-input" type="date" value={form.expires_at}
-              onChange={e => setForm(f => ({...f, expires_at: e.target.value}))}
-              onKeyDown={onKey} />
-          </div>
+          {form.action === 'extend' && (
+            <div className="lc-modal-field full">
+              <label className="lc-modal-label">New Expiration Date</label>
+              <input className="lc-modal-input" type="date" value={form.expires_at}
+                onChange={e => setForm(f=>({...f,expires_at:e.target.value}))} />
+            </div>
+          )}
+          {form.action === 'set_ttl' && (
+            <div className="lc-modal-field full">
+              <label className="lc-modal-label">Token TTL Seconds</label>
+              <input className="lc-modal-input" type="number" min="1" value={form.token_ttl_seconds}
+                placeholder="Example: 3600"
+                onChange={e => setForm(f=>({...f,token_ttl_seconds:e.target.value}))} />
+            </div>
+          )}
+          {form.action === 'revoke' && (
+            <div className="lc-modal-field full">
+              <label className="lc-modal-label">Revocation Reason</label>
+              <textarea className="lc-modal-input" rows={3} value={form.revoke_reason}
+                placeholder="Optional reason"
+                onChange={e => setForm(f=>({...f,revoke_reason:e.target.value}))} />
+            </div>
+          )}
         </div>
         <div className="lc-modal-actions">
           <button className="lc-modal-cancel" onClick={() => dispatch(closeEditModal())}>Cancel</button>
-          <button className="lc-modal-save" disabled={busy}
-            onClick={() => dispatch(editLicense({ licenseId: editModal.id, data: form }))}>
-            {busy ? <span className="lc-mini-spin" /> : <><SaveIcon /> Save</>}
+          <button className="lc-modal-save" disabled={busy || !canSave}
+            onClick={() => dispatch(editLicense({ licenseId: editModal.id, data: buildLicensePatchPayload(form) }))}>
+            {busy ? <span className="lc-mini-spin"/> : <><SaveIcon /> Apply</>}
           </button>
         </div>
       </div>
@@ -122,7 +169,7 @@ function Pagination({ current, total, totalItems, onPrev, onNext, onPage }) {
       <div className="lp-controls">
         <button className="lp-nav" onClick={onPrev} disabled={current===1}><ChevLeft /> Previous</button>
         <div className="lp-pages">
-          {pages.map(p => typeof p==='string'
+          {pages.map(p=>typeof p==='string'
             ? <span key={p} className="lp-ellipsis">…</span>
             : <button key={p} className={`lp-page${p===current?' active':''}`} onClick={()=>onPage(p)}>{p}</button>)}
         </div>
@@ -132,19 +179,26 @@ function Pagination({ current, total, totalItems, onPrev, onNext, onPage }) {
   );
 }
 
-// ── Detail field helper ───────────────────────────────────
-const DField = ({ label, value, accent, mono, wide }) => (
-  <div style={{ gridColumn: wide ? '1/-1' : 'auto', marginBottom:14 }}>
+// ── Info field ────────────────────────────────────────────
+const IF = ({ label, value, accent, mono }) => (
+  <div style={{ marginBottom:14 }}>
     <div style={{ fontSize:'0.7rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:3 }}>{label}</div>
-    <div style={{ fontSize:'0.875rem', fontWeight:500, wordBreak:'break-all', lineHeight:1.5,
-      color: accent ? 'var(--accent-primary)' : 'var(--text-primary)',
-      fontFamily: mono ? 'monospace' : 'inherit', fontSize: mono ? '0.78rem' : '0.875rem' }}>
+    <div style={{ fontWeight:500, color: accent?'var(--accent-primary)':'var(--text-primary)',
+      fontFamily: mono?'monospace':'inherit', fontSize: mono?'0.78rem':'0.875rem', wordBreak:'break-all' }}>
       {value ?? '—'}
     </div>
   </div>
 );
 
-// ── License Detail Panel ──────────────────────────────────
+// ── Info card ─────────────────────────────────────────────
+const IC = ({ title, children, fullWidth }) => (
+  <div className="ld-card" style={ fullWidth ? { gridColumn:'1/-1' } : {}}>
+    <div className="ld-card-title">{title}</div>
+    {children}
+  </div>
+);
+
+// ── Detail Panel ──────────────────────────────────────────
 function LicenseDetail({ onBack }) {
   const dispatch = useDispatch();
   const { selectedDetail: l, detailLoading, actionLoading } = useSelector(s => s.licenses);
@@ -158,71 +212,70 @@ function LicenseDetail({ onBack }) {
     </div>
   );
 
-  const raw   = l._raw || l;
-  const st    = ST[l.status] || ST.active;
-  const busy  = actionLoading === l.id;
-  const days  = daysLeft(raw.expires_at || l.expirationDate);
+  const st   = stStyle(l.status);
+  const busy = actionLoading === l.id;
+  const days = daysLeft(l.expiresAt);
 
-  // Parse device array if present
-  const devices = raw.devices || raw.allowed_devices || [];
-  // Risk score
-  const riskScore = raw.risk_score ?? raw.riskScore ?? null;
+  // Device from API
+  const dev = l.device || {};
+  const devIcon = DEVICE_ICONS[dev.device_type?.toLowerCase()] || DEVICE_ICONS.default;
+
+  // History from API
+  const history = l.history || [];
+
+  // Risk score from device
+  const riskScore = dev.risk_score ?? null;
   const riskColor = riskScore === null ? 'var(--text-muted)'
     : riskScore >= 70 ? '#f87171'
     : riskScore >= 40 ? '#fbbf24'
     : '#34d399';
 
   return (
-    <div className="license-page" style={{ maxWidth: 900 }}>
+    <div className="license-page" style={{ maxWidth:900 }}>
 
-      {/* Back */}
-      <button onClick={onBack} className="ld-back-btn">
-        <BackIcon /> Back to Licenses
-      </button>
+      {/* Back button */}
+      <button onClick={onBack} className="ld-back-btn"><BackIcon /> Back to Licenses</button>
 
-      {/* Hero card */}
+      {/* Hero */}
       <div className="ld-hero">
         <div className="ld-hero-bar" />
         <div className="ld-hero-top">
           <div>
-            <div className="ld-hero-title">
-              {raw.plan_type || l.licenseType || 'License'} Plan
-            </div>
-            <div className="ld-hero-id">ID: {l.id}</div>
-            <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:10 }}>
+            <div className="ld-hero-title">{l.planType || 'License'} Plan</div>
+            <div className="ld-hero-id">ID: <code style={{ fontSize:'0.78rem', opacity:0.7 }}>{l.id}</code></div>
+            <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:12 }}>
               <span className="ld-badge" style={{ background:st.bg, border:`1px solid ${st.border}`, color:st.color }}>
-                ● {l.status === 'expiring_soon' ? 'Expiring Soon' : (l.status||'active').charAt(0).toUpperCase()+(l.status||'').slice(1)}
+                ● {stLabel(l.status)}
               </span>
               {days !== null && days >= 0 && l.status !== 'revoked' && (
                 <span className="ld-badge" style={{ background:'rgba(255,255,255,0.04)', border:'1px solid var(--border-subtle)', color:'var(--text-muted)' }}>
-                  {days} days remaining
+                  {days}d remaining
                 </span>
               )}
-              {riskScore !== null && (
-                <span className="ld-badge" style={{ background:'rgba(0,0,0,0.2)', border:`1px solid ${riskColor}33`, color: riskColor }}>
-                  ⚠ Risk: {riskScore}
+              {days !== null && days < 0 && (
+                <span className="ld-badge" style={{ background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.25)', color:'#f87171' }}>
+                  Expired {Math.abs(days)}d ago
                 </span>
               )}
             </div>
           </div>
 
-          {/* Actions — Change / Revoke / Edit */}
+          {/* Action buttons */}
           {canEdit && (
             <div className="ld-actions">
-              {/* Change = Renew */}
               {l.status !== 'revoked' && (
                 <button className="ld-btn ld-btn-change" disabled={busy}
-                  onClick={() => dispatch(renewLicense({ licenseId: l.id }))}>
-                  {busy ? '…' : <><RenewIcon /> Change</>}
+                  onClick={() => dispatch(openEditModal({ ...l, defaultAction: 'extend' }))}>
+                  <RenewIcon /> Change
                 </button>
               )}
               <button className="ld-btn ld-btn-edit" disabled={busy}
-                onClick={() => dispatch(openEditModal(raw))}>
+                onClick={() => dispatch(openEditModal({ ...l, defaultAction: 'extend' }))}>
                 <EditIcon /> Edit
               </button>
               {l.status !== 'revoked' && (
                 <button className="ld-btn ld-btn-revoke" disabled={busy}
-                  onClick={() => { if(window.confirm('Revoke this license? This cannot be undone.')) dispatch(revokeLicense({ licenseId: l.id })); }}>
+                  onClick={() => dispatch(openEditModal({ ...l, defaultAction: 'revoke' }))}>
                   <RevokeIcon /> Revoke
                 </button>
               )}
@@ -231,97 +284,128 @@ function LicenseDetail({ onBack }) {
         </div>
       </div>
 
-      {/* Info grid */}
+      {/* Detail grid */}
       <div className="ld-grid">
 
-        {/* Core details */}
-        <div className="ld-card">
-          <div className="ld-card-title">🔑 License Details</div>
-          <DField label="License ID" value={l.id}                          mono />
-          <DField label="Plan Type"  value={raw.plan_type || l.licenseType} accent />
-          <DField label="Status"     value={(l.status||'—').charAt(0).toUpperCase()+(l.status||'').slice(1)} />
-          <DField label="Start Date" value={fmt(raw.start_date || raw.created_at || l.issueDate)} />
-          <DField label="Expires"    value={fmt(raw.expires_at || l.expirationDate)} />
-          {raw.revocation_reason && (
-            <DField label="Revocation Reason" value={raw.revocation_reason} />
-          )}
-        </div>
+        {/* License Info */}
+        <IC title="🔑 License Details">
+          <IF label="License ID" value={l.id}         mono />
+          <IF label="Plan Type"  value={l.planType}   accent />
+          <IF label="Status"     value={stLabel(l.status)} />
+          <IF label="Start Date" value={fmt(l.startDate)} />
+          <IF label="Expires"    value={fmt(l.expiresAt)} />
+          {l.revocationReason && <IF label="Revocation Reason" value={l.revocationReason} />}
+        </IC>
 
-        {/* Enrollment & risk */}
-        <div className="ld-card">
-          <div className="ld-card-title">📋 Enrollment & Risk</div>
-          <DField label="Enrolled"      value={raw.enrolled !== undefined ? (raw.enrolled ? 'Yes' : 'No') : raw.enrollment_date ? fmt(raw.enrollment_date) : '—'} />
-          <DField label="Enrolled Date" value={fmt(raw.enrollment_date || raw.enrolled_at)} />
-          <DField label="Risk Score"    value={riskScore !== null ? `${riskScore} / 100` : '—'} />
-          {riskScore !== null && (
-            <div style={{ marginTop:4 }}>
-              <div style={{ height:5, background:'var(--bg-raised)', borderRadius:3, overflow:'hidden', marginBottom:4 }}>
-                <div style={{ height:'100%', width:`${Math.min(100,riskScore)}%`, background:riskColor, borderRadius:3, transition:'width 0.4s ease' }} />
+        {/* Device */}
+        {dev.id ? (
+          <IC title={`${devIcon} Device`}>
+            <div style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', background:'var(--bg-surface)', border:'1px solid var(--border-subtle)', borderRadius:'var(--radius-md)', marginBottom:14 }}>
+              <span style={{ fontSize:'1.4rem' }}>{devIcon}</span>
+              <div>
+                <div style={{ fontSize:'0.875rem', fontWeight:600, color:'var(--text-primary)', textTransform:'capitalize' }}>
+                  {dev.device_brand ? `${dev.device_brand} ` : ''}{dev.device_type || 'Device'}
+                </div>
+                <div style={{ fontSize:'0.75rem', color:'var(--text-muted)' }}>{dev.device_model || '—'}</div>
               </div>
-              <div style={{ fontSize:'0.72rem', color:'var(--text-muted)' }}>
-                {riskScore < 40 ? 'Low risk' : riskScore < 70 ? 'Medium risk' : 'High risk'}
-              </div>
+              <span style={{ marginLeft:'auto', padding:'3px 10px', borderRadius:20, fontSize:'0.7rem', fontWeight:600,
+                background: dev.status==='active' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.08)',
+                border: `1px solid ${dev.status==='active' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.25)'}`,
+                color: dev.status==='active' ? '#34d399' : '#f87171' }}>
+                {dev.status || 'unknown'}
+              </span>
             </div>
-          )}
-          {raw.revocation_reason && (
-            <DField label="Revocation Reason" value={raw.revocation_reason} />
-          )}
-        </div>
-
-        {/* Devices */}
-        <div className="ld-card" style={{ gridColumn: devices.length > 0 ? '1/-1' : 'auto' }}>
-          <div className="ld-card-title">📱 Devices</div>
-          {devices.length === 0 ? (
-            <div style={{ fontSize:'0.82rem', color:'var(--text-muted)' }}>
-              {raw.device_type
-                ? <div style={{ display:'flex', alignItems:'center', gap:8, fontSize:'0.875rem', color:'var(--text-primary)' }}>
-                    <span style={{ fontSize:'1.2rem' }}>{DEVICE_ICONS[raw.device_type?.toLowerCase()] || '📱'}</span>
-                    {raw.device_type}
+            <IF label="Device ID"    value={dev.id}          mono />
+            <IF label="App Version"  value={dev.app_version} accent />
+            <IF label="Enrolled At"  value={fmtDateTime(dev.enrolled_at)} />
+            <IF label="Last Heartbeat" value={dev.last_heartbeat_at ? fmtDateTime(dev.last_heartbeat_at) : 'Never'} />
+            {/* Risk score */}
+            {riskScore !== null && (
+              <div style={{ marginTop:8 }}>
+                <div style={{ fontSize:'0.7rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Risk Score</div>
+                <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                  <div style={{ flex:1, height:6, background:'var(--bg-raised)', borderRadius:3, overflow:'hidden' }}>
+                    <div style={{ height:'100%', width:`${Math.min(100,riskScore)}%`, background:riskColor, borderRadius:3 }} />
                   </div>
-                : 'No device information available'}
-            </div>
-          ) : (
-            <div style={{ display:'flex', flexWrap:'wrap', gap:10 }}>
-              {devices.map((d, i) => {
-                const type = (typeof d === 'string' ? d : d.type || d.device_type || '').toLowerCase();
+                  <span style={{ fontSize:'0.82rem', fontWeight:600, color:riskColor, minWidth:32 }}>{riskScore}</span>
+                </div>
+                <div style={{ fontSize:'0.72rem', color:'var(--text-muted)', marginTop:3 }}>
+                  {riskScore < 40 ? 'Low risk' : riskScore < 70 ? 'Medium risk' : 'High risk'}
+                </div>
+              </div>
+            )}
+          </IC>
+        ) : (
+          <IC title="📱 Device">
+            <div style={{ fontSize:'0.82rem', color:'var(--text-muted)', padding:'12px 0' }}>No device enrolled yet.</div>
+          </IC>
+        )}
+
+        {/* History */}
+        {history.length > 0 && (
+          <IC title="📋 License History" fullWidth>
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {history.map((h, i) => {
+                const hSt = stStyle(h.status);
                 return (
-                  <div key={i} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 14px', background:'var(--bg-surface)', border:'1px solid var(--border-subtle)', borderRadius:'var(--radius-md)', fontSize:'0.82rem' }}>
-                    <span style={{ fontSize:'1.1rem' }}>{DEVICE_ICONS[type] || '📱'}</span>
-                    <span style={{ color:'var(--text-primary)', fontWeight:500, textTransform:'capitalize' }}>
-                      {typeof d === 'string' ? d : d.name || d.type || 'Device'}
-                    </span>
-                    {d.status && (
-                      <span style={{ fontSize:'0.7rem', padding:'2px 7px', borderRadius:10, background: d.status==='active'?'rgba(16,185,129,0.1)':'rgba(239,68,68,0.08)', color: d.status==='active'?'#34d399':'#f87171', border:`1px solid ${d.status==='active'?'rgba(16,185,129,0.3)':'rgba(239,68,68,0.25)'}` }}>
-                        {d.status}
-                      </span>
-                    )}
+                  <div key={h.id || i} style={{ display:'flex', alignItems:'flex-start', gap:14, padding:'12px 16px', background:'var(--bg-surface)', border:'1px solid var(--border-subtle)', borderRadius:'var(--radius-md)' }}>
+                    {/* Status dot */}
+                    <div style={{ width:8, height:8, borderRadius:'50%', background:hSt.color, marginTop:6, flexShrink:0 }} />
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginBottom:4 }}>
+                        <span style={{ fontSize:'0.82rem', fontWeight:600, color:'var(--text-primary)', textTransform:'capitalize' }}>
+                          {h.plan_type || '—'}
+                        </span>
+                        <span style={{ padding:'2px 8px', borderRadius:12, fontSize:'0.68rem', fontWeight:600, background:hSt.bg, border:`1px solid ${hSt.border}`, color:hSt.color }}>
+                          {stLabel(h.status)}
+                        </span>
+                        {h.change_reason && (
+                          <span style={{ fontSize:'0.72rem', color:'var(--text-muted)', fontStyle:'italic' }}>
+                            {h.change_reason.replace(/_/g,' ')}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ display:'flex', gap:16, flexWrap:'wrap' }}>
+                        {h.expires_at && (
+                          <span style={{ fontSize:'0.75rem', color:'var(--text-muted)' }}>
+                            Expires: {fmt(h.expires_at)}
+                          </span>
+                        )}
+                        {h.revoked_at && (
+                          <span style={{ fontSize:'0.75rem', color:'#f87171' }}>
+                            Revoked: {fmtDateTime(h.revoked_at)}
+                          </span>
+                        )}
+                        {h.changed_by && h.changed_by !== 'null' && (
+                          <span style={{ fontSize:'0.75rem', color:'var(--text-muted)' }}>
+                            By: {h.changed_by}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 );
               })}
             </div>
-          )}
-        </div>
-
-        {/* Raw data for superadmin */}
-        {me?.role === 'superadmin' && (
-          <div className="ld-card" style={{ gridColumn:'1/-1' }}>
-            <div className="ld-card-title">🔧 Raw API Response
-              <span style={{ marginLeft:'auto', fontSize:'0.7rem', color:'var(--text-muted)', fontWeight:400, textTransform:'none', letterSpacing:0 }}>Super Admin only</span>
-            </div>
-            <pre style={{ fontSize:'0.72rem', color:'var(--text-muted)', overflowX:'auto', lineHeight:1.7, whiteSpace:'pre-wrap', wordBreak:'break-all', maxHeight:300 }}>
-              {JSON.stringify(raw, null, 2)}
-            </pre>
-          </div>
+          </IC>
         )}
+
+        {/* Notes */}
+        {l.notes && (
+          <IC title="📝 Notes" fullWidth>
+            <p style={{ fontSize:'0.875rem', color:'var(--text-secondary)', lineHeight:1.6 }}>{l.notes}</p>
+          </IC>
+        )}
+
       </div>
     </div>
   );
 }
 
-// ── Main License Page ─────────────────────────────────────
+// ── Main License List ─────────────────────────────────────
 export default function LicensePage() {
   const dispatch = useDispatch();
-  const { licenses, loading, actionLoading, selectedDetail } = useSelector(s => s.licenses);
+  const { licenses, loading, actionLoading, selectedDetail, editModal } = useSelector(s => s.licenses);
   const { user: me } = useSelector(s => s.auth);
   const canEdit = me?.role === 'superadmin';
 
@@ -333,20 +417,14 @@ export default function LicensePage() {
 
   const handleRowClick = (lic) => dispatch(fetchLicenseDetail({ licenseId: lic.id }));
   const handleBack     = ()    => dispatch(clearDetail());
+  const handleSearch   = v    => { setSearch(v);       setPage(1); };
+  const handleStatus   = v    => { setStatusFilter(v); setPage(1); };
 
-  const handleSearch = v => { setSearch(v);       setPage(1); };
-  const handleStatus = v => { setStatusFilter(v); setPage(1); };
-
-  if (selectedDetail) return (
-    <>
-      <Toast /><EditModal /><LicenseDetail onBack={handleBack} />
-    </>
-  );
+  if (selectedDetail) return <><Toast />{editModal && <EditModal />}<LicenseDetail onBack={handleBack} /></>;
 
   const filtered = licenses.filter(l => {
     const q = search.toLowerCase();
-    const matchSearch = !q || [l.id, l.licenseType, l.userEmail, l._raw?.plan_type]
-      .some(v => v?.toLowerCase().includes(q));
+    const matchSearch = !q || [l.id, l.planType].some(v => v?.toLowerCase().includes(q));
     const matchStatus = statusFilter === 'all' || l.status === statusFilter;
     return matchSearch && matchStatus;
   });
@@ -357,20 +435,20 @@ export default function LicensePage() {
   const stats = {
     total:   licenses.length,
     active:  licenses.filter(l => l.status==='active').length,
-    soon:    licenses.filter(l => l.status==='expiring_soon').length,
+    trial:   licenses.filter(l => l.status==='trial').length,
     expired: licenses.filter(l => l.status==='expired'||l.status==='revoked').length,
   };
 
   return (
     <div className="license-page">
-      <Toast /><EditModal />
+      <Toast />{editModal && <EditModal />}
 
       {/* Stats */}
       <div className="license-stats">
         {[
           { icon:'🔑', val:stats.total,   label:'Total',          lsc:'var(--accent-primary)' },
           { icon:'✅', val:stats.active,  label:'Active',         lsc:'#10b981' },
-          { icon:'⚠️', val:stats.soon,    label:'Expiring Soon',  lsc:'#f59e0b' },
+          { icon:'🔮', val:stats.trial,   label:'Trial',          lsc:'#7c3aed' },
           { icon:'❌', val:stats.expired, label:'Expired/Revoked',lsc:'#ef4444' },
         ].map(s => (
           <div key={s.label} className="ls-card" style={{'--lsc':s.lsc}}>
@@ -385,7 +463,7 @@ export default function LicensePage() {
       <div className="license-toolbar">
         <div className="license-search-wrap">
           <SearchIcon />
-          <input className="license-search" placeholder="Search by ID, plan, email…"
+          <input className="license-search" placeholder="Search by ID or plan type…"
             value={search} onChange={e => handleSearch(e.target.value)} />
         </div>
         <select className="license-filter-select" value={statusFilter} onChange={e => handleStatus(e.target.value)}>
@@ -433,13 +511,11 @@ export default function LicensePage() {
                 </thead>
                 <tbody>
                   {paginated.map(l => {
-                    const raw  = l._raw || l;
-                    const st   = ST[l.status] || ST.active;
+                    const st   = stStyle(l.status);
                     const busy = actionLoading === l.id;
-                    const days = daysLeft(raw.expires_at || l.expirationDate);
+                    const days = daysLeft(l.expiresAt);
                     return (
-                      <tr key={l.id} onClick={() => handleRowClick(l)}
-                        style={{ cursor:'pointer' }}>
+                      <tr key={l.id} onClick={() => handleRowClick(l)} style={{ cursor:'pointer' }}>
                         <td>
                           <code style={{ fontSize:'0.78rem', color:'var(--text-muted)', background:'rgba(255,255,255,0.04)', padding:'2px 7px', borderRadius:4 }}>
                             {l.id}
@@ -447,21 +523,21 @@ export default function LicensePage() {
                         </td>
                         <td>
                           <span style={{ fontSize:'0.82rem', fontWeight:600, color:'var(--accent-primary)' }}>
-                            {raw.plan_type || l.licenseType || '—'}
+                            {l.planType || '—'}
                           </span>
                         </td>
                         <td>
                           <span style={{ padding:'3px 10px', borderRadius:20, fontSize:'0.7rem', fontWeight:600, background:st.bg, border:`1px solid ${st.border}`, color:st.color, display:'inline-flex', alignItems:'center', gap:4 }}>
                             <span style={{ width:5, height:5, borderRadius:'50%', background:'currentColor', display:'inline-block' }} />
-                            {l.status === 'expiring_soon' ? 'Expiring Soon' : (l.status||'active').charAt(0).toUpperCase()+(l.status||'').slice(1)}
+                            {stLabel(l.status)}
                           </span>
                         </td>
                         <td style={{ fontSize:'0.82rem', color:'var(--text-secondary)' }}>
-                          {fmt(raw.start_date || raw.created_at || l.issueDate)}
+                          {fmt(l.startDate)}
                         </td>
                         <td>
                           <div style={{ fontSize:'0.82rem', color: days !== null && days < 0 ? '#f87171' : days !== null && days <= 30 ? '#fbbf24' : 'var(--text-secondary)' }}>
-                            {fmt(raw.expires_at || l.expirationDate)}
+                            {fmt(l.expiresAt)}
                           </div>
                           {days !== null && (
                             <div style={{ fontSize:'0.72rem', color: days < 0 ? '#f87171' : days <= 30 ? '#fbbf24' : 'var(--text-muted)', marginTop:2 }}>
@@ -474,17 +550,17 @@ export default function LicensePage() {
                             <div className="lc-actions">
                               {l.status !== 'revoked' && (
                                 <button className="lc-btn renew" disabled={busy}
-                                  onClick={() => dispatch(renewLicense({ licenseId: l.id }))}>
-                                  {busy ? '…' : <><RenewIcon /> Change</>}
+                                  onClick={() => dispatch(openEditModal({ ...l, defaultAction: 'extend' }))}>
+                                  <RenewIcon /> Change
                                 </button>
                               )}
                               <button className="lc-btn edit" disabled={busy}
-                                onClick={() => dispatch(openEditModal(raw))}>
+                                onClick={() => dispatch(openEditModal({ ...l, defaultAction: 'extend' }))}>
                                 <EditIcon /> Edit
                               </button>
                               {l.status !== 'revoked' && (
                                 <button className="lc-btn revoke" disabled={busy}
-                                  onClick={() => { if(window.confirm('Revoke?')) dispatch(revokeLicense({ licenseId: l.id })); }}>
+                                  onClick={() => dispatch(openEditModal({ ...l, defaultAction: 'revoke' }))}>
                                   <RevokeIcon /> Revoke
                                 </button>
                               )}

@@ -10,6 +10,7 @@ import {
 import './DevicePage.css';
 
 const PAGE_SIZE = 8;
+const STATUS_TABS = ['all', 'active', 'inactive', 'blocked'];
 
 // ── Device type config ────────────────────────────────────
 const TYPE_CONFIG = {
@@ -17,8 +18,6 @@ const TYPE_CONFIG = {
   tablet:  { icon: '📟', label: 'Tablet',  color: '#7c3aed', bg: 'rgba(124,58,237,0.08)', border: 'rgba(124,58,237,0.2)' },
   desktop: { icon: '🖥️', label: 'Desktop', color: '#10b981', bg: 'rgba(16,185,129,0.08)',  border: 'rgba(16,185,129,0.2)'  },
 };
-
-const STATUS_TABS = ['all', 'active', 'inactive', 'blocked'];
 
 // ── Icons ─────────────────────────────────────────────────
 const SearchIcon  = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
