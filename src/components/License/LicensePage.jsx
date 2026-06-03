@@ -2,9 +2,9 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
-  fetchLicenses, fetchLicenseDetail,
-  editLicense,
-  clearToast, openEditModal, closeEditModal, clearDetail,
+  fetchExpiringLicenses, fetchLicenses, fetchLicenseDetail, fetchLicenseStats,
+  editLicense, validateLicense,
+  clearToast, openEditModal, closeEditModal, closeValidationModal, clearDetail,
 } from '../../store/slices/licenseSlice';
 import './LicensePage.css';
 
@@ -17,6 +17,7 @@ const EditIcon   = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="n
 const RenewIcon  = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>;
 const RevokeIcon = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>;
 const SaveIcon   = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>;
+const ValidateIcon = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M8 12l3 3 5-6"/></svg>;
 const BackIcon   = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>;
 const ChevLeft   = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>;
 const ChevRight  = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>;
@@ -84,6 +85,60 @@ const isLicensePatchValid = (form) => {
   return true;
 };
 
+const actionCopy = {
+  extend: {
+    title: 'Change Expiry',
+    description: 'Update this license expiration date.',
+    button: 'Apply Change',
+  },
+  set_ttl: {
+    title: 'Override Token TTL',
+    description: 'Set a custom token time-to-live in seconds.',
+    button: 'Update TTL',
+  },
+  revoke: {
+    title: 'Revoke License',
+    description: 'Revoke access for this license. The linked device will fail validation.',
+    button: 'Revoke License',
+  },
+};
+
+const countText = (value) => Number(value || 0).toLocaleString();
+
+const formatTtl = (seconds) => {
+  if (seconds === undefined || seconds === null) return '—';
+  const total = Number(seconds);
+  if (!Number.isFinite(total)) return '—';
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+};
+
+const buildFallbackStats = (licenses) => ({
+  total_licenses: licenses.length,
+  active_count: licenses.filter(l => l.status === 'active').length,
+  expired_count: licenses.filter(l => l.status === 'expired').length,
+  revoked_count: licenses.filter(l => l.status === 'revoked').length,
+  expiring_7d: licenses.filter(l => {
+    const days = daysLeft(l.expiresAt);
+    return l.status !== 'revoked' && days !== null && days >= 0 && days <= 7;
+  }).length,
+  ui_filter_counts: {
+    active: licenses.filter(l => l.status === 'active').length,
+    trial: licenses.filter(l => l.status === 'trial').length,
+    expiring_soon: licenses.filter(l => {
+      const days = daysLeft(l.expiresAt);
+      return l.status !== 'revoked' && days !== null && days >= 0 && days <= 7;
+    }).length,
+    expired: licenses.filter(l => l.status === 'expired').length,
+    revoked: licenses.filter(l => l.status === 'revoked').length,
+    expired_revoked: licenses.filter(l => l.status === 'expired' || l.status === 'revoked').length,
+  },
+});
+
 // ── Toast ─────────────────────────────────────────────────
 function Toast() {
   const dispatch = useDispatch();
@@ -100,20 +155,36 @@ function EditModal() {
   const dispatch = useDispatch();
   const { editModal, actionLoading } = useSelector(s => s.licenses);
   const [form, setForm] = useState(() => buildEditForm(editModal));
+  const [submitError, setSubmitError] = useState('');
 
   if (!editModal) return null;
   const busy = actionLoading === editModal.id;
   const canSave = isLicensePatchValid(form);
+  const copy = actionCopy[form.action] || actionCopy.extend;
+
+  const handleApply = async () => {
+    if (!canSave || busy) return;
+    setSubmitError('');
+    try {
+      await dispatch(editLicense({ licenseId: editModal.id, data: buildLicensePatchPayload(form) })).unwrap();
+    } catch (err) {
+      setSubmitError(err || 'Unable to update license. Please try again.');
+    }
+  };
 
   return (
     <div className="lc-modal-overlay" onClick={() => dispatch(closeEditModal())}>
       <div className="lc-modal" onClick={e => e.stopPropagation()}>
-        <div className="lc-modal-title"><EditIcon /> Manage License</div>
+        <div className="lc-modal-title"><EditIcon /> {copy.title}</div>
+        <div className="lc-modal-subtitle">{copy.description}</div>
         <div className="lc-modal-grid">
           <div className="lc-modal-field full">
             <label className="lc-modal-label">Action</label>
             <select className="lc-modal-select" value={form.action}
-              onChange={e => setForm({...buildEditForm(editModal), action:e.target.value})}
+              onChange={e => {
+                setSubmitError('');
+                setForm({...buildEditForm(editModal), action:e.target.value});
+              }}
               autoFocus>
               <option value="extend">Extend expiry</option>
               <option value="set_ttl">Override token TTL</option>
@@ -124,7 +195,10 @@ function EditModal() {
             <div className="lc-modal-field full">
               <label className="lc-modal-label">New Expiration Date</label>
               <input className="lc-modal-input" type="date" value={form.expires_at}
-                onChange={e => setForm(f=>({...f,expires_at:e.target.value}))} />
+                onChange={e => {
+                  setSubmitError('');
+                  setForm(f=>({...f,expires_at:e.target.value}));
+                }} />
             </div>
           )}
           {form.action === 'set_ttl' && (
@@ -132,7 +206,10 @@ function EditModal() {
               <label className="lc-modal-label">Token TTL Seconds</label>
               <input className="lc-modal-input" type="number" min="1" value={form.token_ttl_seconds}
                 placeholder="Example: 3600"
-                onChange={e => setForm(f=>({...f,token_ttl_seconds:e.target.value}))} />
+                onChange={e => {
+                  setSubmitError('');
+                  setForm(f=>({...f,token_ttl_seconds:e.target.value}));
+                }} />
             </div>
           )}
           {form.action === 'revoke' && (
@@ -140,16 +217,61 @@ function EditModal() {
               <label className="lc-modal-label">Revocation Reason</label>
               <textarea className="lc-modal-input" rows={3} value={form.revoke_reason}
                 placeholder="Optional reason"
-                onChange={e => setForm(f=>({...f,revoke_reason:e.target.value}))} />
+                onChange={e => {
+                  setSubmitError('');
+                  setForm(f=>({...f,revoke_reason:e.target.value}));
+                }} />
             </div>
           )}
         </div>
+        {submitError && <div className="lc-modal-error">{submitError}</div>}
         <div className="lc-modal-actions">
           <button className="lc-modal-cancel" onClick={() => dispatch(closeEditModal())}>Cancel</button>
           <button className="lc-modal-save" disabled={busy || !canSave}
-            onClick={() => dispatch(editLicense({ licenseId: editModal.id, data: buildLicensePatchPayload(form) }))}>
-            {busy ? <span className="lc-mini-spin"/> : <><SaveIcon /> Apply</>}
+            onClick={handleApply}>
+            {busy ? <span className="lc-mini-spin"/> : <><SaveIcon /> {copy.button}</>}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ValidationModal() {
+  const dispatch = useDispatch();
+  const { validationModal: result } = useSelector(s => s.licenses);
+  if (!result) return null;
+
+  const valid = Boolean(result.is_valid);
+
+  return (
+    <div className="lc-modal-overlay" onClick={() => dispatch(closeValidationModal())}>
+      <div className="lc-modal" onClick={e => e.stopPropagation()}>
+        <div className="lc-modal-title"><ValidateIcon /> License Validation</div>
+        <div className="lv-result">
+          <div className={`lv-status ${valid ? 'valid' : 'invalid'}`}>
+            <span>{valid ? 'Valid' : 'Invalid'}</span>
+            <strong>{stLabel(result.status)}</strong>
+          </div>
+          <div className="lv-grid">
+            <IF label="License ID" value={result.license_id || result.licenseId} mono />
+            <IF label="Device ID" value={result.device_id} mono />
+            <IF label="Expires" value={fmtDateTime(result.expires_at)} />
+            <IF label="TTL" value={formatTtl(result.ttl_seconds)} accent />
+          </div>
+          <div className="lv-errors">
+            <div className="lc-modal-label">Validation Errors</div>
+            {result.validation_errors?.length ? (
+              <ul>
+                {result.validation_errors.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}
+              </ul>
+            ) : (
+              <div className="lv-empty">No validation errors returned.</div>
+            )}
+          </div>
+        </div>
+        <div className="lc-modal-actions">
+          <button className="lc-modal-save" onClick={() => dispatch(closeValidationModal())}>Done</button>
         </div>
       </div>
     </div>
@@ -204,6 +326,7 @@ function LicenseDetail({ onBack }) {
   const { selectedDetail: l, detailLoading, actionLoading } = useSelector(s => s.licenses);
   const { user: me } = useSelector(s => s.auth);
   const canEdit = me?.role === 'superadmin';
+  const canValidate = me?.role === 'admin' || me?.role === 'superadmin';
 
   if (detailLoading || !l) return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'60vh', gap:14, color:'var(--text-muted)' }}>
@@ -261,19 +384,21 @@ function LicenseDetail({ onBack }) {
           </div>
 
           {/* Action buttons */}
-          {canEdit && (
+          {(canEdit || canValidate) && (
             <div className="ld-actions">
-              {l.status !== 'revoked' && (
+              {canValidate && (
+                <button className="ld-btn ld-btn-validate" disabled={busy}
+                  onClick={() => dispatch(validateLicense({ licenseId: l.id }))}>
+                  <ValidateIcon /> Validate
+                </button>
+              )}
+              {canEdit && l.status !== 'revoked' && (
                 <button className="ld-btn ld-btn-change" disabled={busy}
                   onClick={() => dispatch(openEditModal({ ...l, defaultAction: 'extend' }))}>
                   <RenewIcon /> Change
                 </button>
               )}
-              <button className="ld-btn ld-btn-edit" disabled={busy}
-                onClick={() => dispatch(openEditModal({ ...l, defaultAction: 'extend' }))}>
-                <EditIcon /> Edit
-              </button>
-              {l.status !== 'revoked' && (
+              {canEdit && l.status !== 'revoked' && (
                 <button className="ld-btn ld-btn-revoke" disabled={busy}
                   onClick={() => dispatch(openEditModal({ ...l, defaultAction: 'revoke' }))}>
                   <RevokeIcon /> Revoke
@@ -405,55 +530,84 @@ function LicenseDetail({ onBack }) {
 // ── Main License List ─────────────────────────────────────
 export default function LicensePage() {
   const dispatch = useDispatch();
-  const { licenses, loading, actionLoading, selectedDetail, editModal } = useSelector(s => s.licenses);
+  const {
+    licenses,
+    expiringLicenses,
+    stats: licenseStats,
+    loading,
+    expiringLoading,
+    statsLoading,
+    actionLoading,
+    selectedDetail,
+    editModal,
+    validationModal,
+  } = useSelector(s => s.licenses);
   const { user: me } = useSelector(s => s.auth);
   const canEdit = me?.role === 'superadmin';
+  const canValidate = me?.role === 'admin' || me?.role === 'superadmin';
+  const canShowActions = canEdit || canValidate;
 
   const [search,       setSearch]       = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [page,         setPage]         = useState(1);
 
-  useEffect(() => { dispatch(fetchLicenses()); }, [dispatch]);
+  useEffect(() => {
+    dispatch(fetchLicenses());
+    dispatch(fetchLicenseStats());
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (statusFilter === 'expiring_soon') {
+      dispatch(fetchExpiringLicenses({ days: 7, page: 1, page_size: 200 }));
+    }
+  }, [dispatch, statusFilter]);
 
   const handleRowClick = (lic) => dispatch(fetchLicenseDetail({ licenseId: lic.id }));
   const handleBack     = ()    => dispatch(clearDetail());
   const handleSearch   = v    => { setSearch(v);       setPage(1); };
   const handleStatus   = v    => { setStatusFilter(v); setPage(1); };
 
-  if (selectedDetail) return <><Toast />{editModal && <EditModal />}<LicenseDetail onBack={handleBack} /></>;
+  if (selectedDetail) return <><Toast />{editModal && <EditModal />}{validationModal && <ValidationModal />}<LicenseDetail onBack={handleBack} /></>;
 
-  const filtered = licenses.filter(l => {
+  const usingExpiringApi = statusFilter === 'expiring_soon';
+  const tableLicenses = usingExpiringApi ? expiringLicenses : licenses;
+  const tableLoading = loading || (usingExpiringApi && expiringLoading);
+
+  const filtered = tableLicenses.filter(l => {
     const q = search.toLowerCase();
     const matchSearch = !q || [l.id, l.planType].some(v => v?.toLowerCase().includes(q));
-    const matchStatus = statusFilter === 'all' || l.status === statusFilter;
+    const days = daysLeft(l.expiresAt);
+    const isExpiringSoon = l.status === 'expiring_soon'
+      || (l.status !== 'revoked' && days !== null && days >= 0 && days <= 7);
+    const matchStatus = statusFilter === 'all'
+      || l.status === statusFilter
+      || (statusFilter === 'expiring_soon' && (usingExpiringApi || isExpiringSoon));
     return matchSearch && matchStatus;
   });
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated  = filtered.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
 
-  const stats = {
-    total:   licenses.length,
-    active:  licenses.filter(l => l.status==='active').length,
-    trial:   licenses.filter(l => l.status==='trial').length,
-    expired: licenses.filter(l => l.status==='expired'||l.status==='revoked').length,
-  };
+  const fallbackStats = buildFallbackStats(licenses);
+  const stats = licenseStats || fallbackStats;
+  const filterCounts = stats.ui_filter_counts || fallbackStats.ui_filter_counts;
+  const statCards = [
+    { icon:'🔑', val:stats.total_licenses, label:'Total',           lsc:'var(--accent-primary)' },
+    { icon:'✅', val:stats.active_count,   label:'Active',          lsc:'#10b981' },
+    { icon:'◆',  val:stats.by_plan?.trial ?? filterCounts.trial, label:'Trial', lsc:'#7c3aed' },
+    { icon:'⊘',  val:(stats.expired_count || 0) + (stats.revoked_count || 0), label:'Expired/Revoked', lsc:'#ef4444' },
+  ];
 
   return (
     <div className="license-page">
-      <Toast />{editModal && <EditModal />}
+      <Toast />{editModal && <EditModal />}{validationModal && <ValidationModal />}
 
       {/* Stats */}
       <div className="license-stats">
-        {[
-          { icon:'🔑', val:stats.total,   label:'Total',          lsc:'var(--accent-primary)' },
-          { icon:'✅', val:stats.active,  label:'Active',         lsc:'#10b981' },
-          { icon:'🔮', val:stats.trial,   label:'Trial',          lsc:'#7c3aed' },
-          { icon:'❌', val:stats.expired, label:'Expired/Revoked',lsc:'#ef4444' },
-        ].map(s => (
+        {statCards.map(s => (
           <div key={s.label} className="ls-card" style={{'--lsc':s.lsc}}>
             <span className="ls-icon">{s.icon}</span>
-            <div className="ls-value">{s.val}</div>
+            <div className="ls-value">{statsLoading ? '...' : countText(s.val)}</div>
             <div className="ls-label">{s.label}</div>
           </div>
         ))}
@@ -467,15 +621,25 @@ export default function LicensePage() {
             value={search} onChange={e => handleSearch(e.target.value)} />
         </div>
         <select className="license-filter-select" value={statusFilter} onChange={e => handleStatus(e.target.value)}>
-          <option value="all">All Status</option>
-          <option value="active">● Active</option>
-          <option value="trial">◆ Trial</option>
-          <option value="expiring_soon">⚠ Expiring Soon</option>
-          <option value="expired">✕ Expired</option>
-          <option value="revoked">⊘ Revoked</option>
+          <option value="all">All Status ({countText(stats.total_licenses)})</option>
+          <option value="active">● Active ({countText(filterCounts.active)})</option>
+          <option value="trial">◆ Trial ({countText(filterCounts.trial)})</option>
+          <option value="expiring_soon">⚠ Expiring Soon ({countText(filterCounts.expiring_soon)})</option>
+          <option value="expired">✕ Expired ({countText(filterCounts.expired)})</option>
+          <option value="revoked">⊘ Revoked ({countText(filterCounts.revoked)})</option>
         </select>
         <div className="license-toolbar-right">
-          <button className="lc-icon-btn" onClick={() => dispatch(fetchLicenses())} title="Refresh"><RefreshIcon /></button>
+          <button
+            className="lc-icon-btn"
+            onClick={() => {
+              dispatch(fetchLicenses());
+              dispatch(fetchLicenseStats());
+              if (statusFilter === 'expiring_soon') dispatch(fetchExpiringLicenses({ days: 7, page: 1, page_size: 200 }));
+            }}
+            title="Refresh"
+          >
+            <RefreshIcon />
+          </button>
         </div>
       </div>
 
@@ -488,12 +652,12 @@ export default function LicensePage() {
           </div>
         </div>
 
-        {loading ? (
+        {tableLoading ? (
           <div className="license-loading"><div className="license-spinner" /> Loading licenses…</div>
         ) : filtered.length === 0 ? (
           <div className="license-empty">
             <span className="license-empty-icon">🔑</span>
-            {licenses.length === 0 ? 'No licenses returned from API.' : 'No licenses match your filters.'}
+            {tableLicenses.length === 0 ? 'No licenses returned from API.' : 'No licenses match your filters.'}
           </div>
         ) : (
           <>
@@ -506,7 +670,7 @@ export default function LicensePage() {
                     <th>Status</th>
                     <th>Start Date</th>
                     <th>Expires</th>
-                    {canEdit && <th>Actions</th>}
+                    {canShowActions && <th>Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -545,20 +709,22 @@ export default function LicensePage() {
                             </div>
                           )}
                         </td>
-                        {canEdit && (
+                        {canShowActions && (
                           <td onClick={e => e.stopPropagation()}>
                             <div className="lc-actions">
-                              {l.status !== 'revoked' && (
+                              {canValidate && (
+                                <button className="lc-btn validate" disabled={busy}
+                                  onClick={() => dispatch(validateLicense({ licenseId: l.id }))}>
+                                  <ValidateIcon /> Validate
+                                </button>
+                              )}
+                              {canEdit && l.status !== 'revoked' && (
                                 <button className="lc-btn renew" disabled={busy}
                                   onClick={() => dispatch(openEditModal({ ...l, defaultAction: 'extend' }))}>
                                   <RenewIcon /> Change
                                 </button>
                               )}
-                              <button className="lc-btn edit" disabled={busy}
-                                onClick={() => dispatch(openEditModal({ ...l, defaultAction: 'extend' }))}>
-                                <EditIcon /> Edit
-                              </button>
-                              {l.status !== 'revoked' && (
+                              {canEdit && l.status !== 'revoked' && (
                                 <button className="lc-btn revoke" disabled={busy}
                                   onClick={() => dispatch(openEditModal({ ...l, defaultAction: 'revoke' }))}>
                                   <RevokeIcon /> Revoke

@@ -1,7 +1,11 @@
 // src/components/Layout/Header.js
 import { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { fetchDashboardStats } from '../../store/slices/dashboardSlice';
+import {
+  fetchDashboardOverview,
+  fetchDashboardRevenue,
+  fetchDashboardStats,
+} from '../../store/slices/dashboardSlice';
 import { fetchHeartbeatStats } from '../../store/slices/heartbeatSlice';
 import { useTheme } from '../../context/ThemeContext';
 import './Header.css';
@@ -42,7 +46,7 @@ const MoonIcon = () => (
   </svg>
 );
 
-export default function Header({ activePage, sidebarCollapsed }) {
+export default function Header({ activePage, dashboardTab, sidebarCollapsed }) {
   const { user }   = useSelector(s => s.auth);
   const dispatch   = useDispatch();
   const { theme, toggleTheme } = useTheme();
@@ -54,9 +58,19 @@ export default function Header({ activePage, sidebarCollapsed }) {
   }, []);
 
   const left = sidebarCollapsed ? 'var(--sidebar-collapsed)' : 'var(--sidebar-width)';
+  const breadcrumb = activePage === 'home'
+    ? `/${dashboardTab === 'revenue' ? ' Revenue' : dashboardTab === 'overview' ? ' Overview' : ' Live Stats'}`
+    : '/ Overview';
+
   const handleRefresh = () => {
     if (activePage === 'heartbeat') {
       dispatch(fetchHeartbeatStats());
+      return;
+    }
+    if (activePage === 'home') {
+      dispatch(fetchDashboardStats());
+      dispatch(fetchDashboardOverview());
+      dispatch(fetchDashboardRevenue());
       return;
     }
     dispatch(fetchDashboardStats());
@@ -66,7 +80,7 @@ export default function Header({ activePage, sidebarCollapsed }) {
     <header className="app-header" style={{ left }}>
       <div className="header-left">
         <span className="header-page-title">{PAGE_TITLES[activePage] || 'Dashboard'}</span>
-        <span className="header-breadcrumb">/ Overview</span>
+        <span className="header-breadcrumb">{breadcrumb}</span>
       </div>
       <div className="header-right">
         <span className="header-time">

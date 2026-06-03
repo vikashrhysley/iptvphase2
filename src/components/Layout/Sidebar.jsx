@@ -1,5 +1,7 @@
 // src/components/Layout/Sidebar.js
+import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { apiGetProfile } from '../../services/api';
 import { logoutUser } from '../../store/slices/authSlice';
 import './Sidebar.css';
 
@@ -47,6 +49,12 @@ const ChevronRightIcon = () => (
   </svg>
 );
 
+const ChevronDownIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+    <polyline points="6 9 12 15 18 9" />
+  </svg>
+);
+
 const LogoutIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -63,13 +71,68 @@ const NAV_ITEMS = [
   { id: 'trial', label: 'Trial & Grace', icon: <TrialIcon />, page: 'trial' },
 ];
 
-export default function Sidebar({ collapsed, onToggle, activePage, onNavigate }) {
-  const dispatch = useDispatch();
-  const { user, loading: logoutLoading } = useSelector(s => s.auth);
+const DASHBOARD_SUB_ITEMS = [
+  { id: 'liveStats', label: 'Live Stats' },
+  { id: 'overview', label: 'Overview' },
+  { id: 'revenue', label: 'Revenue' },
+];
 
-  const initials = user?.name
-    ? user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
-    : '??';
+const roleLabel = (role) => {
+  if (!role) return 'Admin';
+  return role === 'superadmin'
+    ? 'Super Admin'
+    : role.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+};
+
+const initialsFor = (name) => {
+  if (!name) return 'AD';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const initials = parts.length > 1
+    ? `${parts[0][0]}${parts[1][0]}`
+    : parts[0].slice(0, 2);
+  return initials.toUpperCase();
+};
+
+export default function Sidebar({
+  collapsed,
+  onToggle,
+  activePage,
+  dashboardTab,
+  onDashboardTabChange,
+  onNavigate,
+}) {
+  const dispatch = useDispatch();
+  const { accessToken, user, loading: logoutLoading } = useSelector(s => s.auth);
+  const [dashboardMenuOpen, setDashboardMenuOpen] = useState(activePage === 'home');
+  const [sidebarProfile, setSidebarProfile] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    const timer = setTimeout(async () => {
+      if (!accessToken) {
+        if (active) setSidebarProfile(null);
+        return;
+      }
+
+      try {
+        const data = await apiGetProfile(accessToken);
+        if (active) setSidebarProfile(data);
+      } catch {
+        if (active) setSidebarProfile(null);
+      }
+    }, 0);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [accessToken]);
+
+  const profileUser = sidebarProfile || user || {};
+  const displayRole = profileUser.role_display || roleLabel(profileUser.role);
+  const displayName = profileUser.full_name || profileUser.fullName || profileUser.name || profileUser.username || profileUser.email || displayRole;
+  const avatarUrl = profileUser.avatar_url || profileUser.avatarUrl;
+  const initials = initialsFor(displayName);
 
   return (
     <>
@@ -100,15 +163,48 @@ export default function Sidebar({ collapsed, onToggle, activePage, onNavigate })
       <nav className="sidebar-nav">
         <div className="nav-section-label">Navigation</div>
         {NAV_ITEMS.map(item => (
-          <button
-            key={item.id}
-            className={`nav-item${activePage === item.page ? ' active' : ''}`}
-            onClick={() => onNavigate(item.page)}
-          >
-            <span className="nav-icon">{item.icon}</span>
-            <span className="nav-label">{item.label}</span>
-            {collapsed && <span className="nav-tooltip">{item.label}</span>}
-          </button>
+          <div className="nav-group" key={item.id}>
+            <button
+              className={`nav-item${activePage === item.page ? ' active' : ''}`}
+              onClick={() => {
+                if (item.id === 'home') {
+                  if (activePage !== 'home') {
+                    onNavigate('home');
+                    onDashboardTabChange('liveStats');
+                  }
+                  setDashboardMenuOpen(open => !open);
+                  return;
+                }
+                setDashboardMenuOpen(false);
+                onNavigate(item.page);
+              }}
+            >
+              <span className="nav-icon">{item.icon}</span>
+              <span className="nav-label">{item.label}</span>
+              {item.id === 'home' && !collapsed && (
+                <span className={`nav-caret${dashboardMenuOpen ? ' open' : ''}`}>
+                  {dashboardMenuOpen ? <ChevronDownIcon /> : <ChevronRightIcon />}
+                </span>
+              )}
+              {collapsed && <span className="nav-tooltip">{item.label}</span>}
+            </button>
+            {item.id === 'home' && dashboardMenuOpen && !collapsed && (
+              <div className="nav-submenu">
+                {DASHBOARD_SUB_ITEMS.map(subItem => (
+                  <button
+                    key={subItem.id}
+                    className={`nav-subitem${dashboardTab === subItem.id ? ' active' : ''}`}
+                    onClick={() => {
+                      onNavigate('home');
+                      onDashboardTabChange(subItem.id);
+                    }}
+                  >
+                    {subItem.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         ))}
       </nav>
 
@@ -118,13 +214,15 @@ export default function Sidebar({ collapsed, onToggle, activePage, onNavigate })
           onClick={() => onNavigate('profile')}
           title="View profile"
         >
-          <div className="user-avatar">{initials}</div>
+          {avatarUrl ? (
+            <img className="user-avatar user-avatar-img" src={avatarUrl} alt={displayName} />
+          ) : (
+            <div className="user-avatar">{initials}</div>
+          )}
         </button>
         <div className="user-info" style={{ cursor:'pointer' }} onClick={() => onNavigate('profile')}>
-          <div className="user-name">{user?.name}</div>
-          <div className="user-role" style={{ textTransform:'capitalize' }}>
-            {user?.role === 'superadmin' ? 'Super Admin' : user?.role}
-          </div>
+          <div className="user-name">{displayName}</div>
+          <div className="user-role">{displayRole}</div>
         </div>
         <button
           className="logout-btn"

@@ -177,6 +177,22 @@ export const apiGetProfile = async (accessToken) => {
   return res.data || res;
 };
 
+// 7. Change own password - POST /auth/me/change-password
+//    Body: { current_password, new_password, confirm_password }
+export const apiChangePassword = async (accessToken, data) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/auth/me/change-password`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({
+      current_password: data.current_password,
+      new_password: data.new_password,
+      confirm_password: data.confirm_password,
+    }),
+  });
+  return res.data || res;
+};
+
 // ─────────────────────────────────────────────────────────
 // DASHBOARD / DEVICES / LICENSES — dummyjson (mock data)
 // ─────────────────────────────────────────────────────────
@@ -184,6 +200,24 @@ export const apiGetProfile = async (accessToken) => {
 export const apiFetchDashboardStats = async (accessToken) => {
   if (!accessToken) throw new Error('Unauthorized');
   const res = await request(`${BASE}/admin/dashboard/stats`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+export const apiFetchDashboardOverview = async (accessToken) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/dashboard/overview`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+export const apiFetchDashboardRevenue = async (accessToken) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/dashboard/revenue`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${accessToken}` },
   });
@@ -344,6 +378,30 @@ export const apiFetchLicenses = async (accessToken) => {
   return { licenses: list.map(normalizeLicense) };
 };
 
+// GET /admin/licenses/stats — aggregate license counts for License Center
+export const apiFetchLicenseStats = async (accessToken) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/licenses/stats`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+// GET /admin/licenses/expiring — licenses expiring within N days
+export const apiFetchExpiringLicenses = async (accessToken, params = {}) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/licenses/expiring${cleanParams(params)}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const paged = normalizePagedResponse(res);
+  return {
+    ...paged,
+    licenses: paged.items.map(normalizeLicense),
+  };
+};
+
 // GET /admin/licenses/:id  — single license detail
 // Header: Authorization: Bearer <access_token>
 export const apiFetchLicenseDetail = async (accessToken, licenseId) => {
@@ -485,6 +543,26 @@ export const apiEditLicense = async (accessToken, licenseId, data) => {
     action: data.action,
     ...fallback,
     ...(hasLicenseShape ? normalizeLicense(raw) : {}),
+  };
+};
+
+export const apiValidateLicense = async (accessToken, licenseId) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/licenses/validate`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ license_id: licenseId }),
+  });
+  const raw = res.data || res;
+  return {
+    licenseId,
+    license_id: raw.license_id || licenseId,
+    is_valid: raw.is_valid,
+    status: raw.status,
+    expires_at: raw.expires_at,
+    ttl_seconds: raw.ttl_seconds,
+    device_id: raw.device_id,
+    validation_errors: raw.validation_errors || [],
   };
 };
 

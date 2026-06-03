@@ -1,5 +1,5 @@
 // src/components/Heartbeat/HeartbeatPage.jsx
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   DEFAULT_LOG_FILTERS,
@@ -111,6 +111,8 @@ export default function HeartbeatPage() {
     riskyError,
     riskyFilters,
   } = useSelector(s => s.heartbeat);
+  const didMountLogSearch = useRef(false);
+  const { device_id: logSearch, status: logStatus } = logFilters;
 
   useEffect(() => {
     dispatch(fetchHeartbeatStats());
@@ -118,9 +120,23 @@ export default function HeartbeatPage() {
     dispatch(fetchRiskyHeartbeatDevices(DEFAULT_RISKY_FILTERS));
   }, [dispatch]);
 
-  const fetchLogs = (filters = logFilters) => {
-    dispatch(fetchHeartbeatLogs({ ...filters, page_size: 8 }));
-  };
+  useEffect(() => {
+    if (!didMountLogSearch.current) {
+      didMountLogSearch.current = true;
+      return undefined;
+    }
+
+    const timer = setTimeout(() => {
+      dispatch(fetchHeartbeatLogs({
+        device_id: logSearch,
+        status: logStatus,
+        page: 1,
+        page_size: 8,
+      }));
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [dispatch, logSearch, logStatus]);
 
   return (
     <div className="heartbeat-page">
@@ -186,36 +202,38 @@ export default function HeartbeatPage() {
             <input
               className="hb-search"
               value={logFilters.device_id}
-              placeholder="Search device, user, location."
+              placeholder="Search device, user, location..."
               onChange={e => dispatch(setLogFilters({ device_id: e.target.value, page: 1 }))}
-              onKeyDown={e => {
-                if (e.key === 'Enter') fetchLogs({ ...logFilters, page: 1 });
-              }}
             />
           </div>
           <select
             className="hb-status-filter"
             value={logFilters.status}
-            onChange={e => {
-              const next = { ...logFilters, status: e.target.value, page: 1 };
-              dispatch(setLogFilters(next));
-              fetchLogs(next);
-            }}
+            onChange={e => dispatch(setLogFilters({ status: e.target.value, page: 1 }))}
           >
             {STATUS_OPTIONS.map(status => (
               <option value={status} key={status}>{status || 'All Status'}</option>
             ))}
           </select>
-          <button className="hb-refresh" onClick={() => fetchLogs({ ...logFilters, page: 1 })} disabled={logsLoading}>
-            Search
-          </button>
         </div>
 
         {logsError ? (
           <div className="hb-error">{logsError}</div>
         ) : (
           <div className="hb-table-wrap">
-            <table className="hb-table">
+            <table className="hb-table hb-log-table">
+              <colgroup>
+                <col className="hb-col-date" />
+                <col className="hb-col-device" />
+                <col className="hb-col-user" />
+                <col className="hb-col-status" />
+                <col className="hb-col-ip" />
+                <col className="hb-col-location" />
+                <col className="hb-col-streaming" />
+                <col className="hb-col-screen" />
+                <col className="hb-col-app" />
+                <col className="hb-col-response" />
+              </colgroup>
               <thead>
                 <tr>
                   <th>Date</th>
@@ -235,16 +253,16 @@ export default function HeartbeatPage() {
                   <tr><td colSpan="10" className="hb-table-state">Loading heartbeat logs...</td></tr>
                 ) : logs.length ? logs.map(log => (
                   <tr key={log.id || `${log.device_id}-${log.created_at}`}>
-                    <td>{fmtDateTime(log.created_at)}</td>
-                    <td><code>{log.device_id || '—'}</code></td>
-                    <td>{log.user_email || '—'}</td>
+                    <td><span className="hb-date-text">{fmtDateTime(log.created_at)}</span></td>
+                    <td><code className="hb-id-text" title={log.device_id || ''}>{log.device_id || '—'}</code></td>
+                    <td><span className="hb-ellipsis" title={log.user_email || ''}>{log.user_email || '—'}</span></td>
                     <td><span className={statusClass(log.status)}>{log.status || 'unknown'}</span></td>
-                    <td>{log.ip_address || '—'}</td>
-                    <td>{[log.city, log.country_code].filter(Boolean).join(', ') || '—'}</td>
+                    <td><span className="hb-nowrap">{log.ip_address || '—'}</span></td>
+                    <td><span className="hb-ellipsis" title={[log.city, log.country_code].filter(Boolean).join(', ')}>{[log.city, log.country_code].filter(Boolean).join(', ') || '—'}</span></td>
                     <td>{log.playback_active ? 'Active' : 'Idle'}</td>
-                    <td>{log.active_screen || '—'}</td>
-                    <td>{log.app_version || '—'}</td>
-                    <td>{fmtNum(log.response_ms, 'ms')}</td>
+                    <td><span className="hb-ellipsis" title={log.active_screen || ''}>{log.active_screen || '—'}</span></td>
+                    <td><span className="hb-nowrap">{log.app_version || '—'}</span></td>
+                    <td><span className="hb-response">{fmtNum(log.response_ms, 'ms')}</span></td>
                   </tr>
                 )) : (
                   <tr><td colSpan="10" className="hb-table-state">No heartbeat logs found.</td></tr>

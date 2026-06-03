@@ -1,6 +1,10 @@
 // src/store/slices/dashboardSlice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { apiFetchDashboardStats } from '../../services/api';
+import {
+  apiFetchDashboardOverview,
+  apiFetchDashboardRevenue,
+  apiFetchDashboardStats,
+} from '../../services/api';
 
 export const fetchDashboardStats = createAsyncThunk(
   'dashboard/fetchStats',
@@ -14,12 +18,42 @@ export const fetchDashboardStats = createAsyncThunk(
   }
 );
 
+export const fetchDashboardOverview = createAsyncThunk(
+  'dashboard/fetchOverview',
+  async (_, { getState, rejectWithValue }) => {
+    try {
+      const { accessToken } = getState().auth;
+      return await apiFetchDashboardOverview(accessToken);
+    } catch (err) {
+      return rejectWithValue(err.message);
+    }
+  }
+);
+
+export const fetchDashboardRevenue = createAsyncThunk(
+  'dashboard/fetchRevenue',
+  async (_, { getState, rejectWithValue }) => {
+    try {
+      const { accessToken } = getState().auth;
+      return await apiFetchDashboardRevenue(accessToken);
+    } catch (err) {
+      return rejectWithValue(err.message);
+    }
+  }
+);
+
 const dashboardSlice = createSlice({
   name: 'dashboard',
   initialState: {
     stats: null,
+    overview: null,
+    revenue: null,
     loading: false,
+    overviewLoading: false,
+    revenueLoading: false,
     error: null,
+    overviewError: null,
+    revenueError: null,
     notification: null,
   },
   reducers: {
@@ -44,6 +78,35 @@ const dashboardSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       });
+
+    builder
+      .addCase(fetchDashboardOverview.pending, (state) => {
+        state.overviewLoading = true;
+        state.overviewError = null;
+      })
+      .addCase(fetchDashboardOverview.fulfilled, (state, action) => {
+        state.overviewLoading = false;
+        state.overview = action.payload;
+      })
+      .addCase(fetchDashboardOverview.rejected, (state, action) => {
+        state.overviewLoading = false;
+        state.overviewError = action.payload;
+      });
+
+    builder
+      .addCase(fetchDashboardRevenue.pending, (state) => {
+        state.revenueLoading = true;
+        state.revenueError = null;
+      })
+      .addCase(fetchDashboardRevenue.fulfilled, (state, action) => {
+        state.revenueLoading = false;
+        state.revenue = action.payload;
+      })
+      .addCase(fetchDashboardRevenue.rejected, (state, action) => {
+        state.revenueLoading = false;
+        state.revenueError = action.payload;
+      });
+
   },
 });
 

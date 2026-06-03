@@ -13,12 +13,13 @@ import './AppLayout.css';
 export default function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [activePage, setActivePage] = useState('home');
+  const [dashboardTab, setDashboardTab] = useState('liveStats');
 
   const mainLeft = collapsed ? 'var(--sidebar-collapsed)' : 'var(--sidebar-width)';
 
   const renderPage = () => {
     switch (activePage) {
-      case 'home':    return <DashboardTable />;
+      case 'home':    return <DashboardTable activeDashboardTab={dashboardTab} />;
       case 'device':  return <DevicePage />;
       case 'heartbeat': return <HeartbeatPage />;
       case 'license': return <LicensePage />;
@@ -34,9 +35,11 @@ export default function AppLayout() {
         collapsed={collapsed}
         onToggle={() => setCollapsed(c => !c)}
         activePage={activePage}
+        dashboardTab={dashboardTab}
+        onDashboardTabChange={setDashboardTab}
         onNavigate={setActivePage}
       />
-      <Header activePage={activePage} sidebarCollapsed={collapsed} />
+      <Header activePage={activePage} dashboardTab={dashboardTab} sidebarCollapsed={collapsed} />
       <main className="app-main" style={{ marginLeft: mainLeft }}>
         {renderPage()}
       </main>
