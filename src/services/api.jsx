@@ -594,3 +594,218 @@ export const apiUpdateTrialConfig = async (accessToken, data) => {
   });
   return res.data || res;
 };
+
+// ── Admin Users APIs ────────────────────────────────────────
+
+// GET /admin/users
+// Header: Authorization: Bearer <access_token>
+// Query: role=viewer|admin|superadmin, status=active|disabled, page, page_size
+export const apiFetchAdminUsers = async (accessToken, params = {}) => {
+  if (!accessToken) throw new Error('Unauthorized');
+
+  const query = new URLSearchParams();
+  if (params.role) query.set('role', params.role);
+  if (params.status) query.set('status', params.status);
+  if (params.page) query.set('page', params.page);
+  if (params.page_size) query.set('page_size', params.page_size);
+
+  const qs = query.toString() ? `?${query.toString()}` : '';
+
+  const res = await request(`${BASE}/admin/users${qs}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  const raw = res.data || res;
+
+  // Expected: { data: [ ... ] }
+  const items = Array.isArray(raw) ? raw : Array.isArray(raw.data) ? raw.data : [];
+
+  // If API provides pagination meta, map it; otherwise derive.
+  const meta = res.meta || raw.meta || {};
+  return {
+    users: items,
+    total: raw.total ?? raw.total_count ?? meta.total ?? meta.total_count ?? items.length,
+    page: raw.page ?? raw.current_page ?? meta.page ?? params.page ?? 1,
+    pageSize: raw.page_size ?? raw.pageSize ?? meta.page_size ?? meta.pageSize ?? params.page_size ?? 20,
+    data: res.data || res,
+  };
+};
+
+// GET /admin/users/stats
+// Header: Authorization: Bearer <access_token>
+export const apiFetchAdminUsersStats = async (accessToken) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/users/stats`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+// GET /admin/app-users/{id}/login-history
+export const apiFetchUserLoginHistory = async (accessToken, userId, params = {}) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const query = new URLSearchParams();
+  if (params.status)    query.set('status', params.status);
+  if (params.page)      query.set('page', String(params.page));
+  if (params.page_size) query.set('page_size', String(params.page_size));
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  const res = await request(`${BASE}/admin/app-users/${userId}/login-history${qs}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const raw   = res.data || res;
+  const items = Array.isArray(raw) ? raw : Array.isArray(raw.data) ? raw.data : [];
+  const meta  = res.meta || raw.meta || {};
+  return {
+    items,
+    total:    raw.total    ?? raw.total_count    ?? meta.total    ?? items.length,
+    page:     raw.page     ?? raw.current_page   ?? meta.page     ?? params.page ?? 1,
+    pageSize: raw.page_size ?? raw.pageSize      ?? meta.page_size ?? params.page_size ?? 20,
+  };
+};
+
+// GET /admin/app-users/{id}/activity
+export const apiFetchUserActivity = async (accessToken, userId, params = {}) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const query = new URLSearchParams();
+  if (params.content_type) query.set('content_type', params.content_type);
+  if (params.date_from)    query.set('date_from', params.date_from);
+  if (params.date_to)      query.set('date_to', params.date_to);
+  if (params.page)         query.set('page', String(params.page));
+  if (params.page_size)    query.set('page_size', String(params.page_size));
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  const res = await request(`${BASE}/admin/app-users/${userId}/activity${qs}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const raw   = res.data || res;
+  const items = Array.isArray(raw) ? raw : Array.isArray(raw.data) ? raw.data : [];
+  const meta  = res.meta || raw.meta || {};
+  return {
+    items,
+    total:    raw.total    ?? raw.total_count    ?? meta.total    ?? items.length,
+    page:     raw.page     ?? raw.current_page   ?? meta.page     ?? params.page ?? 1,
+    pageSize: raw.page_size ?? raw.pageSize      ?? meta.page_size ?? params.page_size ?? 20,
+  };
+};
+
+// PATCH /admin/app-users/{id} - update profile fields
+export const apiUpdateAppUser = async (accessToken, userId, data) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const payload = {};
+  if (data.full_name    !== undefined) payload.full_name    = data.full_name;
+  if (data.status       !== undefined) payload.status       = data.status;
+  if (data.max_devices  !== undefined) payload.max_devices  = data.max_devices;
+  if (data.country_code !== undefined) payload.country_code = data.country_code;
+  if (data.reason       !== undefined) payload.reason       = data.reason;
+  const res = await request(`${BASE}/admin/app-users/${userId}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(payload),
+  });
+  return res.data || res;
+};
+
+// GET /admin/app-users/{id}
+export const apiFetchAppUserDetail = async (accessToken, userId) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/app-users/${userId}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+// GET /admin/app-users/stats
+export const apiFetchAppUsersStats = async (accessToken) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/app-users/stats`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+// GET /admin/app-users - paginated subscriber accounts
+export const apiFetchAppUsers = async (accessToken, params = {}) => {
+  if (!accessToken) throw new Error('Unauthorized');
+
+  const query = new URLSearchParams();
+  if (params.search)       query.set('search', params.search);
+  if (params.status)       query.set('status', params.status);
+  if (params.device_status) query.set('device_status', params.device_status);
+  if (params.country_code) query.set('country_code', params.country_code);
+  if (params.trial_used !== undefined && params.trial_used !== '')
+    query.set('trial_used', params.trial_used);
+  if (params.has_active_license !== undefined && params.has_active_license !== '')
+    query.set('has_active_license', params.has_active_license);
+  if (params.date_from)    query.set('date_from', params.date_from);
+  if (params.date_to)      query.set('date_to', params.date_to);
+  if (params.sort_by)      query.set('sort_by', params.sort_by);
+  if (params.sort_order)   query.set('sort_order', params.sort_order);
+  if (params.page)         query.set('page', String(params.page));
+  if (params.page_size)    query.set('page_size', String(params.page_size));
+
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  const res = await request(`${BASE}/admin/app-users${qs}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  const raw = res.data || res;
+  const items = Array.isArray(raw) ? raw : Array.isArray(raw.data) ? raw.data : [];
+  const meta  = res.meta || raw.meta || {};
+  return {
+    users:    items,
+    total:    raw.total    ?? raw.total_count    ?? meta.total    ?? meta.total_count    ?? items.length,
+    page:     raw.page     ?? raw.current_page   ?? meta.page     ?? params.page         ?? 1,
+    pageSize: raw.page_size ?? raw.pageSize      ?? meta.page_size ?? meta.pageSize      ?? params.page_size ?? 20,
+  };
+};
+
+// GET /admin/users/{id}
+export const apiFetchAdminUserDetail = async (accessToken, userId) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/users/${userId}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+// PATCH /admin/users/{id} - update role or status (superadmin only)
+// Body: { role?, status? }
+export const apiUpdateAdminUser = async (accessToken, userId, data) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const payload = {};
+  if (data.role !== undefined) payload.role = data.role;
+  if (data.status !== undefined) payload.status = data.status;
+  const res = await request(`${BASE}/admin/users/${userId}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(payload),
+  });
+  return res.data || res;
+};
+
+// POST /admin/users - create a new admin account
+// Body: { email, password, role, full_name? }
+export const apiCreateAdminUser = async (accessToken, data) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const payload = {
+    email: data.email,
+    password: data.password,
+    role: data.role,
+  };
+  if (data.full_name) payload.full_name = data.full_name;
+
+  const res = await request(`${BASE}/admin/users`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(payload),
+  });
+  return res.data || res;
+};
+

@@ -8,6 +8,9 @@ import HeartbeatPage from '../components/Heartbeat/HeartbeatPage';
 import LicensePage from '../components/License/LicensePage';
 import ProfilePage from '../components/Profile/ProfilePage';
 import TrialPage from '../components/Trial/TrialPage';
+import AdminUsersPage from '../components/AdminUser/AdminUsersPage';
+import AppUsersPage   from '../components/AppUsers/AppUsersPage';
+
 import './AppLayout.css';
 
 export default function AppLayout() {
@@ -25,7 +28,10 @@ export default function AppLayout() {
       case 'license': return <LicensePage />;
       case 'profile': return <ProfilePage />;
       case 'trial':   return <TrialPage />;
+      case 'admin_users': return <AdminUsersPage />;
+      case 'app_users':   return <AppUsersPage />;
       default:        return <DashboardTable />;
+
     }
   };
 
