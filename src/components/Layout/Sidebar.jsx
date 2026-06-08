@@ -88,7 +88,7 @@ const NAV_ITEMS = [
   { id: 'device', label: 'Device', icon: <DeviceIcon />, page: 'device' },
   { id: 'heartbeat', label: 'Heartbeat', icon: <HeartbeatIcon />, page: 'heartbeat' },
   { id: 'license', label: 'License', icon: <LicenseIcon />, page: 'license' },
-  { id: 'trial', label: 'Trial & Grace', icon: <TrialIcon />, page: 'trial' },
+  { id: 'trial', label: 'System Configuration', icon: <TrialIcon />, page: 'trial' },
 ];
 
 

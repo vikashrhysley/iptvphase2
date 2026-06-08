@@ -16,7 +16,7 @@ const PAGE_TITLES = {
   heartbeat: 'Heartbeat Monitoring',
   license: 'License Center',
   profile: 'My Profile',
-  trial:   'Trial & Grace Policies',
+  trial:   'System Configuration',
 };
 
 const RefreshIcon = () => (

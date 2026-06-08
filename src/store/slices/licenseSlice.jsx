@@ -1,23 +1,30 @@
-// src/store/slices/licenseSlice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import {
-  apiFetchExpiringLicenses,
-  apiFetchLicenses, apiFetchLicenseDetail,
-  apiFetchLicenseStats,
-  apiRenewLicense, apiRevokeLicense, apiEditLicense, apiValidateLicense,
-} from '../../services/api';
+import { apiFetchExpiringLicenses, apiFetchLicenses, apiFetchLicenseStats, apiFetchLicenseDetail, apiRenewLicense, apiRevokeLicense, apiEditLicense } from '../../services/api';
 
-const licenseActionMessage = {
-  extend: 'License expiry extended successfully',
-  set_ttl: 'License token TTL updated successfully',
-  revoke: 'License revoked successfully',
+const DEFAULT_FILTERS = {
+  license_filter: '',
+  plan_type: '',
+  search: '',
+  sort_by: 'expires_at',
+  sort_order: 'asc',
+  page: 1,
+  page_size: 20,
 };
 
-export const fetchLicenses = createAsyncThunk('licenses/fetchAll',
-  async (_, { getState, rejectWithValue }) => {
+export const fetchExpiringLicenses = createAsyncThunk('licenses/fetchExpiring',
+  async (params = {}, { getState, rejectWithValue }) => {
     try {
       const { accessToken } = getState().auth;
-      return await apiFetchLicenses(accessToken);
+      return await apiFetchExpiringLicenses(accessToken, params);
+    } catch (err) { return rejectWithValue(err.message); }
+  }
+);
+
+export const fetchLicenses = createAsyncThunk('licenses/fetchAll',
+  async (params = {}, { getState, rejectWithValue }) => {
+    try {
+      const { accessToken } = getState().auth;
+      return await apiFetchLicenses(accessToken, params);
     } catch (err) { return rejectWithValue(err.message); }
   }
 );
@@ -27,15 +34,6 @@ export const fetchLicenseStats = createAsyncThunk('licenses/fetchStats',
     try {
       const { accessToken } = getState().auth;
       return await apiFetchLicenseStats(accessToken);
-    } catch (err) { return rejectWithValue(err.message); }
-  }
-);
-
-export const fetchExpiringLicenses = createAsyncThunk('licenses/fetchExpiring',
-  async (params = {}, { getState, rejectWithValue }) => {
-    try {
-      const { accessToken } = getState().auth;
-      return await apiFetchExpiringLicenses(accessToken, params);
     } catch (err) { return rejectWithValue(err.message); }
   }
 );
@@ -71,21 +69,9 @@ export const editLicense = createAsyncThunk('licenses/edit',
   async ({ licenseId, data }, { getState, rejectWithValue, dispatch }) => {
     try {
       const { accessToken } = getState().auth;
-      const shouldRefreshDetail = getState().licenses.selectedDetail?.id === licenseId;
       const result = await apiEditLicense(accessToken, licenseId, data);
-      dispatch(fetchLicenses());
       dispatch(fetchLicenseStats());
-      if (shouldRefreshDetail) dispatch(fetchLicenseDetail({ licenseId }));
       return result;
-    } catch (err) { return rejectWithValue(err.message); }
-  }
-);
-
-export const validateLicense = createAsyncThunk('licenses/validate',
-  async ({ licenseId }, { getState, rejectWithValue }) => {
-    try {
-      const { accessToken } = getState().auth;
-      return await apiValidateLicense(accessToken, licenseId);
     } catch (err) { return rejectWithValue(err.message); }
   }
 );
@@ -93,92 +79,94 @@ export const validateLicense = createAsyncThunk('licenses/validate',
 const licenseSlice = createSlice({
   name: 'licenses',
   initialState: {
-    licenses:       [],
-    expiringLicenses: [],
-    expiringTotal:  0,
-    stats:          null,
-    selectedDetail: null, // full detail of clicked license
-    loading:        false,
-    expiringLoading: false,
-    statsLoading:   false,
+    licenses:      [],
+    total:         0,
+    page:          1,
+    pageSize:      20,
+    loading:       false,
+    error:         null,
+
+    stats:         null,
+    statsLoading:  false,
+    statsError:    null,
+
+    selectedDetail: null,
     detailLoading:  false,
-    error:          null,
-    expiringError:  null,
-    statsError:     null,
-    actionLoading:  null,
-    toast:          null,
-    editModal:      null,
-    validationModal: null,
+    detailError:    null,
+
+    actionLoading: null,
+    toast:         null,
+    editModal:     null,
+
+    filters: { ...DEFAULT_FILTERS },
   },
   reducers: {
-    clearToast(s)       { s.toast = null; },
-    setToast(s, a)      { s.toast = a.payload; },
-    openEditModal(s, a) { s.editModal = a.payload; },
-    closeEditModal(s)   { s.editModal = null; },
-    closeValidationModal(s) { s.validationModal = null; },
-    clearDetail(s)      { s.selectedDetail = null; },
+    clearToast(s)         { s.toast = null; },
+    setToast(s, a)        { s.toast = a.payload; },
+    openEditModal(s, a)   { s.editModal = a.payload; },
+    closeEditModal(s)     { s.editModal = null; },
+    clearDetail(s)        { s.selectedDetail = null; s.detailLoading = false; s.detailError = null; },
+    setLicenseFilters(s, a) { s.filters = { ...s.filters, ...a.payload }; },
+    clearLicenseFilters(s)  { s.filters = { ...DEFAULT_FILTERS }; },
   },
   extraReducers: (b) => {
+    b.addCase(fetchExpiringLicenses.pending,   s => { s.loading = true;  s.error = null; })
+     .addCase(fetchExpiringLicenses.fulfilled, (s, a) => {
+       s.loading  = false;
+       s.licenses = a.payload.licenses;
+       s.total    = a.payload.total;
+       s.page     = a.payload.page;
+       s.pageSize = a.payload.pageSize;
+     })
+     .addCase(fetchExpiringLicenses.rejected,  (s, a) => { s.loading = false; s.error = a.payload; });
+
     b.addCase(fetchLicenses.pending,   s => { s.loading = true;  s.error = null; })
-     .addCase(fetchLicenses.fulfilled, (s, a) => { s.loading = false; s.licenses = a.payload.licenses; })
+     .addCase(fetchLicenses.fulfilled, (s, a) => {
+       s.loading  = false;
+       s.licenses = a.payload.licenses;
+       s.total    = a.payload.total;
+       s.page     = a.payload.page;
+       s.pageSize = a.payload.pageSize;
+     })
      .addCase(fetchLicenses.rejected,  (s, a) => { s.loading = false; s.error = a.payload; });
 
     b.addCase(fetchLicenseStats.pending,   s => { s.statsLoading = true;  s.statsError = null; })
-     .addCase(fetchLicenseStats.fulfilled, (s, a) => { s.statsLoading = false; s.stats = a.payload; })
+     .addCase(fetchLicenseStats.fulfilled, (s, a) => { s.statsLoading = false; s.stats = a.payload?.data || a.payload; })
      .addCase(fetchLicenseStats.rejected,  (s, a) => { s.statsLoading = false; s.statsError = a.payload; });
 
-    b.addCase(fetchExpiringLicenses.pending,   s => { s.expiringLoading = true;  s.expiringError = null; })
-     .addCase(fetchExpiringLicenses.fulfilled, (s, a) => {
-       s.expiringLoading = false;
-       s.expiringLicenses = a.payload.licenses;
-       s.expiringTotal = a.payload.total;
-     })
-     .addCase(fetchExpiringLicenses.rejected,  (s, a) => { s.expiringLoading = false; s.expiringError = a.payload; });
-
-    b.addCase(fetchLicenseDetail.pending,   s => { s.detailLoading = true; })
+    b.addCase(fetchLicenseDetail.pending,   s => { s.detailLoading = true; s.detailError = null; s.selectedDetail = null; })
      .addCase(fetchLicenseDetail.fulfilled, (s, a) => { s.detailLoading = false; s.selectedDetail = a.payload; })
-     .addCase(fetchLicenseDetail.rejected,  (s, a) => { s.detailLoading = false; s.error = a.payload; });
+     .addCase(fetchLicenseDetail.rejected,  (s, a) => { s.detailLoading = false; s.detailError = a.payload || 'Failed to load license details.'; });
 
     b.addCase(renewLicense.pending,   (s, a) => { s.actionLoading = a.meta.arg.licenseId; })
      .addCase(renewLicense.fulfilled, (s, a) => {
        s.actionLoading = null;
-       const l = s.licenses.find(l => l.id === a.payload.licenseId);
-       if (l) { l.status = 'active'; if (a.payload.expiration_date || a.payload.expirationDate) l.expirationDate = a.payload.expiration_date || a.payload.expirationDate; }
-       s.toast = { type: 'success', msg: 'License renewed successfully' };
+       const id = a.meta.arg.licenseId;
+       const l  = s.licenses.find(l => l.id === id);
+       if (l) l.status = 'active';
+       s.toast = { type: 'success', msg: 'License renewed successfully.' };
      })
      .addCase(renewLicense.rejected, (s, a) => { s.actionLoading = null; s.toast = { type: 'error', msg: a.payload }; });
 
     b.addCase(revokeLicense.pending,   (s, a) => { s.actionLoading = a.meta.arg.licenseId; })
      .addCase(revokeLicense.fulfilled, (s, a) => {
        s.actionLoading = null;
-       const l = s.licenses.find(l => l.id === a.payload.licenseId);
+       const id = a.meta.arg.licenseId;
+       const l  = s.licenses.find(l => l.id === id);
        if (l) l.status = 'revoked';
-       s.toast = { type: 'success', msg: 'License revoked' };
+       s.toast = { type: 'success', msg: 'License revoked.' };
      })
      .addCase(revokeLicense.rejected, (s, a) => { s.actionLoading = null; s.toast = { type: 'error', msg: a.payload }; });
 
     b.addCase(editLicense.pending,   (s, a) => { s.actionLoading = a.meta.arg.licenseId; })
-     .addCase(editLicense.fulfilled, (s, a) => {
-       s.actionLoading = null; s.editModal = null;
-       const l = s.licenses.find(l => l.id === a.payload.licenseId);
-       if (l) Object.assign(l, a.payload);
-       if (s.selectedDetail?.id === a.payload.licenseId) Object.assign(s.selectedDetail, a.payload);
-       s.toast = { type: 'success', msg: licenseActionMessage[a.payload.action] || 'License updated' };
+     .addCase(editLicense.fulfilled, (s) => {
+       s.actionLoading = null;
+       s.editModal     = null;
+       s.toast = { type: 'success', msg: 'License updated successfully.' };
      })
      .addCase(editLicense.rejected, (s, a) => { s.actionLoading = null; s.toast = { type: 'error', msg: a.payload }; });
-
-    b.addCase(validateLicense.pending,   (s, a) => { s.actionLoading = a.meta.arg.licenseId; })
-     .addCase(validateLicense.fulfilled, (s, a) => {
-       s.actionLoading = null;
-       s.validationModal = a.payload;
-       s.toast = { type: 'success', msg: 'License validation completed' };
-     })
-     .addCase(validateLicense.rejected, (s, a) => {
-       s.actionLoading = null;
-       s.toast = { type: 'error', msg: a.payload };
-     });
   },
 });
 
-export const { clearToast, setToast, openEditModal, closeEditModal, closeValidationModal, clearDetail } = licenseSlice.actions;
+export const { clearToast, setToast, openEditModal, closeEditModal, clearDetail, setLicenseFilters, clearLicenseFilters } = licenseSlice.actions;
 export default licenseSlice.reducer;

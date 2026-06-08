@@ -70,52 +70,59 @@ function OTPRow({ otp, setOtp, onSubmit, dispatch }) {
 function CredentialsStep() {
   const dispatch = useDispatch();
   const { loading, error } = useSelector(s => s.auth);
-  const [form, setForm]   = useState({ email:'', password:'' });
-  const [show, setShow]   = useState(false);
+  const [form, setForm]     = useState({ email:'', password:'' });
+  const [show, setShow]     = useState(false);
+  const [localError, setLocalError] = useState('');
 
   const submit = () => {
-    if (!form.email || !form.password) return;
-    dispatch(loginStep1({ email: form.email, password: form.password }));
+    if (!form.email.trim()) { setLocalError('Email is required.'); return; }
+    if (!form.password)     { setLocalError('Password is required.'); return; }
+    setLocalError('');
+    dispatch(loginStep1({ email: form.email.trim(), password: form.password }));
   };
-  const onChange = e => { dispatch(clearError()); setForm(f => ({...f, [e.target.name]: e.target.value})); };
+  const onChange = e => {
+    setLocalError('');
+    dispatch(clearError());
+    setForm(f => ({...f, [e.target.name]: e.target.value}));
+  };
+
+  const displayError = localError || (typeof error === 'string' ? error : error ? 'An error occurred. Please try again.' : '');
 
   return (
     <>
       <StepDots current={1} total={3} />
-      <h1 className="login-heading">Welcome back</h1>
-      <p className="login-subheading">Sign in to your account to continue</p>
 
       <div className="form-group">
         <label className="form-label">Email</label>
         <div className="form-input-wrapper">
+          <span className="form-input-icon"><MailIcon /></span>
           <input className="form-input" type="email" name="email"
             placeholder="Enter your email" value={form.email}
             onChange={onChange} onKeyDown={e => e.key==='Enter' && submit()}
             autoFocus autoComplete="email" />
-          <span className="form-input-icon"><MailIcon /></span>
         </div>
       </div>
 
       <div className="form-group">
         <label className="form-label">Password</label>
         <div className="form-input-wrapper">
+          <span className="form-input-icon"><LockIcon /></span>
           <input className="form-input has-right-icon" type={show?'text':'password'}
             name="password" placeholder="Enter your password" value={form.password}
             onChange={onChange} onKeyDown={e => e.key==='Enter' && submit()}
             autoComplete="current-password" />
-          <span className="form-input-icon"><LockIcon /></span>
           <button className="toggle-password" onClick={() => setShow(p=>!p)} type="button" tabIndex={-1}>
             <EyeIcon open={show} />
           </button>
         </div>
       </div>
 
-      {error && <div className="form-error"><AlertIcon /> {typeof error === 'string' ? error : 'An error occurred. Please try again.'}</div>}
+      {displayError && <div className="form-error"><AlertIcon /> {displayError}</div>}
 
-      <button className="btn-primary" onClick={submit}
-        disabled={loading || !form.email || !form.password} style={{ marginTop: 24 }}>
+      <button className="btn-primary" onClick={submit} disabled={loading} style={{ marginTop: 30, marginBottom: 20 }}>
         {loading ? <span className="loading-spinner" /> : <><ShieldIcon /> Continue</>}
       </button>
+      
     </>
   );
 }

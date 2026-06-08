@@ -272,38 +272,154 @@ export const apiEditUser = async (accessToken, userId, data) => {
   return { success: true, userId, name: `${updated.firstName} ${updated.lastName}`, phone: updated.phone || data.phone, address: data.address };
 };
 
-// Device API
-const DEVICE_TYPES = ['phone','tablet','desktop','tv'];
-const DEVICE_OS    = { phone:['iOS 17','Android 14','Android 13','iOS 16'], tablet:['iPadOS 17','Android 13','iPadOS 16','Android 12'], desktop:['Windows 11','macOS Sonoma','Ubuntu 22.04','Windows 10'], tv:['Android TV 12','Tizen 7','webOS 23','Fire OS 8'] };
-const DEVICE_NAMES = { phone:['iPhone 15 Pro','Samsung Galaxy S24','Pixel 8','OnePlus 12'], tablet:['iPad Pro 12.9"','Samsung Tab S9','iPad Air','Lenovo Tab P12'], desktop:['MacBook Pro','Dell XPS 15','HP EliteBook','ThinkPad X1'], tv:['Samsung QLED 4K','LG C3 OLED','Fire TV Stick 4K','Chromecast HD'] };
-const LOCATIONS    = ['New York, US','London, UK','Tokyo, JP','Sydney, AU','Berlin, DE','Toronto, CA','Singapore, SG','Dubai, AE'];
-
-export const apiFetchDevices = async (accessToken) => {
+// ── Device APIs ──────────────────────────────────────────────
+// GET /admin/devices/stats
+export const apiFetchDeviceStats = async (accessToken) => {
   if (!accessToken) throw new Error('Unauthorized');
-  const res  = await fetch('https://dummyjson.com/users?limit=20');
-  const data = await res.json();
-  const devices = data.users.flatMap((u, ui) =>
-    Array.from({ length: (ui % 3) + 1 }, (_, di) => {
-      const type = DEVICE_TYPES[(ui + di) % 4];
-      return {
-        id: `DEV-${String(ui * 3 + di + 1).padStart(4,'0')}`,
-        userId: `USR-${String(u.id).padStart(3,'0')}`,
-        userName: `${u.firstName} ${u.lastName}`,
-        userImage: u.image, username: u.username, type,
-        name:       DEVICE_NAMES[type][(ui+di)%4],
-        os:         DEVICE_OS[type][(ui+di)%4],
-        location:   LOCATIONS[(ui*2+di)%8],
-        status:     ['active','active','active','inactive','blocked'][(ui+di*3)%5],
-        lastSeen:   new Date(Date.now()-((ui*7+di*3)%30+1)*86400000).toISOString(),
-        appVersion: `v${2+(ui%3)}.${di+1}.${(ui+di)%9}`,
-      };
-    })
-  );
-  return { devices };
+  const res = await request(`${BASE}/admin/devices/stats`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
 };
 
-export const apiUpdateDeviceStatus = async (_, deviceId, status) => { await new Promise(r=>setTimeout(r,400)); return { success:true, deviceId, status }; };
-export const apiRevokeDevice       = async (_, deviceId)         => { await new Promise(r=>setTimeout(r,400)); return { success:true, deviceId }; };
+// GET /admin/devices
+export const apiFetchAdminDevices = async (accessToken, params = {}) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const query = new URLSearchParams();
+  if (params.search)          query.set('search',           params.search);
+  if (params.status)          query.set('status',           params.status);
+  if (params.device_type)     query.set('device_type',      params.device_type);
+  if (params.platform)        query.set('platform',         params.platform);
+  if (params.plan_type)       query.set('plan_type',        params.plan_type);
+  if (params.risk_min != null) query.set('risk_min',        String(params.risk_min));
+  if (params.risk_max != null) query.set('risk_max',        String(params.risk_max));
+  if (params.has_risk_flag)    query.set('has_risk_flag',   'true');
+  if (params.heartbeat_stale)  query.set('heartbeat_stale', 'true');
+  if (params.sort_by)          query.set('sort_by',         params.sort_by);
+  if (params.sort_order)       query.set('sort_order',      params.sort_order);
+  if (params.page)             query.set('page',            String(params.page));
+  if (params.page_size)        query.set('page_size',       String(params.page_size));
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  const res = await request(`${BASE}/admin/devices${qs}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const raw   = res.data || res;
+  const items = Array.isArray(raw) ? raw : Array.isArray(raw.data) ? raw.data : [];
+  const meta  = res.meta || raw.meta || {};
+  return {
+    devices:  items,
+    total:    raw.total    ?? raw.total_count    ?? meta.total    ?? items.length,
+    page:     raw.page     ?? raw.current_page   ?? meta.page     ?? params.page ?? 1,
+    pageSize: raw.page_size ?? raw.pageSize      ?? meta.page_size ?? params.page_size ?? 20,
+  };
+};
+
+// GET /admin/devices/{id}/activity
+export const apiFetchDeviceActivity = async (accessToken, deviceId, params = {}) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const query = new URLSearchParams();
+  if (params.content_type) query.set('content_type', params.content_type);
+  if (params.date_from)    query.set('date_from', params.date_from);
+  if (params.date_to)      query.set('date_to', params.date_to);
+  if (params.page)         query.set('page', String(params.page));
+  if (params.page_size)    query.set('page_size', String(params.page_size));
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  const res = await request(`${BASE}/admin/devices/${deviceId}/activity${qs}`, {
+    method: 'GET', headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const raw = res.data || res;
+  const items = Array.isArray(raw) ? raw : Array.isArray(raw.data) ? raw.data : [];
+  const meta  = res.meta || raw.meta || {};
+  return { items, total: raw.total ?? meta.total ?? items.length, page: raw.page ?? meta.page ?? 1, pageSize: raw.page_size ?? meta.page_size ?? 20 };
+};
+
+// GET /admin/devices/{id}/login-history
+export const apiFetchDeviceLoginHistory = async (accessToken, deviceId, params = {}) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const query = new URLSearchParams();
+  if (params.status)    query.set('status', params.status);
+  if (params.page)      query.set('page', String(params.page));
+  if (params.page_size) query.set('page_size', String(params.page_size));
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  const res = await request(`${BASE}/admin/devices/${deviceId}/login-history${qs}`, {
+    method: 'GET', headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const raw = res.data || res;
+  const items = Array.isArray(raw) ? raw : Array.isArray(raw.data) ? raw.data : [];
+  const meta  = res.meta || raw.meta || {};
+  return { items, total: raw.total ?? meta.total ?? items.length, page: raw.page ?? meta.page ?? 1, pageSize: raw.page_size ?? meta.page_size ?? 20 };
+};
+
+// GET /admin/devices/{id} - full device detail
+export const apiFetchDeviceDetail = async (accessToken, deviceId) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/devices/${deviceId}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+// PATCH /admin/devices/{id}/status
+export const apiUpdateDeviceStatus = async (accessToken, deviceId, status, reason) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const payload = { status };
+  if (reason?.trim()) payload.reason = reason.trim();
+  const res = await request(`${BASE}/admin/devices/${deviceId}/status`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(payload),
+  });
+  return { success: true, deviceId, status, ...(res.data || res) };
+};
+
+// POST /admin/devices/{id}/revoke
+export const apiRevokeDevice = async (accessToken, deviceId, reason) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/devices/${deviceId}/revoke`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ reason }),
+  });
+  return { success: true, deviceId, ...(res.data || res) };
+};
+
+// Keep alias for backward compat
+export const apiFetchDevices = apiFetchAdminDevices;
+
+// GET /admin/devices/export — download CSV or JSON with current filters
+export const apiExportDevices = async (accessToken, filters = {}, format = 'csv') => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const query = new URLSearchParams();
+  query.set('format', format);
+  if (filters.search)          query.set('search',           filters.search);
+  if (filters.status)          query.set('status',           filters.status);
+  if (filters.device_type)     query.set('device_type',      filters.device_type);
+  if (filters.platform)        query.set('platform',         filters.platform);
+  if (filters.plan_type)       query.set('plan_type',        filters.plan_type);
+  if (filters.has_risk_flag)   query.set('has_risk_flag',    'true');
+  if (filters.heartbeat_stale) query.set('heartbeat_stale',  'true');
+  if (filters.sort_by)         query.set('sort_by',          filters.sort_by);
+  if (filters.sort_order)      query.set('sort_order',       filters.sort_order);
+
+  const res = await fetch(`${BASE}/admin/devices/export?${query.toString()}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) throw new Error(`Export failed (${res.status})`);
+
+  const blob = await res.blob();
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  const ts   = new Date().toISOString().slice(0, 10);
+  a.href     = url;
+  a.download = `devices_${ts}.${format}`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
 
 // Heartbeat Monitoring APIs
 const cleanParams = (params = {}) => {
@@ -361,29 +477,45 @@ export const apiFetchRiskyHeartbeatDevices = async (accessToken, params = {}) =>
 
 // ── License APIs — Real endpoints ────────────────────────
 
-// GET /admin/licenses  — list all licenses
-// Header: Authorization: Bearer <access_token>
-export const apiFetchLicenses = async (accessToken) => {
+// GET /admin/licenses — paginated list with compound filter support
+export const apiFetchLicenses = async (accessToken, params = {}) => {
   if (!accessToken) throw new Error('Unauthorized');
-  const res = await request(`${BASE}/admin/licenses`, {
-    method: 'GET',
-    headers: { Authorization: `Bearer ${accessToken}` },
+  const query = new URLSearchParams();
+  if (params.license_filter)      query.set('license_filter', params.license_filter);
+  if (params.status)              query.set('status',         params.status);
+  if (params.plan_type)           query.set('plan_type',      params.plan_type);
+  if (params.search)              query.set('search',         params.search);
+  if (params.device_id)           query.set('device_id',      params.device_id);
+  if (params.user_id)             query.set('user_id',        params.user_id);
+  if (params.expires_soon != null) query.set('expires_soon',  String(params.expires_soon));
+  if (params.is_active != null)   query.set('is_active',      String(params.is_active));
+  if (params.auto_renew != null)  query.set('auto_renew',     String(params.auto_renew));
+  if (params.date_from)           query.set('date_from',      params.date_from);
+  if (params.date_to)             query.set('date_to',        params.date_to);
+  if (params.sort_by)             query.set('sort_by',        params.sort_by);
+  if (params.sort_order)          query.set('sort_order',     params.sort_order);
+  if (params.page)                query.set('page',           String(params.page));
+  if (params.page_size)           query.set('page_size',      String(params.page_size));
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  const res = await request(`${BASE}/admin/licenses${qs}`, {
+    method: 'GET', headers: { Authorization: `Bearer ${accessToken}` },
   });
-  // Response: { success, data: [ ...licenses ] } or { success, data: { items: [...] } }
-  const raw = res.data || res;
-  const list = Array.isArray(raw) ? raw
-             : Array.isArray(raw.items) ? raw.items
-             : Array.isArray(raw.licenses) ? raw.licenses
-             : [];
-  return { licenses: list.map(normalizeLicense) };
+  const raw   = res.data || res;
+  const meta  = res.meta || raw.meta || {};
+  const items = Array.isArray(raw) ? raw : Array.isArray(raw.data) ? raw.data : Array.isArray(raw.items) ? raw.items : [];
+  return {
+    licenses: items,
+    total:    raw.total    ?? raw.total_count    ?? meta.total    ?? items.length,
+    page:     raw.page     ?? raw.current_page   ?? meta.page     ?? params.page ?? 1,
+    pageSize: raw.page_size ?? raw.pageSize      ?? meta.page_size ?? params.page_size ?? 20,
+  };
 };
 
-// GET /admin/licenses/stats — aggregate license counts for License Center
+// GET /admin/licenses/stats
 export const apiFetchLicenseStats = async (accessToken) => {
   if (!accessToken) throw new Error('Unauthorized');
   const res = await request(`${BASE}/admin/licenses/stats`, {
-    method: 'GET',
-    headers: { Authorization: `Bearer ${accessToken}` },
+    method: 'GET', headers: { Authorization: `Bearer ${accessToken}` },
   });
   return res.data || res;
 };
@@ -391,28 +523,37 @@ export const apiFetchLicenseStats = async (accessToken) => {
 // GET /admin/licenses/expiring — licenses expiring within N days
 export const apiFetchExpiringLicenses = async (accessToken, params = {}) => {
   if (!accessToken) throw new Error('Unauthorized');
-  const res = await request(`${BASE}/admin/licenses/expiring${cleanParams(params)}`, {
+  const query = new URLSearchParams();
+  query.set('days',      String(params.days      || 7));
+  query.set('page',      String(params.page      || 1));
+  query.set('page_size', String(params.page_size || 20));
+  const res = await request(`${BASE}/admin/licenses/expiring?${query.toString()}`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  const paged = normalizePagedResponse(res);
+  const raw   = res.data || res;
+  const items = Array.isArray(raw) ? raw : Array.isArray(raw.data) ? raw.data : Array.isArray(raw.items) ? raw.items : [];
+  const meta  = res.meta || raw.meta || {};
   return {
-    ...paged,
-    licenses: paged.items.map(normalizeLicense),
+    licenses: items,
+    total:    raw.total ?? raw.total_count ?? meta.total ?? items.length,
+    page:     raw.page  ?? raw.current_page ?? meta.page ?? params.page ?? 1,
+    pageSize: raw.page_size ?? raw.pageSize ?? meta.page_size ?? params.page_size ?? 20,
   };
 };
 
-// GET /admin/licenses/:id  — single license detail
-// Header: Authorization: Bearer <access_token>
+// GET /admin/licenses/{id} — full detail with history + device
 export const apiFetchLicenseDetail = async (accessToken, licenseId) => {
   if (!accessToken) throw new Error('Unauthorized');
-  const res = await request(`${BASE}/admin/licenses/${licenseId}`, {
+  const id = String(licenseId || '').trim();
+  if (!id || id === 'undefined' || id === 'null') throw new Error(`Invalid license ID: "${licenseId}"`);
+  const res = await request(`${BASE}/admin/licenses/${id}`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  // API response: { success, data: { id, plan_type, status, start_date, expires_at, device, history, snapshot, ... } }
   const raw = res.data || res;
-  return normalizeLicense(raw);
+  if (raw.license) return { license: raw.license, history: raw.history || [], device: raw.device || null };
+  return { license: raw, history: raw.history || [], device: raw.device || null };
 };
 
 // Normalize any API shape → consistent license object for the UI
@@ -568,6 +709,29 @@ export const apiValidateLicense = async (accessToken, licenseId) => {
 
 // ── Trial & Grace Policy APIs ─────────────────────────────
 
+// GET /admin/system-config — all runtime config key/value pairs (superadmin)
+export const apiGetSystemConfig = async (accessToken) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/system-config`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return Array.isArray(res.data) ? res.data : Array.isArray(res) ? res : [];
+};
+
+// PUT /admin/system-config/{key} — update a single config key (superadmin)
+export const apiUpdateSystemConfigKey = async (accessToken, key, value, changeNote) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const body = { value: String(value) };
+  if (changeNote?.trim()) body.change_note = changeNote.trim();
+  const res = await request(`${BASE}/admin/system-config/${encodeURIComponent(key)}`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(body),
+  });
+  return res.data || res;
+};
+
 // GET /admin/system-config/trial
 // Header: Authorization: Bearer <access_token>
 export const apiGetTrialConfig = async (accessToken) => {
@@ -579,16 +743,21 @@ export const apiGetTrialConfig = async (accessToken) => {
   return res.data || res;
 };
 
-// PUT /admin/system-config/trial  — update trial period (superadmin only)
-export const apiUpdateTrialConfig = async (accessToken, data) => {
+// PATCH /admin/system-config/trial — update trial & grace period settings (superadmin only)
+// Only sends fields supported by the endpoint; device_limit_policy is excluded (use PUT /admin/system-config/{key})
+export const apiUpdateTrialConfig = async (accessToken, data, changeNote) => {
   if (!accessToken) throw new Error('Unauthorized');
-  const payload = {
-    ...data,
-    trial_duration_days: data.trial_period_days,
-    max_devices_per_trial: data.max_trial_extensions,
-  };
+  const payload = {};
+  if (data.trial_duration_days   != null) payload.trial_duration_days   = data.trial_duration_days;
+  if (data.max_trial_extensions  != null) payload.max_trial_extensions  = data.max_trial_extensions;
+  if (data.trial_extension_days  != null) payload.trial_extension_days  = data.trial_extension_days;
+  if (data.trial_reminder_days   != null) payload.trial_reminder_days   = data.trial_reminder_days;
+  if (data.trial_auto_convert    != null) payload.trial_auto_convert    = data.trial_auto_convert;
+  if (data.grace_period_days     != null) payload.grace_period_days     = data.grace_period_days;
+  if (data.max_devices_per_trial != null) payload.max_devices_per_trial = data.max_devices_per_trial;
+  if (changeNote?.trim())                 payload.change_note           = changeNote.trim();
   const res = await request(`${BASE}/admin/system-config/trial`, {
-    method: 'PUT',
+    method: 'PATCH',
     headers: { Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify(payload),
   });

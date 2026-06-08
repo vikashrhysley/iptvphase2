@@ -61,7 +61,7 @@
   background: var(--bg-deep);
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-lg);
-  padding: 48px 44px;
+  padding: 36px 40px;
   box-shadow: var(--shadow-elevated), inset 0 1px 0 rgba(255,255,255,0.05);
   animation: fadeIn 0.5s ease both;
 }
@@ -69,8 +69,9 @@
 .login-logo {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 14px;
-  margin-bottom: 36px;
+  margin-bottom: 26px;
 }
 
 .login-logo-icon {
@@ -122,26 +123,37 @@
   color: var(--text-primary);
   letter-spacing: -0.02em;
   margin-bottom: 6px;
+  text-align: left;
 }
 
 .login-subheading {
   font-size: 0.9rem;
   color: var(--text-secondary);
-  margin-bottom: 32px;
+  margin-bottom: 22px;
+  text-align: left;
 }
 
 .form-group {
-  margin-bottom: 20px;
+  margin-bottom: 18px;
+}
+
+.form-group:first-of-type {
+  margin-top: 20px;
 }
 
 .form-label {
   display: block;
+  text-align: left;
   font-size: 0.8rem;
   font-weight: 500;
   color: var(--text-secondary);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   margin-bottom: 8px;
+}
+
+.form-group {
+  text-align: left;
 }
 
 .form-input-wrapper {
@@ -154,9 +166,11 @@
   top: 50%;
   transform: translateY(-50%);
   color: var(--text-muted);
-  font-size: 16px;
+  display: flex;
+  align-items: center;
   transition: color var(--transition-fast);
   pointer-events: none;
+  z-index: 1;
 }
 
 .form-input {
@@ -274,7 +288,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 28px;
+  margin-bottom: 20px;
 }
 
 .step-dot {
