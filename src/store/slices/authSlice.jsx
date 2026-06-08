@@ -1,30 +1,105 @@
 // src/store/slices/authSlice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { apiLogin, api2FASetup, api2FAConfirm, apiVerifyTOTP, apiLogout } from '../../services/api';
+import {
+  apiLogin, api2FASetup, api2FAConfirm, apiVerifyTOTP, apiLogout,
+  apiTokenStatus, apiRefreshToken, apiGetProfile,
+} from '../../services/api';
+
+// ── localStorage helpers ───────────────────────────────────
+const LS_ACCESS  = 'auth_access_token';
+const LS_REFRESH = 'auth_refresh_token';
+
+const saveTokens = (access, refresh) => {
+  if (access)  localStorage.setItem(LS_ACCESS,  access);
+  if (refresh) localStorage.setItem(LS_REFRESH, refresh);
+};
+const clearTokens = () => {
+  localStorage.removeItem(LS_ACCESS);
+  localStorage.removeItem(LS_REFRESH);
+};
+
+// ── Thunks ─────────────────────────────────────────────────
+
+// Startup check — reads localStorage tokens, calls POST /auth/token-status,
+// then acts on the next_step directive to restore or discard the session.
+export const checkTokenStatus = createAsyncThunk('auth/checkTokenStatus',
+  async (_, { rejectWithValue }) => {
+    const accessToken  = localStorage.getItem(LS_ACCESS)  || '';
+    const refreshToken = localStorage.getItem(LS_REFRESH) || '';
+
+    try {
+      const status   = await apiTokenStatus(accessToken, refreshToken);
+      const nextStep = status.next_step;
+
+      if (nextStep === 'continue') {
+        // Full session active — restore user profile
+        try {
+          const user = await apiGetProfile(accessToken);
+          return { nextStep: 'continue', accessToken, refreshToken, user };
+        } catch {
+          return { nextStep: 'continue', accessToken, refreshToken, user: null };
+        }
+      }
+
+      if (nextStep === 'refresh') {
+        // Access token stale — exchange for new pair, then fetch profile
+        try {
+          const refreshed       = await apiRefreshToken(refreshToken);
+          const newAccessToken  = refreshed.access_token  || refreshed.accessToken;
+          const newRefreshToken = refreshed.refresh_token || refreshed.refreshToken || refreshToken;
+          saveTokens(newAccessToken, newRefreshToken);
+          const user = await apiGetProfile(newAccessToken);
+          return { nextStep: 'continue', accessToken: newAccessToken, refreshToken: newRefreshToken, user };
+        } catch {
+          clearTokens();
+          return { nextStep: 'login' };
+        }
+      }
+
+      if (nextStep === 'verify_totp') {
+        // Partial token — TOTP step still needed
+        return { nextStep: 'verify_totp', tempToken: accessToken };
+      }
+
+      if (nextStep === 'setup_2fa') {
+        // Partial token — first-time 2FA setup
+        return { nextStep: 'setup_2fa', tempToken: accessToken };
+      }
+
+      if (nextStep === 'logout') {
+        // Refresh token blacklisted — force logout
+        try { await apiLogout(accessToken); } catch { /* best-effort */ }
+        clearTokens();
+        return { nextStep: 'login' };
+      }
+
+      // 'login' or any unknown directive
+      clearTokens();
+      return { nextStep: 'login' };
+    } catch {
+      // Network or parse error — fail safe to login
+      clearTokens();
+      return { nextStep: 'login' };
+    }
+  }
+);
 
 // Step 1 — email + password
 export const loginStep1 = createAsyncThunk('auth/loginStep1',
   async ({ email, password }, { rejectWithValue }) => {
     try { return await apiLogin(email, password); }
     catch (err) {
-      // err.message is always a string from our fixed api.js
       const msg = (err.message || '').toLowerCase();
-      if (msg.includes('incorrect') || msg.includes('invalid') || msg.includes('401') || msg.includes('wrong') || msg.includes('unauthorized')) {
+      if (msg.includes('incorrect') || msg.includes('invalid') || msg.includes('401') || msg.includes('wrong') || msg.includes('unauthorized'))
         return rejectWithValue('Incorrect email or password. Please try again.');
-      }
-      if (msg.includes('not found') || msg.includes('404') || msg.includes('no account')) {
+      if (msg.includes('not found') || msg.includes('404') || msg.includes('no account'))
         return rejectWithValue('No account found with this email address.');
-      }
-      if (msg.includes('429') || msg.includes('too many')) {
+      if (msg.includes('429') || msg.includes('too many'))
         return rejectWithValue('Too many failed attempts. Please wait a few minutes and try again.');
-      }
-      if (msg.includes('network') || msg.includes('fetch') || msg.includes('failed to fetch')) {
+      if (msg.includes('network') || msg.includes('fetch') || msg.includes('failed to fetch'))
         return rejectWithValue('Unable to reach the server. Please check your internet connection.');
-      }
-      if (msg.includes('500') || msg.includes('server error')) {
+      if (msg.includes('500') || msg.includes('server error'))
         return rejectWithValue('Server error. Please try again in a moment.');
-      }
-      // Always return a string — never an object
       return rejectWithValue(typeof err.message === 'string' ? err.message : 'Login failed. Please try again.');
     }
   }
@@ -44,12 +119,10 @@ export const confirm2FASetup = createAsyncThunk('auth/confirm2FASetup',
     try { return await api2FAConfirm(getState().auth.tempToken, totpCode); }
     catch (err) {
       const msg = err.message?.toLowerCase();
-      if (msg?.includes('401') || msg?.includes('invalid') || msg?.includes('incorrect')) {
+      if (msg?.includes('401') || msg?.includes('invalid') || msg?.includes('incorrect'))
         return rejectWithValue('Invalid verification code. Please check your authenticator app and try again.');
-      }
-      if (msg?.includes('expired') || msg?.includes('session')) {
+      if (msg?.includes('expired') || msg?.includes('session'))
         return rejectWithValue('Session expired. Please log in again.');
-      }
       return rejectWithValue(err.message);
     }
   }
@@ -61,25 +134,32 @@ export const verifyTOTP = createAsyncThunk('auth/verifyTOTP',
     try { return await apiVerifyTOTP(getState().auth.tempToken, totpCode); }
     catch (err) {
       const msg = err.message?.toLowerCase();
-      if (msg?.includes('401') || msg?.includes('invalid') || msg?.includes('incorrect')) {
+      if (msg?.includes('401') || msg?.includes('invalid') || msg?.includes('incorrect'))
         return rejectWithValue('Invalid code. Please open your authenticator app and enter the current 6-digit code.');
-      }
-      if (msg?.includes('expired') || msg?.includes('session')) {
+      if (msg?.includes('expired') || msg?.includes('session'))
         return rejectWithValue('Session expired. Please log in again.');
-      }
       return rejectWithValue(err.message);
     }
   }
 );
 
-// Logout — hits API then clears local state
+// Logout — hits API then clears local state + localStorage
 export const logoutUser = createAsyncThunk('auth/logoutUser',
   async (_, { getState }) => {
     const { accessToken } = getState().auth;
-    await apiLogout(accessToken);
+    try { await apiLogout(accessToken); } catch { /* best-effort */ }
+    clearTokens();
     return { success: true };
   }
 );
+
+// ── Shared reducer for completed login ────────────────────
+const CLEAR_STATE = {
+  step: 1, tempToken: null, accessToken: null, refreshToken: null,
+  user: null, twoFactorEnabled: false, requiresTotp: false,
+  requires2faSetup: false, provisioningUri: null, qrCode: null,
+  secret: null, loading: false, error: null,
+};
 
 const done = (s, a) => {
   s.loading      = false;
@@ -87,95 +167,102 @@ const done = (s, a) => {
   s.refreshToken = a.payload.refreshToken;
   s.user         = a.payload.user;
   s.tempToken    = null;
-  s.step         = 4; // authenticated
+  s.step         = 4;
+  saveTokens(a.payload.accessToken, a.payload.refreshToken);
 };
 
+// ── Slice ──────────────────────────────────────────────────
 const authSlice = createSlice({
   name: 'auth',
   initialState: {
-    step: 1,               // 1=login 2=QR-setup 3=OTP-verify 4=done
-    tempToken:       null,
-    accessToken:     null,
-    refreshToken:    null,
-    user:            null,
-    twoFactorEnabled: false,
-    requiresTotp:     false,
-    requires2faSetup: false,
-    provisioningUri: null,
-    qrCode:          null,
-    secret:          null,
-    loading:         false,
-    error:           null,
+    step: 1,               // 1=login 2=QR-setup 3=OTP-verify 4=authenticated
+    tempToken:         null,
+    accessToken:       null,
+    refreshToken:      null,
+    user:              null,
+    twoFactorEnabled:  false,
+    requiresTotp:      false,
+    requires2faSetup:  false,
+    provisioningUri:   null,
+    qrCode:            null,
+    secret:            null,
+    loading:           false,
+    error:             null,
+    tokenChecked:      false, // true once the startup token-status check has resolved
+    tokenCheckLoading: false,
   },
   reducers: {
     logout(s) {
-      Object.assign(s, { step:1, tempToken:null, accessToken:null, refreshToken:null,
-        user:null, twoFactorEnabled:false, provisioningUri:null, qrCode:null,
-        secret:null, loading:false, error:null });
+      clearTokens();
+      Object.assign(s, CLEAR_STATE, { tokenChecked: true, tokenCheckLoading: false });
     },
     clearError(s) { s.error = null; },
   },
   extraReducers: b => {
+    // ── Token status check (startup) ──
+    b.addCase(checkTokenStatus.pending, s => {
+       s.tokenCheckLoading = true;
+     })
+     .addCase(checkTokenStatus.fulfilled, (s, a) => {
+       s.tokenCheckLoading = false;
+       s.tokenChecked      = true;
+       const { nextStep, accessToken, refreshToken, user, tempToken } = a.payload;
+       if (nextStep === 'continue') {
+         s.accessToken  = accessToken;
+         s.refreshToken = refreshToken;
+         s.user         = user;
+         s.step         = 4;
+       } else if (nextStep === 'verify_totp') {
+         s.tempToken = tempToken;
+         s.step      = 3;
+       } else if (nextStep === 'setup_2fa') {
+         s.tempToken = tempToken;
+         s.step      = 2;
+       } else {
+         s.step = 1;
+       }
+     })
+     .addCase(checkTokenStatus.rejected, s => {
+       s.tokenCheckLoading = false;
+       s.tokenChecked      = true;
+       s.step              = 1;
+     });
+
     // ── Login ──
     b.addCase(loginStep1.pending,   s => { s.loading = true;  s.error = null; })
-     .addCase(loginStep1.rejected,  (s,a) => { s.loading = false; s.error = a.payload; })
-     .addCase(loginStep1.fulfilled, (s,a) => {
+     .addCase(loginStep1.rejected,  (s, a) => { s.loading = false; s.error = a.payload; })
+     .addCase(loginStep1.fulfilled, (s, a) => {
        s.loading          = false;
        s.tempToken        = a.payload.tempToken;
        s.requiresTotp     = a.payload.requiresTotp;
        s.requires2faSetup = a.payload.requires2faSetup;
-
-       // First-time user  → requires_2fa_setup=true  → step 2 (scan QR, then confirm)
-       // Returning user   → requires_totp=true        → step 3 (enter OTP directly)
-       if (a.payload.requires2faSetup) {
-         s.step = 2;
-       } else if (a.payload.requiresTotp) {
-         s.step = 3;
-       } else {
-         // Fallback — shouldn't happen but default to OTP entry
-         s.step = 3;
-       }
+       s.step = a.payload.requires2faSetup ? 2 : 3;
      });
 
     // ── 2FA Setup (QR fetch) ──
     b.addCase(fetch2FASetup.pending,   s => { s.loading = true;  s.error = null; })
-     .addCase(fetch2FASetup.rejected,  (s,a) => { s.loading = false; s.error = a.payload; })
-     .addCase(fetch2FASetup.fulfilled, (s,a) => {
-       s.loading        = false;
+     .addCase(fetch2FASetup.rejected,  (s, a) => { s.loading = false; s.error = a.payload; })
+     .addCase(fetch2FASetup.fulfilled, (s, a) => {
+       s.loading         = false;
        s.provisioningUri = a.payload.provisioningUri;
-       s.qrCode         = a.payload.qrCode;
-       s.secret         = a.payload.secret;
+       s.qrCode          = a.payload.qrCode;
+       s.secret          = a.payload.secret;
      });
 
-    // ── Confirm setup ──
+    // ── Confirm 2FA setup ──
     b.addCase(confirm2FASetup.pending,   s => { s.loading = true;  s.error = null; })
-     .addCase(confirm2FASetup.rejected,  (s,a) => { s.loading = false; s.error = a.payload; })
+     .addCase(confirm2FASetup.rejected,  (s, a) => { s.loading = false; s.error = a.payload; })
      .addCase(confirm2FASetup.fulfilled, done);
-
-    // ── Logout ──
-    b.addCase(logoutUser.pending,   s => { s.loading = true; })
-     .addCase(logoutUser.fulfilled, s => {
-       Object.assign(s, {
-         step:1, tempToken:null, accessToken:null, refreshToken:null,
-         user:null, twoFactorEnabled:false, requiresTotp:false,
-         requires2faSetup:false, provisioningUri:null, qrCode:null,
-         secret:null, loading:false, error:null,
-       });
-     })
-     .addCase(logoutUser.rejected, s => {
-       // Still clear state even if API fails
-       Object.assign(s, {
-         step:1, tempToken:null, accessToken:null, refreshToken:null,
-         user:null, twoFactorEnabled:false, requiresTotp:false,
-         requires2faSetup:false, provisioningUri:null, qrCode:null,
-         secret:null, loading:false, error:null,
-       });
-     });
 
     // ── Verify TOTP ──
     b.addCase(verifyTOTP.pending,   s => { s.loading = true;  s.error = null; })
-     .addCase(verifyTOTP.rejected,  (s,a) => { s.loading = false; s.error = a.payload; })
+     .addCase(verifyTOTP.rejected,  (s, a) => { s.loading = false; s.error = a.payload; })
      .addCase(verifyTOTP.fulfilled, done);
+
+    // ── Logout ──
+    b.addCase(logoutUser.pending,   s => { s.loading = true; })
+     .addCase(logoutUser.fulfilled, s => { Object.assign(s, CLEAR_STATE, { tokenChecked: true }); })
+     .addCase(logoutUser.rejected,  s => { Object.assign(s, CLEAR_STATE, { tokenChecked: true }); });
   },
 });
 

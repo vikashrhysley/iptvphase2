@@ -1,3 +1,20 @@
+@keyframes app-spin { to { transform: rotate(360deg); } }
+
+.app-boot-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background: var(--bg-base, #0a0d14);
+}
+.app-boot-spinner {
+  width: 36px; height: 36px;
+  border: 3px solid rgba(0, 196, 239, 0.15);
+  border-top-color: #00c4ef;
+  border-radius: 50%;
+  animation: app-spin 0.7s linear infinite;
+}
+
 .counter {
   font-size: 16px;
   padding: 5px 10px;

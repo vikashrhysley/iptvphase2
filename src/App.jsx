@@ -1,14 +1,30 @@
 // src/App.js
-import React from 'react';
-import { Provider, useSelector } from 'react-redux';
+import React, { useEffect } from 'react';
+import { Provider, useSelector, useDispatch } from 'react-redux';
 import store from './store';
 import { ThemeProvider } from './context/ThemeContext';
+import { checkTokenStatus } from './store/slices/authSlice';
 import LoginForm from './components/Auth/LoginForm';
 import AppLayout from './pages/AppLayout';
+import './App.css';
 import './styles/global.css';
 
 function AppRoot() {
-  const { step } = useSelector(s => s.auth);
+  const dispatch = useDispatch();
+  const { step, tokenChecked } = useSelector(s => s.auth);
+
+  useEffect(() => {
+    dispatch(checkTokenStatus());
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!tokenChecked) {
+    return (
+      <div className="app-boot-screen">
+        <div className="app-boot-spinner" />
+      </div>
+    );
+  }
+
   return step === 4 ? <AppLayout /> : <LoginForm />;
 }
 

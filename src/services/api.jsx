@@ -146,7 +146,32 @@ export const apiVerifyTOTP = async (tempToken, totpCode) => {
   };
 };
 
-// 5. Logout — POST /auth/logout
+// 5. Token status — POST /auth/token-status (public — no auth header)
+//    Body: { access_token?, refresh_token? }
+//    Response: { next_step, access_token_status, refresh_token_status, ... }
+export const apiTokenStatus = async (accessToken, refreshToken) => {
+  const body = {};
+  if (accessToken)  body.access_token  = accessToken;
+  if (refreshToken) body.refresh_token = refreshToken;
+  const res = await request(`${BASE}/auth/token-status`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return res.data || res;
+};
+
+// 6. Refresh token — POST /auth/refresh (public — refresh token in body)
+//    Body: { refresh_token }
+//    Response: { access_token, refresh_token, expires_in }
+export const apiRefreshToken = async (refreshToken) => {
+  const res = await request(`${BASE}/auth/refresh`, {
+    method: 'POST',
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  });
+  return res.data || res;
+};
+
+// 7. Logout — POST /auth/logout
 //    Header: Authorization: Bearer <access_token>
 //    Response: { success: true, data: { message: "Logged out successfully" } }
 export const apiLogout = async (accessToken) => {
@@ -194,7 +219,7 @@ export const apiChangePassword = async (accessToken, data) => {
 };
 
 // ─────────────────────────────────────────────────────────
-// DASHBOARD / DEVICES / LICENSES — dummyjson (mock data)
+// DASHBOARD APIs
 // ─────────────────────────────────────────────────────────
 
 export const apiFetchDashboardStats = async (accessToken) => {
@@ -222,54 +247,6 @@ export const apiFetchDashboardRevenue = async (accessToken) => {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   return res.data || res;
-};
-
-export const apiFetchUsers = async (accessToken) => {
-  if (!accessToken) throw new Error('Unauthorized');
-  const res  = await fetch('https://dummyjson.com/users?limit=20');
-  if (!res.ok) throw new Error('Failed to fetch users');
-  const data = await res.json();
-  const users = data.users.map(u => ({
-    id:      `USR-${String(u.id).padStart(3, '0')}`,
-    rawId:   u.id,
-    name:    `${u.firstName} ${u.lastName}`,
-    phone:   u.phone,
-    address: `${u.address.address}, ${u.address.city} ${u.address.state}`,
-    userId:  u.username,
-    image:   u.image,
-    device:  u.id % 2 === 0 ? 'inactive' : 'active',
-    account: null,
-  }));
-  return { users };
-};
-
-export const apiUpdateDevice = async (accessToken, userId, status) => {
-  if (!accessToken) throw new Error('Unauthorized');
-  const rawId = userId.replace('USR-', '').replace(/^0+/, '') || '1';
-  await fetch(`https://dummyjson.com/users/${rawId}`, {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ device: status }),
-  });
-  return { success: true, userId, device: status };
-};
-
-export const apiRevokeAccount = async (accessToken, userId) => {
-  if (!accessToken) throw new Error('Unauthorized');
-  const rawId = userId.replace('USR-', '').replace(/^0+/, '') || '1';
-  await fetch(`https://dummyjson.com/users/${rawId}`, { method: 'DELETE' });
-  return { success: true, userId };
-};
-
-export const apiEditUser = async (accessToken, userId, data) => {
-  if (!accessToken) throw new Error('Unauthorized');
-  const rawId = userId.replace('USR-', '').replace(/^0+/, '') || '1';
-  const [firstName = '', ...rest] = (data.name || '').split(' ');
-  const res = await fetch(`https://dummyjson.com/users/${rawId}`, {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ firstName, lastName: rest.join(' '), phone: data.phone }),
-  });
-  const updated = await res.json();
-  return { success: true, userId, name: `${updated.firstName} ${updated.lastName}`, phone: updated.phone || data.phone, address: data.address };
 };
 
 // ── Device APIs ──────────────────────────────────────────────
