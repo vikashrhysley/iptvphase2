@@ -10,6 +10,8 @@ import ProfilePage from '../components/Profile/ProfilePage';
 import TrialPage from '../components/Trial/TrialPage';
 import AdminUsersPage from '../components/AdminUser/AdminUsersPage';
 import AppUsersPage   from '../components/AppUsers/AppUsersPage';
+import AuditPage      from '../components/Audit/AuditPage';
+import RbacPage       from '../components/Rbac/RbacPage';
 
 import './AppLayout.css';
 
@@ -30,6 +32,8 @@ export default function AppLayout() {
       case 'trial':   return <TrialPage />;
       case 'admin_users': return <AdminUsersPage />;
       case 'app_users':   return <AppUsersPage />;
+      case 'audit':       return <AuditPage />;
+      case 'rbac':        return <RbacPage />;
       default:        return <DashboardTable />;
 
     }

@@ -144,10 +144,6 @@ export default function HeartbeatPage() {
         <div className="hb-section-head">
           <div>
             <div className="hb-title">Heartbeat Monitoring</div>
-            <div className="hb-subtitle">
-              {stats?.window ? `Window ${stats.window}` : 'Real-time device heartbeat health'}
-              {stats?.generated_at ? ` · Generated ${fmtDateTime(stats.generated_at)}` : ''}
-            </div>
           </div>
           <button className="hb-refresh" onClick={() => dispatch(fetchHeartbeatStats())} disabled={statsLoading}>
             {statsLoading ? 'Refreshing...' : 'Refresh'}

@@ -5,7 +5,6 @@ import {
   updateDeviceStatus, revokeDevice,
   clearToast, setDeviceFilters, clearDeviceFilters,
 } from '../../store/slices/deviceSlice';
-import { apiExportDevices } from '../../services/api';
 import DeviceDetail from './DeviceDetail';
 import './DevicePage.css';
 
@@ -296,12 +295,11 @@ export default function DevicePage() {
   const { user: me } = useSelector(s => s.auth);
   const canEdit = me?.role === 'superadmin' || me?.role === 'admin';
 
-  const [view,          setView]         = useState('grid');
-  const [detailId,      setDetailId]     = useState(null);
-  const [revokeTarget,  setRevokeTarget] = useState(null);
-  const [exportLoading, setExportLoading] = useState(false);
-  const [exportError,   setExportError]   = useState('');
-  const { accessToken } = useSelector(s => s.auth);
+  const [view,         setView]        = useState('grid');
+  const [detailId,     setDetailId]    = useState(null);
+  const [revokeTarget, setRevokeTarget] = useState(null);
+  const [exportOpen,   setExportOpen]  = useState(false);
+  const exportRef = useRef(null);
 
   // All hooks before any conditional return
 
@@ -338,22 +336,62 @@ export default function DevicePage() {
       filters.plan_type, filters.has_risk_flag, filters.heartbeat_stale,
       filters.sort_by, filters.sort_order, filters.page, filters.page_size]);
 
+  // Close export menu on outside click
+  useEffect(() => {
+    if (!exportOpen) return;
+    const handler = (e) => { if (exportRef.current && !exportRef.current.contains(e.target)) setExportOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [exportOpen]);
+
   if (detailId) {
     return <DeviceDetail deviceId={detailId} onBack={() => setDetailId(null)} />;
   }
 
-  const handleExport = async (format) => {
-    setExportError('');
-    setExportLoading(true);
-    try {
-      await apiExportDevices(accessToken, filters, format);
-    } catch (err) {
-      setExportError(err.message || 'Export failed.');
-      setTimeout(() => setExportError(''), 4000);
-    } finally {
-      setExportLoading(false);
+  const handleExport = (format) => {
+    setExportOpen(false);
+    const rows = devices.map(d => ({
+      device_id:    d.device_id   || d.id            || '',
+      device_name:  d.device_brand
+                      ? `${d.device_brand} ${d.device_model || ''}`.trim()
+                      : (d.device_name || d.name     || ''),
+      device_type:  d.device_type || d.type          || '',
+      os_version:   d.os_version  || d.os            || '',
+      app_version:  d.app_version || d.appVersion    || '',
+      status:       d.status                         || '',
+      user_name:    d.user_full_name || d.userName   || '',
+      user_email:   d.user_email                     || '',
+      location:     d.last_seen_city
+                      ? `${d.last_seen_city}${d.last_seen_country ? ', '+d.last_seen_country : ''}`
+                      : (d.location                  || ''),
+      last_seen:    d.last_heartbeat_at || d.lastSeen || '',
+    }));
+
+    if (format === 'json') {
+      const blob = new Blob([JSON.stringify(rows, null, 2)], { type: 'application/json' });
+      triggerDownload(blob, `devices_${datestamp()}.json`);
+    } else {
+      const headers = Object.keys(rows[0] || {});
+      const csv = [
+        headers.join(','),
+        ...rows.map(r => headers.map(h => `"${String(r[h]).replace(/"/g, '""')}"`).join(',')),
+      ].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      triggerDownload(blob, `devices_${datestamp()}.csv`);
     }
   };
+
+  const triggerDownload = (blob, filename) => {
+    const url = URL.createObjectURL(blob);
+    const a   = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const datestamp = () => new Date().toISOString().slice(0, 10);
 
   const handleToggle = (deviceId, status) => dispatch(updateDeviceStatus({ deviceId, status }));
   const handleRevoke = (device) => setRevokeTarget(device);
@@ -434,19 +472,27 @@ export default function DevicePage() {
           </select>
 
           {/* Export */}
-          <div className="dv-export-wrap">
-            <button className="dv-export-btn" disabled={exportLoading}>
-              {exportLoading
-                ? <span className="dv-export-spin" />
-                : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>}
-              Export
+          <div className="dv-export-wrap" ref={exportRef}>
+            <button
+              className={`dv-export-btn${exportOpen ? ' open' : ''}`}
+              onClick={() => setExportOpen(o => !o)}
+              disabled={devices.length === 0}
+              title={devices.length === 0 ? 'No data to export' : 'Export table data'}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Export <span className="dv-export-caret" style={{ fontSize:'0.68rem', opacity:0.6, transition:'transform 0.18s', display:'inline-block', transform: exportOpen ? 'rotate(180deg)' : 'none' }}>▾</span>
             </button>
-            <div className="dv-export-dropdown">
-              <button className="dv-export-option" onClick={() => handleExport('csv')}  disabled={exportLoading}>📄 Download CSV</button>
-              <button className="dv-export-option" onClick={() => handleExport('json')} disabled={exportLoading}>📋 Download JSON</button>
-            </div>
+            {exportOpen && (
+              <div className="dv-export-dropdown">
+                <button className="dv-export-option" onClick={() => handleExport('csv')}>
+                  📄 <span><strong>CSV</strong> <span style={{fontSize:'0.7rem',opacity:0.6}}>Spreadsheet</span></span>
+                </button>
+                <button className="dv-export-option" onClick={() => handleExport('json')}>
+                  {'{ }'} <span><strong>JSON</strong> <span style={{fontSize:'0.7rem',opacity:0.6}}>Raw data</span></span>
+                </button>
+              </div>
+            )}
           </div>
-          {exportError && <span className="dv-export-error">{exportError}</span>}
 
           <div className="view-toggle">
             <button className={`view-btn${view === 'grid' ? ' active' : ''}`} onClick={() => setView('grid')} title="Grid view"><GridIcon /></button>

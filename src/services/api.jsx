@@ -955,3 +955,97 @@ export const apiCreateAdminUser = async (accessToken, data) => {
   return res.data || res;
 };
 
+// ── Audit Log APIs ────────────────────────────────────────
+
+// GET /admin/audit-logs — paginated list with filters
+export const apiFetchAuditLogs = async (accessToken, params = {}) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const query = new URLSearchParams();
+  if (params.action)      query.set('action',      params.action);
+  if (params.entity_type) query.set('entity_type', params.entity_type);
+  if (params.entity_id)   query.set('entity_id',   params.entity_id);
+  if (params.severity)    query.set('severity',     params.severity);
+  if (params.actor_id)    query.set('actor_id',     params.actor_id);
+  if (params.date_from)   query.set('date_from',    params.date_from);
+  if (params.date_to)     query.set('date_to',      params.date_to);
+  if (params.ip_address)  query.set('ip_address',   params.ip_address);
+  if (params.page)        query.set('page',         String(params.page));
+  if (params.page_size)   query.set('page_size',    String(params.page_size));
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  const res = await request(`${BASE}/admin/audit-logs${qs}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const raw   = res.data || res;
+  const items = Array.isArray(raw)       ? raw
+              : Array.isArray(raw.logs)  ? raw.logs
+              : Array.isArray(raw.items) ? raw.items
+              : Array.isArray(raw.data)  ? raw.data
+              : [];
+  const meta  = res.meta || raw.meta || {};
+  return {
+    logs:     items,
+    total:    raw.total      ?? raw.total_count  ?? raw.total_records ?? meta.total    ?? items.length,
+    page:     raw.page       ?? raw.current_page ?? meta.page         ?? params.page   ?? 1,
+    pageSize: raw.page_size  ?? raw.pageSize     ?? meta.page_size    ?? params.page_size ?? 20,
+  };
+};
+
+// GET /admin/audit-logs/{id} — single log with before/after snapshots
+export const apiFetchAuditLogDetail = async (accessToken, id) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/audit-logs/${id}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+// ── RBAC APIs ─────────────────────────────────────────────
+
+// GET /admin/rbac/roles
+export const apiGetRbacRoles = async (accessToken) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/rbac/roles`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const raw = res.data || res;
+  return Array.isArray(raw) ? raw : Array.isArray(raw.roles) ? raw.roles : [];
+};
+
+// GET /admin/rbac/modules
+export const apiGetRbacModules = async (accessToken) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/rbac/modules`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const raw = res.data || res;
+  return Array.isArray(raw) ? raw : Array.isArray(raw.modules) ? raw.modules : [];
+};
+
+// GET /admin/audit-logs?export=csv|json — download export
+export const apiExportAuditLogs = async (accessToken, params = {}, format = 'csv') => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const query = new URLSearchParams();
+  query.set('export', format);
+  if (params.action)      query.set('action',      params.action);
+  if (params.entity_type) query.set('entity_type', params.entity_type);
+  if (params.severity)    query.set('severity',     params.severity);
+  if (params.date_from)   query.set('date_from',    params.date_from);
+  if (params.date_to)     query.set('date_to',      params.date_to);
+  if (params.ip_address)  query.set('ip_address',   params.ip_address);
+  const res = await fetch(`${BASE}/admin/audit-logs?${query.toString()}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) throw new Error(`Export failed (${res.status})`);
+  const blob = await res.blob();
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `audit-logs_${new Date().toISOString().slice(0, 10)}.${format}`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+

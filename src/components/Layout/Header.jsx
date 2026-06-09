@@ -11,12 +11,14 @@ import { useTheme } from '../../context/ThemeContext';
 import './Header.css';
 
 const PAGE_TITLES = {
-  home:    'Dashboard',
-  device:  'Device Management',
-  heartbeat: 'Heartbeat Monitoring',
-  license: 'License Center',
-  profile: 'My Profile',
-  trial:   'System Configuration',
+  home:       'Dashboard',
+  device:     'Device Management',
+  heartbeat:  'Heartbeat Monitoring',
+  license:    'License Center',
+  profile:    'My Profile',
+  trial:      'System Configuration',
+  audit:      'Audit Logs',
+  rbac:       'RBAC',
 };
 
 const RefreshIcon = () => (

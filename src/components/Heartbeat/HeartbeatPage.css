@@ -26,6 +26,7 @@
   font-size: 1rem;
   font-weight: 700;
   color: var(--text-primary);
+  text-align: left;
 }
 
 .hb-subtitle {
