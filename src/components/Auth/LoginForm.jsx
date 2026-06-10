@@ -127,7 +127,7 @@ function CredentialsStep() {
   );
 }
 
-// ── Step 2: QR Setup (first-time 2FA) ────────────────────
+
 function QRSetupStep() {
   const dispatch  = useDispatch();
   const { loading, error, provisioningUri, qrCode, secret } = useSelector(s => s.auth);
