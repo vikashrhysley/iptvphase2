@@ -11,17 +11,26 @@ const fmtDateTime = (iso) => {
   if (!iso) return '—';
   try { return new Date(iso).toLocaleString('en-US', { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }); } catch { return '—'; }
 };
-const fmtDuration = (s) => {
-  if (s == null || s === 0) return '—';
-  const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m ${sec}s`;
-  return `${sec}s`;
+const eventClass = (t) => {
+  if (!t) return 'other';
+  const v = t.toLowerCase();
+  if (v.includes('play') || v.includes('start') || v.includes('resume')) return 'start';
+  if (v.includes('stop') || v.includes('end') || v.includes('complete')) return 'stop';
+  if (v.includes('pause')) return 'pause';
+  if (v.includes('error')) return 'error';
+  if (v.includes('surf')) return 'surf';
+  return 'other';
 };
-const eventClass = (t) => { if (!t) return 'other'; if (t.includes('start')) return 'start'; if (t.includes('stop')||t.includes('end')) return 'stop'; if (t.includes('pause')) return 'pause'; if (t.includes('error')) return 'error'; return 'other'; };
-const fmtEvent  = (t) => (t||'').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+const fmtEvent  = (t) => (t||'—').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
 const typeClass  = (t) => ({ live:'live', vod:'vod', series:'series' }[t]||'other');
-const qualClass  = (q) => (q==='hd'||q==='fhd'||q==='4k') ? 'hd' : q==='sd' ? 'sd' : 'other';
+const stateClass = (s) => {
+  if (!s) return 'other';
+  const v = s.toLowerCase();
+  if (v.includes('play')) return 'start';
+  if (v.includes('pause')) return 'pause';
+  if (v.includes('stop') || v.includes('end')) return 'stop';
+  return 'other';
+};
 
 function Pagination({ current, totalPages, totalItems, pageSize, onPage }) {
   if (!totalItems) return null;
@@ -84,21 +93,25 @@ export default function DeviceActivity({ deviceId, deviceName, onBack }) {
           : (
           <div className="ua-table-scroll">
             <table className="ua-table">
-              <thead><tr><th>Date</th><th>Event</th><th>Content</th><th>Type</th><th>Quality</th><th>Watch Time</th><th>Buffers</th><th>Location</th></tr></thead>
+              <thead><tr><th>Date</th><th>Event</th><th>Content</th><th>Type</th><th>Playback State</th><th>App Version</th><th>IP Address</th><th>Location</th></tr></thead>
               <tbody>
                 {activityItems.length ? activityItems.map(row=>(
                   <tr key={row.id}>
                     <td className="ua-date">{fmtDateTime(row.created_at)}</td>
                     <td><span className={`ua-event-pill ${eventClass(row.event_type)}`}>{fmtEvent(row.event_type)}</span></td>
-                    <td className="ua-content"><div className="ua-content-title">{row.content_title||row.channel_name||'—'}</div></td>
+                    <td className="ua-content"><div className="ua-content-title">{row.content_name||'—'}</div></td>
                     <td><span className={`ua-type-pill ${typeClass(row.content_type)}`}>{(row.content_type||'—').toUpperCase()}</span></td>
-                    <td><span className={`ua-quality-pill ${qualClass(row.stream_quality)}`}>{(row.stream_quality||'—').toUpperCase()}</span></td>
-                    <td className="ua-duration">{fmtDuration(row.watch_duration_s)}</td>
-                    <td className="ua-num">{row.buffer_count??'—'}</td>
+                    <td>
+                      {row.playback_state
+                        ? <span className={`ua-event-pill ${stateClass(row.playback_state)}`}>{fmtEvent(row.playback_state)}</span>
+                        : <span className="ua-dim">—</span>}
+                    </td>
+                    <td className="ua-mono">{row.app_version || '—'}</td>
+                    <td className="ua-mono">{row.ip_address || '—'}</td>
                     <td className="ua-location">
-                      {row.city&&<span className="ua-city">{row.city}</span>}
+                      {row.country_name&&<span className="ua-city">{row.country_name}</span>}
                       {row.country_code&&<span className="ua-country-code">{row.country_code}</span>}
-                      {!row.city&&!row.country_code&&'—'}
+                      {!row.country_name&&!row.country_code&&'—'}
                     </td>
                   </tr>
                 )) : <tr><td colSpan={8} className="ua-empty">No activity records found.</td></tr>}

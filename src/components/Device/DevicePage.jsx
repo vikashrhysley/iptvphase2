@@ -239,7 +239,7 @@ function DeviceCard({ device, canEdit, onToggle, onRevoke, actionLoading, onCard
 }
 
 /* ── Device Table Row ───────────────────────────────────── */
-function DeviceTableRow({ device, canEdit, onToggle, onRevoke, actionLoading }) {
+function DeviceTableRow({ device, canEdit, onToggle, onRevoke, actionLoading, onRowClick }) {
   const id   = device.device_id || device.id;
   const tc   = TYPE_CONFIG[device.device_type || device.type] || TYPE_CONFIG.phone;
   const busy = actionLoading === id;
@@ -250,7 +250,7 @@ function DeviceTableRow({ device, canEdit, onToggle, onRevoke, actionLoading }) 
     ? `${device.last_seen_city}${device.last_seen_country ? ', '+device.last_seen_country : ''}`
     : (device.location || '—');
   return (
-    <tr>
+    <tr className="dt-row" onClick={onRowClick} style={{ cursor: 'pointer' }}>
       <td>
         <div className="dt-type-cell" style={{ '--type-bg': tc.bg }}>
           <div className="dt-type-icon">{tc.icon}</div>
@@ -273,7 +273,7 @@ function DeviceTableRow({ device, canEdit, onToggle, onRevoke, actionLoading }) 
           {(device.status||'').charAt(0).toUpperCase()+(device.status||'').slice(1)}
         </span>
       </td>
-      <td>
+      <td onClick={e => e.stopPropagation()}>
         {!canEdit ? <span style={{ fontSize:'0.72rem', color:'var(--text-muted)' }}>—</span>
           : device.status === 'blocked' || device.status === 'revoked' ? (
             <button className="dc-btn activate" style={{ padding:'5px 12px' }} onClick={() => onToggle(id,'active')} disabled={busy}>{busy?'…':'✓ Restore'}</button>
@@ -402,14 +402,25 @@ export default function DevicePage() {
   };
 
   /* Stats cards */
-  const S = stats || {};
-  const statCards = [
-    { label: 'Total',       value: S.total                ?? 0, color: '#00d4ff' },
-    { label: 'Active',      value: S.active               ?? 0, color: '#10b981' },
-    { label: 'Inactive',    value: S.inactive             ?? 0, color: '#f59e0b' },
-    { label: 'Blocked',     value: S.blocked              ?? 0, color: '#ef4444' },
-    { label: 'High Risk',   value: S.high_risk            ?? 0, color: '#f87171' },
-    { label: 'Expiring 7d', value: S.expiring_licenses_7d ?? 0, color: '#fbbf24' },
+  const S  = stats?.stats ?? {};
+  const PB = stats?.platform_breakdown ?? {};
+
+  const deviceStatItems = [
+    { label: 'Total',        value: S.total                ?? 0, color: '#00d4ff', icon: '📱' },
+    { label: 'Active',       value: S.active               ?? 0, color: '#10b981', icon: '✅' },
+    { label: 'Inactive',     value: S.inactive             ?? 0, color: '#94a3b8', icon: '💤' },
+    { label: 'Blocked',      value: S.blocked              ?? 0, color: '#ef4444', icon: '🚫' },
+    { label: 'High Risk',    value: S.high_risk            ?? 0, color: '#f87171', icon: '⚠️' },
+    { label: 'Expiring 7d',  value: S.expiring_licenses_7d ?? 0, color: '#fbbf24', icon: '⏳' },
+    { label: 'Push Enabled', value: S.push_enabled         ?? 0, color: '#8b5cf6', icon: '🔔' },
+  ];
+
+  const platformStatItems = [
+    { label: 'Android', value: PB.android ?? 0, color: '#3ddc84', icon: '🤖' },
+    { label: 'Fire TV', value: PB.firetv  ?? 0, color: '#ff9900', icon: '🔥' },
+    { label: 'iOS',     value: PB.ios     ?? 0, color: '#e5e7eb', icon: '🍎' },
+    { label: 'Roku',    value: PB.roku    ?? 0, color: '#a78bfa', icon: '📺' },
+    { label: 'Other',   value: PB.other   ?? 0, color: '#64748b', icon: '🧩' },
   ];
 
   return (
@@ -420,12 +431,34 @@ export default function DevicePage() {
       {statsLoading && <div className="device-stats-shimmer" />}
       {!statsLoading && (
         <div className="device-stats">
-          {statCards.map(({ label, value, color }) => (
-            <div className="device-stat-card" key={label} style={{ '--dsc': color }}>
-              <div className="dsc-value">{value.toLocaleString()}</div>
-              <div className="dsc-label">{label}</div>
+          <div className="device-stats-panel">
+            <div className="dsp-title"><span className="dsp-title-icon">📊</span> Device Stats</div>
+            <div className="dsp-grid">
+              {deviceStatItems.map(({ label, value, color, icon }) => (
+                <div className="dsp-item" key={label} style={{ '--dsc': color }}>
+                  <div className="dsp-icon">{icon}</div>
+                  <div className="dsp-info">
+                    <div className="dsp-value">{value.toLocaleString()}</div>
+                    <div className="dsp-label">{label}</div>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
+          <div className="device-stats-panel">
+            <div className="dsp-title"><span className="dsp-title-icon">🌐</span> Platform Stats</div>
+            <div className="dsp-grid">
+              {platformStatItems.map(({ label, value, color, icon }) => (
+                <div className="dsp-item" key={label} style={{ '--dsc': color }}>
+                  <div className="dsp-icon">{icon}</div>
+                  <div className="dsp-info">
+                    <div className="dsp-value">{value.toLocaleString()}</div>
+                    <div className="dsp-label">{label}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
@@ -550,7 +583,8 @@ export default function DevicePage() {
               <tbody>
                 {devices.map(d => (
                   <DeviceTableRow key={d.device_id || d.id} device={d} canEdit={canEdit}
-                    onToggle={handleToggle} onRevoke={() => handleRevoke(d)} actionLoading={actionLoading} />
+                    onToggle={handleToggle} onRevoke={() => handleRevoke(d)} actionLoading={actionLoading}
+                    onRowClick={() => setDetailId(d.device_id || d.id)} />
                 ))}
               </tbody>
             </table>

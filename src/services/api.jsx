@@ -1023,6 +1023,114 @@ export const apiGetRbacModules = async (accessToken) => {
   return Array.isArray(raw) ? raw : Array.isArray(raw.modules) ? raw.modules : [];
 };
 
+// POST /admin/rbac/roles — create new role
+export const apiCreateRbacRole = async (accessToken, { name, description, permissions }) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/rbac/roles`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ name, description, permissions: permissions || {} }),
+  });
+  return res.data || res;
+};
+
+// GET /admin/rbac/roles/{id} — full detail with users list
+export const apiGetRbacRoleDetail = async (accessToken, roleId) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/rbac/roles/${roleId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+// PATCH /admin/rbac/roles/{id} — update name / description / is_active
+export const apiPatchRbacRole = async (accessToken, roleId, updates) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/rbac/roles/${roleId}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(updates),
+  });
+  return res.data || res;
+};
+
+// DELETE /admin/rbac/roles/{id}
+export const apiDeleteRbacRole = async (accessToken, roleId) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/rbac/roles/${roleId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+// PUT /admin/rbac/roles/{id}/permissions — full replacement
+export const apiPutRbacRolePermissions = async (accessToken, roleId, permissions) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/rbac/roles/${roleId}/permissions`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ permissions }),
+  });
+  return res.data || res;
+};
+
+// PATCH /admin/rbac/roles/{id}/permissions — partial add/remove
+export const apiPatchRbacRolePermissions = async (accessToken, roleId, { add, remove }) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/rbac/roles/${roleId}/permissions`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ add, remove }),
+  });
+  return res.data || res;
+};
+
+// GET /admin/users/roles — active roles for the role-selector UI
+export const apiGetAssignableRoles = async (accessToken) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/users/roles`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+// POST /admin/rbac/roles/{id}/assign — assign role to admin user
+export const apiAssignRbacRole = async (accessToken, roleId, { user_id, reason }) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const body = { user_id };
+  if (reason?.trim()) body.reason = reason.trim();
+  const res = await request(`${BASE}/admin/rbac/roles/${roleId}/assign`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(body),
+  });
+  return res.data || res;
+};
+
+// DELETE /admin/rbac/modules/{id} — remove a module
+export const apiDeleteRbacModule = async (accessToken, moduleId) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/rbac/modules/${moduleId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return { ...(res.data || res), id: moduleId };
+};
+
+// POST /admin/rbac/modules — register a new RBAC module
+export const apiCreateRbacModule = async (accessToken, { name, display_name, available_actions, description }) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const body = { name, display_name, available_actions };
+  if (description?.trim()) body.description = description.trim();
+  const res = await request(`${BASE}/admin/rbac/modules`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(body),
+  });
+  return res.data || res;
+};
+
 // GET /admin/audit-logs?export=csv|json — download export
 export const apiExportAuditLogs = async (accessToken, params = {}, format = 'csv') => {
   if (!accessToken) throw new Error('Unauthorized');
@@ -1049,3 +1157,29 @@ export const apiExportAuditLogs = async (accessToken, params = {}, format = 'csv
   URL.revokeObjectURL(url);
 };
 
+
+// GET /admin/subscriptions - paginated subscription list
+export const apiFetchSubscriptions = async (accessToken, params = {}) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const query = new URLSearchParams();
+  if (params.status)    query.set('status', params.status);
+  if (params.plan_type) query.set('plan_type', params.plan_type);
+  if (params.user_id)   query.set('user_id', params.user_id);
+  if (params.date_from) query.set('date_from', params.date_from);
+  if (params.date_to)   query.set('date_to', params.date_to);
+  if (params.page)      query.set('page', String(params.page));
+  if (params.page_size) query.set('page_size', String(params.page_size));
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  const res = await request(`${BASE}/admin/subscriptions${qs}`, {
+    method: 'GET', headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const raw   = res.data || res;
+  const meta  = res.meta || raw.meta || {};
+  const items = Array.isArray(raw) ? raw : Array.isArray(raw.data) ? raw.data : Array.isArray(raw.items) ? raw.items : [];
+  return {
+    subscriptions: items,
+    total:    raw.total    ?? raw.total_count   ?? meta.total    ?? items.length,
+    page:     raw.page     ?? raw.current_page  ?? meta.page     ?? params.page ?? 1,
+    pageSize: raw.page_size ?? raw.pageSize     ?? meta.page_size ?? params.page_size ?? 20,
+  };
+};

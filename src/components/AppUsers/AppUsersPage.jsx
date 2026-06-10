@@ -210,11 +210,15 @@ export default function AppUsersPage() {
       {statsLoading && <div className="su-stats-loading" />}
       {statsError && <div className="su-stats-error">Failed to load stats: {statsError}</div>}
       {stats && !statsLoading && (() => {
-        const by      = stats.by_status || {};
-        const total   = stats.total || 1;
+        const S       = stats.stats || {};
+        const V       = stats.verification || {};
+        const L       = stats.license || {};
+        const N       = stats.new_users || {};
+        const by      = S;
+        const total   = S.total || 1;
         const countries = stats.top_countries || [];
         const maxC    = Math.max(...countries.map(c => c.count), 1);
-        const max30d  = Math.max(stats.new_30d ?? 1, 1);
+        const max30d  = Math.max(N.new_30d ?? 1, 1);
         const pct     = (n) => Math.min(100, Math.round(((n ?? 0) / total) * 100));
 
         // SVG ring helper
@@ -288,9 +292,9 @@ export default function AppUsersPage() {
                 </div>
                 <div className="su-rings-row">
                   {[
-                    { label: 'Email Verified', val: stats.email_verified, color: '#7c3aed' },
-                    { label: 'Phone Verified', val: stats.phone_verified, color: '#0284c7' },
-                    { label: 'Trial Used',     val: stats.trial_used,     color: '#f59e0b' },
+                    { label: 'Email Verified', val: V.email_verified, color: '#7c3aed' },
+                    { label: 'Phone Verified', val: V.phone_verified, color: '#0284c7' },
+                    { label: 'Trial Used',     val: L.trial_used,     color: '#f59e0b' },
                   ].map(({ label, val, color }) => (
                     <div className="su-ring-item" key={label}>
                       <Ring value={val} color={color} />
@@ -311,8 +315,8 @@ export default function AppUsersPage() {
                 </div>
                 <div className="su-rings-row">
                   {[
-                    { label: 'Licensed',   val: stats.with_active_license, color: '#00d4ff', size: 80, sw: 7 },
-                    { label: 'w/ Device',  val: stats.with_active_device,  color: '#10b981', size: 80, sw: 7 },
+                    { label: 'Licensed',   val: L.with_active_license, color: '#00d4ff', size: 80, sw: 7 },
+                    { label: 'w/ Device',  val: L.with_active_device,  color: '#10b981', size: 80, sw: 7 },
                   ].map(({ label, val, color, size, sw }) => (
                     <div className="su-ring-item" key={label}>
                       <Ring value={val} color={color} size={size} sw={sw} />
@@ -326,8 +330,8 @@ export default function AppUsersPage() {
                 <div className="su-no-license">
                   <span className="su-no-license-dot" />
                   No License
-                  <strong>{(stats.without_license ?? 0).toLocaleString()}</strong>
-                  <span className="su-no-license-pct">{pct(stats.without_license)}%</span>
+                  <strong>{(L.without_license ?? 0).toLocaleString()}</strong>
+                  <span className="su-no-license-pct">{pct(L.without_license)}%</span>
                 </div>
               </div>
 
@@ -344,26 +348,26 @@ export default function AppUsersPage() {
                 </div>
                 <div className="su-new-hero">
                   <div>
-                    <div className="su-new-big">{(stats.new_24h ?? 0).toLocaleString()}</div>
+                    <div className="su-new-big">{(N.new_24h ?? 0).toLocaleString()}</div>
                     <div className="su-new-hero-sub">registered today</div>
                   </div>
                   <div className="su-new-aside">
                     <div className="su-new-aside-item">
-                      <strong>{(stats.new_7d ?? 0).toLocaleString()}</strong>
+                      <strong>{(N.new_7d ?? 0).toLocaleString()}</strong>
                       <span>7 days</span>
                     </div>
                     <div className="su-new-aside-divider" />
                     <div className="su-new-aside-item">
-                      <strong>{(stats.new_30d ?? 0).toLocaleString()}</strong>
+                      <strong>{(N.new_30d ?? 0).toLocaleString()}</strong>
                       <span>30 days</span>
                     </div>
                   </div>
                 </div>
                 <div className="su-new-bars">
                   {[
-                    { label: 'Today',   val: stats.new_24h, cls: 'today' },
-                    { label: '7 Days',  val: stats.new_7d,  cls: 'week' },
-                    { label: '30 Days', val: stats.new_30d, cls: 'month' },
+                    { label: 'Today',   val: N.new_24h, cls: 'today' },
+                    { label: '7 Days',  val: N.new_7d,  cls: 'week' },
+                    { label: '30 Days', val: N.new_30d, cls: 'month' },
                   ].map(({ label, val, cls }) => (
                     <div className="su-new-row" key={label}>
                       <span className="su-new-period">{label}</span>

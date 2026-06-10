@@ -4,6 +4,7 @@ import {
   apiFetchAdminUserDetail,
   apiFetchAdminUsers,
   apiFetchAdminUsersStats,
+  apiGetAssignableRoles,
   apiUpdateAdminUser,
 } from '../../services/api';
 
@@ -74,6 +75,18 @@ export const createAdminUser = createAsyncThunk(
   }
 );
 
+export const fetchAssignableRoles = createAsyncThunk(
+  'adminUsers/fetchAssignableRoles',
+  async (_, { getState, rejectWithValue }) => {
+    try {
+      const { accessToken } = getState().auth;
+      return await apiGetAssignableRoles(accessToken);
+    } catch (err) {
+      return rejectWithValue(err.message);
+    }
+  }
+);
+
 const adminUsersSlice = createSlice({
   name: 'adminUsers',
   initialState: {
@@ -110,6 +123,10 @@ const adminUsersSlice = createSlice({
     },
 
     lastRefreshAt: null,
+
+    assignableRoles: [],
+    assignableRolesLoading: false,
+    assignableRolesError: null,
   },
   reducers: {
     setFilters(state, action) {
@@ -253,6 +270,19 @@ const adminUsersSlice = createSlice({
       .addCase(createAdminUser.rejected, (s, a) => {
         s.createLoading = false;
         s.createError = a.payload;
+      });
+
+    b.addCase(fetchAssignableRoles.pending, (s) => {
+      s.assignableRolesLoading = true;
+      s.assignableRolesError = null;
+    })
+      .addCase(fetchAssignableRoles.fulfilled, (s, a) => {
+        s.assignableRolesLoading = false;
+        s.assignableRoles = Array.isArray(a.payload) ? a.payload : [];
+      })
+      .addCase(fetchAssignableRoles.rejected, (s, a) => {
+        s.assignableRolesLoading = false;
+        s.assignableRolesError = a.payload;
       });
   },
 });

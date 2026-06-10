@@ -8,6 +8,7 @@ import {
   fetchAdminUserDetail,
   fetchAdminUsers,
   fetchAdminUsersStats,
+  fetchAssignableRoles,
   setFilters,
   updateAdminUser,
 } from '../../store/slices/adminUsersSlice';
@@ -37,6 +38,20 @@ const PlusIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
     <line x1="12" y1="5" x2="12" y2="19" />
     <line x1="5" y1="12" x2="19" y2="12" />
+  </svg>
+);
+
+const EyeIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
+const EyeOffIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a18.5 18.5 0 0 1 4.22-5.06M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+    <line x1="1" y1="1" x2="23" y2="23" />
   </svg>
 );
 
@@ -82,6 +97,13 @@ const roleBadgeText = (role) => {
   if (role === 'viewer') return 'Viewer';
   return role;
 };
+
+// Used until /admin/users/roles has loaded (or if it fails)
+const FALLBACK_ROLES = [
+  { id: 'viewer', name: 'viewer' },
+  { id: 'admin', name: 'admin' },
+  { id: 'superadmin', name: 'superadmin' },
+];
 
 const statusBadgeClass = (status) => {
   if (status === 'active') return 'active';
@@ -165,7 +187,8 @@ function Pagination({ current, totalPages, totalItems, pageSize, onPage }) {
 
 function CreateAdminUserModal({ onClose, onCreated }) {
   const dispatch = useDispatch();
-  const { createLoading, createError } = useSelector((s) => s.adminUsers);
+  const { createLoading, createError, assignableRoles, assignableRolesLoading } =
+    useSelector((s) => s.adminUsers);
   const [form, setForm] = useState({
     full_name: '',
     email: '',
@@ -173,6 +196,10 @@ function CreateAdminUserModal({ onClose, onCreated }) {
     role: 'admin',
   });
   const [localError, setLocalError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  const roleOptions = assignableRoles.length ? assignableRoles : FALLBACK_ROLES;
+  const selectedRole = assignableRoles.find((r) => r.name === form.role);
 
   const updateField = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -253,13 +280,24 @@ function CreateAdminUserModal({ onClose, onCreated }) {
 
           <label className="au-modal-field">
             <span>Initial Password</span>
-            <input
-              type="password"
-              value={form.password}
-              onChange={(e) => updateField('password', e.target.value)}
-              placeholder="TempPass123!"
-              disabled={createLoading}
-            />
+            <div className="au-password-wrap">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={form.password}
+                onChange={(e) => updateField('password', e.target.value)}
+                placeholder="TempPass123!"
+                disabled={createLoading}
+              />
+              <button
+                type="button"
+                className="au-password-toggle"
+                onClick={() => setShowPassword((v) => !v)}
+                tabIndex={-1}
+                title={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+              </button>
+            </div>
           </label>
 
           <label className="au-modal-field">
@@ -267,12 +305,17 @@ function CreateAdminUserModal({ onClose, onCreated }) {
             <select
               value={form.role}
               onChange={(e) => updateField('role', e.target.value)}
-              disabled={createLoading}
+              disabled={createLoading || assignableRolesLoading}
             >
-              <option value="viewer">Viewer</option>
-              <option value="admin">Admin</option>
-              <option value="superadmin">Super Admin</option>
+              {roleOptions.map((r) => (
+                <option key={r.id || r.name} value={r.name}>
+                  {roleBadgeText(r.name)}
+                </option>
+              ))}
             </select>
+            {selectedRole?.description && (
+              <span className="au-form-hint">{selectedRole.description}</span>
+            )}
           </label>
         </div>
 
@@ -296,11 +339,16 @@ function CreateAdminUserModal({ onClose, onCreated }) {
 
 function AdminUserDetailModal({ userId, onClose, isSuperAdmin, currentUserEmail }) {
   const dispatch = useDispatch();
-  const { selectedUser, detailLoading, detailError, updateLoading, updateError, updateSuccess } =
-    useSelector((s) => s.adminUsers);
+  const {
+    selectedUser, detailLoading, detailError, updateLoading, updateError, updateSuccess,
+    assignableRoles, assignableRolesLoading,
+  } = useSelector((s) => s.adminUsers);
 
   const [editRole, setEditRole] = useState('');
   const [editStatus, setEditStatus] = useState('');
+
+  const roleOptions = assignableRoles.length ? assignableRoles : FALLBACK_ROLES;
+  const selectedRole = assignableRoles.find((r) => r.name === editRole);
 
   useEffect(() => {
     dispatch(fetchAdminUserDetail(userId));
@@ -433,12 +481,17 @@ function AdminUserDetailModal({ userId, onClose, isSuperAdmin, currentUserEmail 
                     <select
                       value={editRole}
                       onChange={(e) => { setEditRole(e.target.value); dispatch(clearUpdateState()); }}
-                      disabled={updateLoading}
+                      disabled={updateLoading || assignableRolesLoading}
                     >
-                      <option value="viewer">Viewer</option>
-                      <option value="admin">Admin</option>
-                      <option value="superadmin">Super Admin</option>
+                      {roleOptions.map((r) => (
+                        <option key={r.id || r.name} value={r.name}>
+                          {roleBadgeText(r.name)}
+                        </option>
+                      ))}
                     </select>
+                    {selectedRole?.description && (
+                      <span className="au-form-hint">{selectedRole.description}</span>
+                    )}
                   </label>
                   <label className="au-modal-field" style={{ flex: 1 }}>
                     <span>Status</span>
@@ -571,6 +624,7 @@ export default function AdminUsersPage() {
 
   useEffect(() => {
     dispatch(fetchAdminUsersStats());
+    dispatch(fetchAssignableRoles());
   }, [dispatch]);
 
   useEffect(() => {

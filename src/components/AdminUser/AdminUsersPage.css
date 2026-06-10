@@ -647,6 +647,7 @@
 
 .au-modal-field {
   display: grid;
+  align-content: start;
   gap: 7px;
 }
 
@@ -676,6 +677,44 @@
 .au-modal-field select:focus {
   border-color: var(--border-accent);
   box-shadow: 0 0 0 3px rgba(0,212,255,0.08);
+}
+
+.au-password-wrap {
+  position: relative;
+  display: flex;
+}
+
+.au-password-wrap input {
+  padding-right: 42px;
+}
+
+.au-password-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 48px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.au-password-toggle:hover {
+  color: var(--accent-primary);
+}
+
+.au-form-hint {
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+  line-height: 1.4;
 }
 
 .au-modal-error {
