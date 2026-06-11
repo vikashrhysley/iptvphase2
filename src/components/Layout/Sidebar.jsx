@@ -79,6 +79,13 @@ const SubscriptionsIcon = () => (
   </svg>
 );
 
+const PlansIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/>
+    <circle cx="7.5" cy="7.5" r="1.5" fill="currentColor"/>
+  </svg>
+);
+
 const ChevronLeftIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
     <polyline points="15 18 9 12 15 6" />
@@ -97,6 +104,13 @@ const ChevronDownIcon = () => (
   </svg>
 );
 
+const CloseIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
+
 const LogoutIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -109,13 +123,14 @@ const NAV_ITEMS = [
   { id: 'home', label: 'Dashboard', icon: <HomeIcon />, page: 'home' },
   { id: 'admin_users', label: 'Admin Users', icon: <LockIconForSidebar />, page: 'admin_users' },
   { id: 'app_users',   label: 'Subscriber',  icon: <AppUsersIcon />,      page: 'app_users' },
-  { id: 'subscriptions', label: 'Subscriptions', icon: <SubscriptionsIcon />, page: 'subscriptions' },
+  { id: 'subscriptions', label: 'Subscriptions', icon: <SubscriptionsIcon />, page: 'subscriptions', disabled: true },
+  { id: 'plans', label: 'Plans', icon: <PlansIcon />, page: 'plans', disabled: true },
   { id: 'device', label: 'Device', icon: <DeviceIcon />, page: 'device' },
   { id: 'heartbeat', label: 'Heartbeat', icon: <HeartbeatIcon />, page: 'heartbeat' },
   { id: 'license', label: 'License', icon: <LicenseIcon />, page: 'license' },
   { id: 'trial', label: 'System Configuration', icon: <TrialIcon />, page: 'trial' },
-  { id: 'audit', label: 'Audit Logs',         icon: <AuditIcon />, page: 'audit', superadminOnly: true },
-  { id: 'rbac',  label: 'RBAC', icon: <RbacIcon />,  page: 'rbac',  superadminOnly: true },
+  { id: 'audit', label: 'Audit Logs',         icon: <AuditIcon />, page: 'audit', superadminOnly: true, disabled: true },
+  { id: 'rbac',  label: 'RBAC', icon: <RbacIcon />,  page: 'rbac',  superadminOnly: true, disabled: true },
 ];
 
 
@@ -144,6 +159,8 @@ const initialsFor = (name) => {
 export default function Sidebar({
   collapsed,
   onToggle,
+  mobileOpen,
+  onMobileClose,
   activePage,
   dashboardTab,
   onDashboardTabChange,
@@ -181,13 +198,15 @@ export default function Sidebar({
   const displayName = profileUser.full_name || profileUser.fullName || profileUser.name || profileUser.username || profileUser.email || displayRole;
   const avatarUrl = profileUser.avatar_url || profileUser.avatarUrl;
   const initials = initialsFor(displayName);
+  const effectiveCollapsed = collapsed && !mobileOpen;
 
   return (
     <>
     <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-    <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
+    {mobileOpen && <div className="sidebar-backdrop" onClick={onMobileClose} />}
+    <aside className={`sidebar${effectiveCollapsed ? ' collapsed' : ''}${mobileOpen ? ' mobile-open' : ''}`}>
       <div className="sidebar-header">
-        {!collapsed && (
+        {!effectiveCollapsed && (
           <a className="sidebar-brand" href="#!">
             <div className="sidebar-brand-icon">
               <svg width="18" height="18" viewBox="0 0 28 28" fill="none">
@@ -202,9 +221,13 @@ export default function Sidebar({
             </div>
           </a>
         )}
-        {collapsed && <div style={{ flex: 1 }} />}
-        <button className="sidebar-toggle" onClick={onToggle} title={collapsed ? 'Expand' : 'Collapse'}>
-          {collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
+        {effectiveCollapsed && <div style={{ flex: 1 }} />}
+        <button
+          className="sidebar-toggle"
+          onClick={mobileOpen ? onMobileClose : onToggle}
+          title={mobileOpen ? 'Close menu' : (effectiveCollapsed ? 'Expand' : 'Collapse')}
+        >
+          {mobileOpen ? <CloseIcon /> : (effectiveCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />)}
         </button>
       </div>
 
@@ -212,8 +235,10 @@ export default function Sidebar({
         {NAV_ITEMS.filter(item => !item.superadminOnly || profileUser.role === 'superadmin').map(item => (
           <div className="nav-group" key={item.id}>
             <button
-              className={`nav-item${activePage === item.page ? ' active' : ''}`}
+              className={`nav-item${activePage === item.page ? ' active' : ''}${item.disabled ? ' disabled' : ''}`}
+              aria-disabled={item.disabled || undefined}
               onClick={() => {
+                if (item.disabled) return;
                 if (item.id === 'home') {
                   if (activePage !== 'home') {
                     onNavigate('home');
@@ -228,14 +253,17 @@ export default function Sidebar({
             >
               <span className="nav-icon">{item.icon}</span>
               <span className="nav-label">{item.label}</span>
-              {item.id === 'home' && !collapsed && (
+              {item.disabled && !effectiveCollapsed && <span className="nav-soon-badge">Soon</span>}
+              {item.id === 'home' && !effectiveCollapsed && (
                 <span className={`nav-caret${dashboardMenuOpen ? ' open' : ''}`}>
                   {dashboardMenuOpen ? <ChevronDownIcon /> : <ChevronRightIcon />}
                 </span>
               )}
-              {collapsed && <span className="nav-tooltip">{item.label}</span>}
+              {effectiveCollapsed && (
+                <span className="nav-tooltip">{item.label}{item.disabled ? ' (Phase 2)' : ''}</span>
+              )}
             </button>
-            {item.id === 'home' && dashboardMenuOpen && !collapsed && (
+            {item.id === 'home' && dashboardMenuOpen && !effectiveCollapsed && (
               <div className="nav-submenu">
                 {DASHBOARD_SUB_ITEMS.map(subItem => (
                   <button

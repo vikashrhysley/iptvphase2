@@ -1,0 +1,115 @@
+@keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+@keyframes spin   { to { transform:rotate(360deg); } }
+
+.pp-page { padding:24px; animation:fadeIn 0.35s ease both; text-align:left; }
+
+/* ── Header ── */
+.pp-header   { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:20px; }
+.pp-title    { font-family:var(--font-display); font-size:1.25rem !important; font-weight:700; margin:0 !important; color:var(--text-primary); }
+.pp-subtitle { margin-top:5px; color:var(--text-muted); font-size:0.85rem; }
+
+/* ── Summary stats ── */
+.pp-stats-row {
+  display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:20px;
+}
+.pp-stat-card {
+  background:var(--bg-card); border:1px solid var(--border-subtle);
+  border-radius:var(--radius-md); padding:16px 18px; position:relative; overflow:hidden;
+  transition:all var(--transition-base);
+}
+.pp-stat-card:hover { box-shadow:0 4px 20px rgba(0,0,0,0.28); border-color:var(--border-medium); }
+.pp-stat-accent { position:absolute; top:0; left:0; right:0; height:2px; background:var(--psc); }
+.pp-stat-value  { font-family:var(--font-display); font-size:1.65rem; font-weight:700; color:var(--text-primary); margin-top:6px; }
+.pp-stat-label  { font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-muted); margin-top:3px; }
+
+/* ── Plans grid ── */
+.pp-grid {
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px;
+}
+
+.pp-card {
+  background:var(--bg-card); border:1px solid var(--border-subtle);
+  border-radius:var(--radius-lg); padding:18px; display:flex; flex-direction:column; gap:12px;
+  transition:all var(--transition-base);
+}
+.pp-card:hover { box-shadow:0 4px 20px rgba(0,0,0,0.28); border-color:var(--border-medium); }
+.pp-card.inactive { opacity:0.55; }
+
+/* Top row: type pill + badges */
+.pp-card-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+
+.pp-type-pill {
+  display:inline-flex; padding:3px 9px;
+  border-radius:6px; font-size:0.72rem; font-weight:800; text-transform:capitalize; border:1px solid transparent;
+}
+.pp-type-default  { color:var(--accent-primary); background:rgba(0,212,255,0.07); border-color:rgba(0,212,255,0.22); }
+.pp-type-trial    { color:#a78bfa; background:rgba(124,58,237,0.08); border-color:rgba(124,58,237,0.25); }
+.pp-type-premium  { color:#f59e0b; background:rgba(245,158,11,0.08); border-color:rgba(245,158,11,0.25); }
+.pp-type-lifetime { color:#34d399; background:rgba(16,185,129,0.08); border-color:rgba(16,185,129,0.25); }
+
+.pp-badges { display:flex; align-items:center; gap:6px; }
+.pp-badge {
+  display:inline-flex; align-items:center; padding:3px 8px;
+  border-radius:999px; font-size:0.66rem; font-weight:800; text-transform:uppercase; letter-spacing:0.06em;
+  border:1px solid transparent;
+}
+.pp-badge.default { color:#fbbf24; background:rgba(251,191,36,0.08); border-color:rgba(251,191,36,0.25); }
+.pp-badge.active   { color:#34d399; background:rgba(16,185,129,0.08); border-color:rgba(16,185,129,0.25); }
+.pp-badge.inactive { color:#94a3b8; background:rgba(148,163,184,0.08); border-color:rgba(148,163,184,0.2); }
+
+/* Name / code */
+.pp-name { font-family:var(--font-display); font-size:1.05rem; font-weight:700; color:var(--text-primary); }
+.pp-code { font-family:monospace; font-size:0.74rem; color:var(--text-muted); margin-top:-8px; }
+
+/* Price */
+.pp-price { display:flex; align-items:baseline; gap:6px; }
+.pp-price-amount   { font-family:var(--font-display); font-size:1.5rem; font-weight:800; color:var(--text-primary); }
+.pp-price-cycle    { font-size:0.8rem; color:var(--text-muted); text-transform:capitalize; }
+.pp-price-currency { margin-left:auto; font-size:0.7rem; font-weight:700; color:var(--text-muted); }
+
+/* Active licenses highlight */
+.pp-licenses {
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+  background:rgba(0,212,255,0.05); border:1px solid rgba(0,212,255,0.15);
+  border-radius:var(--radius-md); padding:10px 12px;
+}
+.pp-licenses-value { font-family:var(--font-display); font-size:1.35rem; font-weight:800; color:var(--accent-primary); }
+.pp-licenses-label { font-size:0.68rem; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-muted); }
+
+/* Feature chips */
+.pp-features { display:flex; gap:8px; }
+.pp-feature-chip {
+  display:inline-flex; align-items:center; gap:5px; padding:4px 10px;
+  border-radius:999px; font-size:0.72rem; font-weight:800; border:1px solid transparent;
+}
+.pp-feature-chip.on  { color:#34d399; background:rgba(16,185,129,0.08); border-color:rgba(16,185,129,0.25); }
+.pp-feature-chip.off { color:var(--text-muted); background:rgba(148,163,184,0.06); border-color:rgba(148,163,184,0.15); }
+
+/* Limits */
+.pp-limits { display:flex; flex-direction:column; gap:6px; }
+.pp-limit-row {
+  display:flex; align-items:center; justify-content:space-between;
+  font-size:0.78rem; color:var(--text-muted);
+}
+.pp-limit-row strong { color:var(--text-primary); font-weight:700; text-transform:capitalize; }
+
+/* Footer */
+.pp-footer {
+  margin-top:auto; padding-top:10px; border-top:1px solid var(--border-subtle);
+  font-size:0.72rem; color:var(--text-muted);
+}
+
+/* ── States ── */
+.pp-loading, .pp-error {
+  display:flex; align-items:center; justify-content:center; gap:14px;
+  padding:80px 20px; color:var(--text-muted); font-size:0.875rem;
+}
+.pp-loading::before { content:''; width:28px; height:28px; border:3px solid var(--border-medium); border-top-color:var(--accent-primary); border-radius:50%; animation:spin 0.7s linear infinite; flex-shrink:0; }
+.pp-error { color:#f87171; }
+.pp-empty { text-align:center; color:var(--text-muted); padding:48px 12px; }
+
+/* ── Responsive ── */
+@media (max-width:900px) {
+  .pp-stats-row { grid-template-columns:repeat(1,1fr); }
+  .pp-grid      { grid-template-columns:1fr; }
+}

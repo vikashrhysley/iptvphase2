@@ -1183,3 +1183,13 @@ export const apiFetchSubscriptions = async (accessToken, params = {}) => {
     pageSize: raw.page_size ?? raw.pageSize     ?? meta.page_size ?? params.page_size ?? 20,
   };
 };
+
+// GET /admin/subscription-plans - list all subscription plan definitions
+export const apiFetchSubscriptionPlans = async (accessToken) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/subscription-plans`, {
+    method: 'GET', headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const raw = res.data || res;
+  return Array.isArray(raw) ? raw : Array.isArray(raw.data) ? raw.data : [];
+};

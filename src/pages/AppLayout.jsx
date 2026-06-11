@@ -13,15 +13,22 @@ import AppUsersPage   from '../components/AppUsers/AppUsersPage';
 import AuditPage      from '../components/Audit/AuditPage';
 import RbacPage       from '../components/Rbac/RbacPage';
 import SubscriptionsPage from '../components/Subscriptions/SubscriptionsPage';
+import PlansPage         from '../components/Plans/PlansPage';
 
 import './AppLayout.css';
 
 export default function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [activePage, setActivePage] = useState('home');
   const [dashboardTab, setDashboardTab] = useState('liveStats');
 
   const mainLeft = collapsed ? 'var(--sidebar-collapsed)' : 'var(--sidebar-width)';
+
+  const handleNavigate = (page) => {
+    setActivePage(page);
+    setMobileNavOpen(false);
+  };
 
   const renderPage = () => {
     switch (activePage) {
@@ -36,6 +43,7 @@ export default function AppLayout() {
       case 'audit':       return <AuditPage />;
       case 'rbac':        return <RbacPage />;
       case 'subscriptions': return <SubscriptionsPage />;
+      case 'plans':         return <PlansPage />;
       default:        return <DashboardTable />;
 
     }
@@ -46,12 +54,19 @@ export default function AppLayout() {
       <Sidebar
         collapsed={collapsed}
         onToggle={() => setCollapsed(c => !c)}
+        mobileOpen={mobileNavOpen}
+        onMobileClose={() => setMobileNavOpen(false)}
         activePage={activePage}
         dashboardTab={dashboardTab}
         onDashboardTabChange={setDashboardTab}
-        onNavigate={setActivePage}
+        onNavigate={handleNavigate}
       />
-      <Header activePage={activePage} dashboardTab={dashboardTab} sidebarCollapsed={collapsed} />
+      <Header
+        activePage={activePage}
+        dashboardTab={dashboardTab}
+        sidebarCollapsed={collapsed}
+        onMenuToggle={() => setMobileNavOpen(o => !o)}
+      />
       <main className="app-main" style={{ marginLeft: mainLeft }}>
         {renderPage()}
       </main>

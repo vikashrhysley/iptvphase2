@@ -527,7 +527,7 @@
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  overflow-x: auto;
   margin-bottom: 24px;
 }
 
@@ -892,6 +892,9 @@
 /* ── Responsive ─────────────────────────────────────────── */
 @media (max-width: 1100px) {
   .device-stats { grid-template-columns: 1fr; }
+}
+@media (max-width: 1024px) {
+  .device-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 700px) {
   .device-page   { padding: 16px; }
