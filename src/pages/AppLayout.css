@@ -8,3 +8,10 @@
   min-height: 100vh;
   transition: margin-left var(--transition-slow);
 }
+
+/* ── Responsive: sidebar becomes an off-canvas drawer ── */
+@media (max-width: 1024px) {
+  .app-main {
+    margin-left: 0 !important;
+  }
+}

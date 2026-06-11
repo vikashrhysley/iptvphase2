@@ -15,32 +15,60 @@
   background:linear-gradient(90deg,transparent,var(--accent-primary),transparent);
   background-size:200% 100%; animation:shimmer 1.2s linear infinite; border-radius:2px;
 }
-.lc-stats-row {
-  display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:12px;
-}
-.lc-stat-card {
-  background:var(--bg-card); border:1px solid var(--border-subtle);
-  border-radius:var(--radius-md); padding:16px 18px; position:relative; overflow:hidden;
-  transition:all var(--transition-base);
-}
-.lc-stat-card:hover { box-shadow:0 4px 20px rgba(0,0,0,0.28); border-color:var(--border-medium); }
-.lc-stat-accent { position:absolute; top:0; left:0; right:0; height:2px; background:var(--lsc); }
-.lc-stat-value  { font-family:var(--font-display); font-size:1.65rem; font-weight:700; color:var(--text-primary); margin-top:6px; }
-.lc-stat-label  { font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-muted); margin-top:3px; }
 
-/* Plan chips */
-.lc-plan-chips { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:18px; }
-.lc-plan-chip {
-  display:inline-flex; align-items:center; gap:6px; padding:5px 12px;
-  background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:99px;
-  font-size:0.78rem; cursor:pointer; color:var(--text-muted); transition:all var(--transition-fast);
+/* ── Overview cards ── */
+.lc-cards-row-4 { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin-bottom:18px; }
+
+.lc-ov-card {
+  background:var(--bg-card); border:1px solid var(--border-subtle);
+  border-radius:var(--radius-lg); padding:16px 18px;
+  display:flex; flex-direction:column; gap:10px;
+  transition:box-shadow var(--transition-base), border-color var(--transition-base);
 }
-.lc-plan-chip:hover { border-color:var(--border-medium); }
-.lc-plan-chip.paid       { border-color:rgba(0,212,255,0.2); }
-.lc-plan-chip.trial      { border-color:rgba(167,139,250,0.25); }
-.lc-plan-chip.grace      { border-color:rgba(245,158,11,0.25); }
-.lc-plan-chip.auto-renew { border-color:rgba(16,185,129,0.25); }
-.lc-plan-chip strong { color:var(--text-primary); font-weight:700; }
+.lc-ov-card:hover { box-shadow:0 6px 28px rgba(0,0,0,0.32); border-color:var(--border-medium); }
+
+.lc-ov-top   { display:flex; align-items:center; justify-content:space-between; }
+.lc-ov-label { font-size:0.7rem; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-muted); }
+.lc-ov-icon  {
+  width:28px; height:28px; flex-shrink:0; border-radius:8px;
+  display:flex; align-items:center; justify-content:center;
+}
+.lc-ov-icon svg    { width:14px; height:14px; }
+.lc-ov-icon.cyan   { color:#00d4ff; background:rgba(0,212,255,0.1); }
+.lc-ov-icon.violet { color:#a78bfa; background:rgba(167,139,250,0.1); }
+.lc-ov-icon.green  { color:#34d399; background:rgba(52,211,153,0.1); }
+.lc-ov-icon.amber  { color:#fbbf24; background:rgba(251,191,36,0.1); }
+
+.lc-ov-big { font-family:var(--font-display); font-size:1.9rem; font-weight:700; color:var(--text-primary); line-height:1; letter-spacing:-0.02em; }
+.lc-ov-sub { font-size:0.66rem; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); margin-top:-6px; }
+
+.lc-seg-bar { display:flex; height:6px; border-radius:99px; overflow:hidden; gap:2px; background:var(--border-subtle); }
+.lc-seg     { height:100%; min-width:3px; transition:flex 0.6s ease; }
+
+.lc-ov-chips        { display:flex; flex-direction:column; gap:6px; }
+.lc-ov-chips.two-col { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.lc-ov-chip {
+  display:flex; align-items:center; gap:6px; padding:6px 8px;
+  border-radius:var(--radius-md); background:rgba(255,255,255,0.03);
+  border:1px solid var(--border-subtle); border-left:2px solid var(--cc);
+  min-width:0;
+}
+.lc-ov-chip.clickable { cursor:pointer; transition:all var(--transition-fast); }
+.lc-ov-chip.clickable:hover { border-color:var(--border-medium); background:rgba(255,255,255,0.05); }
+.lc-ov-chip.selected  { border-color:var(--cc); background:rgba(255,255,255,0.06); }
+.lc-ov-dot       { width:6px; height:6px; border-radius:50%; background:var(--cc); flex-shrink:0; }
+.lc-ov-chip-label { flex:1; min-width:0; font-size:0.72rem; color:var(--text-muted); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.lc-ov-chip-val  { font-size:0.8rem; font-weight:700; color:var(--text-primary); flex-shrink:0; }
+.lc-ov-chip-pct  { width:30px; text-align:right; font-size:0.66rem; font-weight:700; color:var(--text-muted); flex-shrink:0; }
+
+/* Card 4 · Expiring & Renewals */
+.lc-exp-row     { display:flex; align-items:center; justify-content:space-around; flex:1; padding:6px 0; }
+.lc-exp-item    { display:flex; flex-direction:column; align-items:center; gap:4px; }
+.lc-exp-val     { font-family:var(--font-display); font-size:1.6rem; font-weight:700; color:var(--text-primary); line-height:1; }
+.lc-exp-val.warn { color:#fbbf24; }
+.lc-exp-val.ok   { color:#34d399; }
+.lc-exp-label   { font-size:0.64rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); text-align:center; }
+.lc-exp-divider { width:1px; height:32px; background:var(--border-subtle); }
 
 /* ── Toolbar ── */
 .lc-toolbar { display:flex; align-items:flex-end; gap:10px; flex-wrap:wrap; margin-bottom:18px; }
@@ -264,8 +292,13 @@
 .lc-btn-cancel:disabled, .lc-btn-save:disabled { opacity:0.6; cursor:not-allowed; transform:none; }
 .lc-mini-spin { width:13px; height:13px; border:2px solid rgba(0,16,24,0.25); border-top-color:#001018; border-radius:50%; animation:spin 0.7s linear infinite; }
 
+@media (max-width:1180px) and (min-width:901px) {
+  .lc-cards-row-4 { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+
 @media (max-width:900px) {
-  .lc-stats-row  { grid-template-columns:repeat(2,1fr); }
+  .lc-cards-row-4 { grid-template-columns:1fr; }
+  .lc-ov-chips.two-col { grid-template-columns:1fr; }
   .lc-toolbar    { flex-direction:column; align-items:stretch; }
   .lc-search-wrap { max-width:100%; }
   .lc-action-opts { flex-direction:column; }

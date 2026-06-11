@@ -655,7 +655,7 @@
   animation: spin 0.7s linear infinite;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 1024px) {
   .pp-summary-grid,
   .pp-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

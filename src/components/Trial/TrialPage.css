@@ -419,3 +419,12 @@
 }
 .tp-sc-state.error { color: #f87171; }
 
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  .trial-page { padding: 16px; }
+  .tp-section { padding: 16px; }
+  .tp-page-header { flex-direction: column; align-items: stretch; }
+  .tp-header-actions { flex-direction: column; align-items: stretch; }
+  .tp-change-note-input { min-width: 0; }
+}
+

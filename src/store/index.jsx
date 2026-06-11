@@ -11,6 +11,7 @@ import appUsersReducer   from './slices/appUsersSlice';
 import auditReducer      from './slices/auditSlice';
 import rbacReducer       from './slices/rbacSlice';
 import subscriptionsReducer from './slices/subscriptionsSlice';
+import plansReducer      from './slices/plansSlice';
 
 export const store = configureStore({
   reducer: {
@@ -25,6 +26,7 @@ export const store = configureStore({
     audit:      auditReducer,
     rbac:       rbacReducer,
     subscriptions: subscriptionsReducer,
+    plans:      plansReducer,
   },
 });
 

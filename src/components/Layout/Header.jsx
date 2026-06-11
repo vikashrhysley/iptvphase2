@@ -48,7 +48,15 @@ const MoonIcon = () => (
   </svg>
 );
 
-export default function Header({ activePage, dashboardTab, sidebarCollapsed }) {
+const MenuIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+    <line x1="3" y1="6" x2="21" y2="6" />
+    <line x1="3" y1="12" x2="21" y2="12" />
+    <line x1="3" y1="18" x2="21" y2="18" />
+  </svg>
+);
+
+export default function Header({ activePage, dashboardTab, sidebarCollapsed, onMenuToggle }) {
   const { user }   = useSelector(s => s.auth);
   const dispatch   = useDispatch();
   const { theme, toggleTheme } = useTheme();
@@ -81,6 +89,9 @@ export default function Header({ activePage, dashboardTab, sidebarCollapsed }) {
   return (
     <header className="app-header" style={{ left }}>
       <div className="header-left">
+        <button className="mobile-menu-btn" onClick={onMenuToggle} aria-label="Toggle navigation menu" title="Menu">
+          <MenuIcon />
+        </button>
         <span className="header-page-title">{PAGE_TITLES[activePage] || 'Dashboard'}</span>
         <span className="header-breadcrumb">{breadcrumb}</span>
       </div>
