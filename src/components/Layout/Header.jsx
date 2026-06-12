@@ -12,6 +12,7 @@ import './Header.css';
 
 const PAGE_TITLES = {
   home:       'Dashboard',
+  analytics:  'Analytics',
   device:     'Device Management',
   heartbeat:  'Heartbeat Monitoring',
   license:    'License Center',
@@ -56,7 +57,7 @@ const MenuIcon = () => (
   </svg>
 );
 
-export default function Header({ activePage, dashboardTab, sidebarCollapsed, onMenuToggle }) {
+export default function Header({ activePage, dashboardTab, analyticsTab, sidebarCollapsed, onMenuToggle }) {
   const { user }   = useSelector(s => s.auth);
   const dispatch   = useDispatch();
   const { theme, toggleTheme } = useTheme();
@@ -70,6 +71,8 @@ export default function Header({ activePage, dashboardTab, sidebarCollapsed, onM
   const left = sidebarCollapsed ? 'var(--sidebar-collapsed)' : 'var(--sidebar-width)';
   const breadcrumb = activePage === 'home'
     ? `/${dashboardTab === 'revenue' ? ' Revenue' : dashboardTab === 'overview' ? ' Overview' : ' Live Stats'}`
+    : activePage === 'analytics'
+    ? `/${analyticsTab === 'revenue' ? ' Revenue' : analyticsTab === 'users' ? ' Users' : analyticsTab === 'devices' ? ' Devices' : analyticsTab === 'licenses' ? ' Licenses' : analyticsTab === 'funnel' ? ' Funnel' : analyticsTab === 'churn' ? ' Churn' : ' Overview'}`
     : '/ Overview';
 
   const handleRefresh = () => {
