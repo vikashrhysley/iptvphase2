@@ -494,6 +494,26 @@
 }
 
 @media (min-width: 761px) and (max-width: 1180px) {
-  .su-cards-row-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .su-cards-row-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  /* Keep the 3-card row on a single line by shrinking card content */
+  .su-cards-row-3 .su-card {
+    padding: 14px 14px;
+    gap: 12px;
+  }
+  .su-cards-row-3 .su-rings-row svg { width: 56px; height: 56px; }
+  .su-cards-row-3 .su-ring-val   { font-size: 0.76rem; }
+  .su-cards-row-3 .su-ring-label { font-size: 0.6rem; }
+  .su-cards-row-3 .su-no-license { padding: 6px 10px; font-size: 0.7rem; gap: 5px; }
+
+  .su-cards-row-3 .su-new-big          { font-size: 1.9rem; }
+  .su-cards-row-3 .su-new-aside        { gap: 10px; }
+  .su-cards-row-3 .su-new-aside-item strong { font-size: 0.92rem; }
+  .su-cards-row-3 .su-new-period       { width: 44px; font-size: 0.66rem; }
+  .su-cards-row-3 .su-new-val          { width: 36px; font-size: 0.74rem; }
+
+  .su-cards-row-3 .su-cty-rank  { width: 18px; font-size: 0.6rem; }
+  .su-cards-row-3 .su-cty-code  { width: 28px; font-size: 0.7rem; }
+  .su-cards-row-3 .su-cty-count { width: 40px; font-size: 0.7rem; }
+  .su-cards-row-3 .su-cty-pct   { width: 28px; font-size: 0.66rem; }
 }

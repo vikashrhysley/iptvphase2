@@ -12,6 +12,7 @@ import auditReducer      from './slices/auditSlice';
 import rbacReducer       from './slices/rbacSlice';
 import subscriptionsReducer from './slices/subscriptionsSlice';
 import plansReducer      from './slices/plansSlice';
+import analyticsReducer  from './slices/analyticsSlice';
 
 export const store = configureStore({
   reducer: {
@@ -27,6 +28,7 @@ export const store = configureStore({
     rbac:       rbacReducer,
     subscriptions: subscriptionsReducer,
     plans:      plansReducer,
+    analytics:  analyticsReducer,
   },
 });
 

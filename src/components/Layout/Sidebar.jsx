@@ -12,6 +12,14 @@ const HomeIcon = () => (
   </svg>
 );
 
+const AnalyticsIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <line x1="18" y1="20" x2="18" y2="10" />
+    <line x1="12" y1="20" x2="12" y2="4" />
+    <line x1="6" y1="20" x2="6" y2="14" />
+  </svg>
+);
+
 const DeviceIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
@@ -119,25 +127,34 @@ const LogoutIcon = () => (
   </svg>
 );
 
-const NAV_ITEMS = [
-  { id: 'home', label: 'Dashboard', icon: <HomeIcon />, page: 'home' },
-  { id: 'admin_users', label: 'Admin Users', icon: <LockIconForSidebar />, page: 'admin_users' },
-  { id: 'app_users',   label: 'Subscriber',  icon: <AppUsersIcon />,      page: 'app_users' },
-  { id: 'subscriptions', label: 'Subscriptions', icon: <SubscriptionsIcon />, page: 'subscriptions', disabled: true },
-  { id: 'plans', label: 'Plans', icon: <PlansIcon />, page: 'plans', disabled: true },
-  { id: 'device', label: 'Device', icon: <DeviceIcon />, page: 'device' },
-  { id: 'heartbeat', label: 'Heartbeat', icon: <HeartbeatIcon />, page: 'heartbeat' },
-  { id: 'license', label: 'License', icon: <LicenseIcon />, page: 'license' },
-  { id: 'trial', label: 'System Configuration', icon: <TrialIcon />, page: 'trial' },
-  { id: 'audit', label: 'Audit Logs',         icon: <AuditIcon />, page: 'audit', superadminOnly: true, disabled: true },
-  { id: 'rbac',  label: 'RBAC', icon: <RbacIcon />,  page: 'rbac',  superadminOnly: true, disabled: true },
-];
-
-
 const DASHBOARD_SUB_ITEMS = [
   { id: 'liveStats', label: 'Live Stats' },
   { id: 'overview', label: 'Overview' },
   { id: 'revenue', label: 'Revenue' },
+];
+
+const ANALYTICS_SUB_ITEMS = [
+  { id: 'revenue', label: 'Revenue' },
+  { id: 'users', label: 'Users' },
+  { id: 'devices', label: 'Devices' },
+  { id: 'licenses', label: 'Licenses' },
+  { id: 'funnel', label: 'Funnel' },
+  { id: 'churn', label: 'Churn' },
+];
+
+const NAV_ITEMS = [
+  { id: 'home', label: 'Dashboard', icon: <HomeIcon />, page: 'home', subItems: DASHBOARD_SUB_ITEMS },
+  { id: 'analytics', label: 'Analytics', icon: <AnalyticsIcon />, page: 'analytics', subItems: ANALYTICS_SUB_ITEMS },
+  { id: 'admin_users', label: 'Admin Users', icon: <LockIconForSidebar />, page: 'admin_users' },
+  { id: 'app_users',   label: 'Subscriber',  icon: <AppUsersIcon />,      page: 'app_users' },
+  { id: 'subscriptions', label: 'Subscriptions', icon: <SubscriptionsIcon />, page: 'subscriptions' },
+  { id: 'plans', label: 'Plans', icon: <PlansIcon />, page: 'plans' },
+  { id: 'device', label: 'Device', icon: <DeviceIcon />, page: 'device' },
+  { id: 'heartbeat', label: 'Heartbeat', icon: <HeartbeatIcon />, page: 'heartbeat' },
+  { id: 'license', label: 'License', icon: <LicenseIcon />, page: 'license' },
+  { id: 'trial', label: 'System Configuration', icon: <TrialIcon />, page: 'trial' },
+  { id: 'audit', label: 'Audit Logs',         icon: <AuditIcon />, page: 'audit', superadminOnly: true },
+  { id: 'rbac',  label: 'RBAC', icon: <RbacIcon />,  page: 'rbac',  superadminOnly: true },
 ];
 
 const roleLabel = (role) => {
@@ -164,11 +181,15 @@ export default function Sidebar({
   activePage,
   dashboardTab,
   onDashboardTabChange,
+  analyticsTab,
+  onAnalyticsTabChange,
   onNavigate,
 }) {
   const dispatch = useDispatch();
   const { accessToken, user, loading: logoutLoading } = useSelector(s => s.auth);
-  const [dashboardMenuOpen, setDashboardMenuOpen] = useState(activePage === 'home');
+  const [openSubmenu, setOpenSubmenu] = useState(
+    activePage === 'home' ? 'home' : activePage === 'analytics' ? 'analytics' : null
+  );
   const [sidebarProfile, setSidebarProfile] = useState(null);
 
   useEffect(() => {
@@ -235,48 +256,48 @@ export default function Sidebar({
         {NAV_ITEMS.filter(item => !item.superadminOnly || profileUser.role === 'superadmin').map(item => (
           <div className="nav-group" key={item.id}>
             <button
-              className={`nav-item${activePage === item.page ? ' active' : ''}${item.disabled ? ' disabled' : ''}`}
-              aria-disabled={item.disabled || undefined}
+              className={`nav-item${activePage === item.page ? ' active' : ''}`}
               onClick={() => {
-                if (item.disabled) return;
-                if (item.id === 'home') {
-                  if (activePage !== 'home') {
-                    onNavigate('home');
-                    onDashboardTabChange('liveStats');
+                if (item.subItems) {
+                  if (activePage !== item.page) {
+                    onNavigate(item.page);
+                    if (item.id === 'home') onDashboardTabChange('liveStats');
+                    if (item.id === 'analytics') onAnalyticsTabChange('revenue');
                   }
-                  setDashboardMenuOpen(open => !open);
+                  setOpenSubmenu(open => (open === item.id ? null : item.id));
                   return;
                 }
-                setDashboardMenuOpen(false);
+                setOpenSubmenu(null);
                 onNavigate(item.page);
               }}
             >
               <span className="nav-icon">{item.icon}</span>
               <span className="nav-label">{item.label}</span>
-              {item.disabled && !effectiveCollapsed && <span className="nav-soon-badge">Soon</span>}
-              {item.id === 'home' && !effectiveCollapsed && (
-                <span className={`nav-caret${dashboardMenuOpen ? ' open' : ''}`}>
-                  {dashboardMenuOpen ? <ChevronDownIcon /> : <ChevronRightIcon />}
+              {item.subItems && !effectiveCollapsed && (
+                <span className={`nav-caret${openSubmenu === item.id ? ' open' : ''}`}>
+                  {openSubmenu === item.id ? <ChevronDownIcon /> : <ChevronRightIcon />}
                 </span>
               )}
-              {effectiveCollapsed && (
-                <span className="nav-tooltip">{item.label}{item.disabled ? ' (Phase 2)' : ''}</span>
-              )}
+              {effectiveCollapsed && <span className="nav-tooltip">{item.label}</span>}
             </button>
-            {item.id === 'home' && dashboardMenuOpen && !effectiveCollapsed && (
+            {item.subItems && openSubmenu === item.id && !effectiveCollapsed && (
               <div className="nav-submenu">
-                {DASHBOARD_SUB_ITEMS.map(subItem => (
-                  <button
-                    key={subItem.id}
-                    className={`nav-subitem${dashboardTab === subItem.id ? ' active' : ''}`}
-                    onClick={() => {
-                      onNavigate('home');
-                      onDashboardTabChange(subItem.id);
-                    }}
-                  >
-                    {subItem.label}
-                  </button>
-                ))}
+                {item.subItems.map(subItem => {
+                  const activeSub = item.id === 'home' ? dashboardTab : analyticsTab;
+                  return (
+                    <button
+                      key={subItem.id}
+                      className={`nav-subitem${activeSub === subItem.id ? ' active' : ''}`}
+                      onClick={() => {
+                        onNavigate(item.page);
+                        if (item.id === 'home') onDashboardTabChange(subItem.id);
+                        else onAnalyticsTabChange(subItem.id);
+                      }}
+                    >
+                      {subItem.label}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>

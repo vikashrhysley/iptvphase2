@@ -249,6 +249,86 @@ export const apiFetchDashboardRevenue = async (accessToken) => {
   return res.data || res;
 };
 
+// ─────────────────────────────────────────────────────────
+// ANALYTICS APIs
+// ─────────────────────────────────────────────────────────
+
+// GET /admin/analytics/revenue
+export const apiFetchRevenueAnalytics = async (accessToken, params = {}) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const query = new URLSearchParams();
+  if (params.start_date) query.set('start_date', params.start_date);
+  if (params.end_date)   query.set('end_date',   params.end_date);
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  const res = await request(`${BASE}/admin/analytics/revenue${qs}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+// GET /admin/analytics/users
+export const apiFetchUserAnalytics = async (accessToken, params = {}) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const query = new URLSearchParams();
+  if (params.start_date) query.set('start_date', params.start_date);
+  if (params.end_date)   query.set('end_date',   params.end_date);
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  const res = await request(`${BASE}/admin/analytics/users${qs}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+// GET /admin/analytics/devices
+export const apiFetchDeviceAnalytics = async (accessToken) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/analytics/devices`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+// GET /admin/analytics/licenses
+export const apiFetchLicenseAnalytics = async (accessToken) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/analytics/licenses`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+// GET /admin/analytics/conversion-funnel
+export const apiFetchFunnelAnalytics = async (accessToken, params = {}) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const query = new URLSearchParams();
+  if (params.start_date) query.set('start_date', params.start_date);
+  if (params.end_date)   query.set('end_date',   params.end_date);
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  const res = await request(`${BASE}/admin/analytics/conversion-funnel${qs}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+// GET /admin/analytics/churn
+export const apiFetchChurnAnalytics = async (accessToken, params = {}) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const query = new URLSearchParams();
+  if (params.start_date) query.set('start_date', params.start_date);
+  if (params.end_date)   query.set('end_date',   params.end_date);
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  const res = await request(`${BASE}/admin/analytics/churn${qs}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
 // ── Device APIs ──────────────────────────────────────────────
 // GET /admin/devices/stats
 export const apiFetchDeviceStats = async (accessToken) => {

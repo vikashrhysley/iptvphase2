@@ -251,6 +251,33 @@ function TypedValue({ raw }) {
   if (raw === null || raw === undefined) return <span style={{ color: TYPE_COLOR.null }}>null</span>;
   if (typeof raw === 'boolean') return <span style={{ color: TYPE_COLOR.boolean }}>{String(raw)}</span>;
   if (typeof raw === 'number')  return <span style={{ color: TYPE_COLOR.number  }}>{raw}</span>;
+  if (Array.isArray(raw)) {
+    if (raw.length === 0) return <span style={{ color: TYPE_COLOR.null }}>[ ]</span>;
+    return (
+      <span>
+        [{raw.map((item, i) => (
+          <span key={i}>
+            <TypedValue raw={item} />
+            {i < raw.length - 1 ? ', ' : ''}
+          </span>
+        ))}]
+      </span>
+    );
+  }
+  if (typeof raw === 'object') {
+    const keys = Object.keys(raw);
+    if (keys.length === 0) return <span style={{ color: TYPE_COLOR.null }}>{'{ }'}</span>;
+    return (
+      <div className="al-state-nested">
+        {keys.map(k => (
+          <div key={k} className="al-state-nested-row">
+            <span className="al-state-nested-key">{k}</span>
+            <TypedValue raw={raw[k]} />
+          </div>
+        ))}
+      </div>
+    );
+  }
   // Try coercing string numbers / booleans for nicer display
   if (raw === 'true')  return <span style={{ color: TYPE_COLOR.boolean }}>true</span>;
   if (raw === 'false') return <span style={{ color: TYPE_COLOR.boolean }}>false</span>;
@@ -295,7 +322,7 @@ function StateBlock({ label, data, compareObj }) {
           return (
             <div key={key} className={`al-state-row${changed ? ' al-state-changed' : ''}`}>
               <span className="al-state-key">{key.replace(/_/g, '_​')}</span>
-              <span className="al-state-val"><TypedValue raw={val} /></span>
+              <div className="al-state-val"><TypedValue raw={val} /></div>
               {changed && <span className="al-state-diff-dot" title="Changed" />}
             </div>
           );

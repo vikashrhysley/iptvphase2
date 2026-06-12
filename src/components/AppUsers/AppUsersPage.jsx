@@ -246,8 +246,8 @@ export default function AppUsersPage() {
 
         return (
           <>
-            {/* ── Row 1: 3 cards ── */}
-            <div className="su-cards-row-3">
+            {/* ── Row 1: 2 cards ── */}
+            <div className="su-cards-row-2">
 
               {/* Card 1 · Total */}
               <div className="su-card">
@@ -307,6 +307,11 @@ export default function AppUsersPage() {
                 </div>
               </div>
 
+            </div>
+
+            {/* ── Row 2: 3 cards ── */}
+            <div className="su-cards-row-3">
+
               {/* Card 3 · License */}
               <div className="su-card">
                 <div className="su-card-top">
@@ -334,11 +339,6 @@ export default function AppUsersPage() {
                   <span className="su-no-license-pct">{pct(L.without_license)}%</span>
                 </div>
               </div>
-
-            </div>
-
-            {/* ── Row 2: 2 cards ── */}
-            <div className="su-cards-row-2">
 
               {/* Card 4 · New Users */}
               <div className="su-card">

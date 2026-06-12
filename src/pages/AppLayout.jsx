@@ -14,6 +14,7 @@ import AuditPage      from '../components/Audit/AuditPage';
 import RbacPage       from '../components/Rbac/RbacPage';
 import SubscriptionsPage from '../components/Subscriptions/SubscriptionsPage';
 import PlansPage         from '../components/Plans/PlansPage';
+import AnalyticsPage     from '../components/Analytics/AnalyticsPage';
 
 import './AppLayout.css';
 
@@ -22,6 +23,7 @@ export default function AppLayout() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [activePage, setActivePage] = useState('home');
   const [dashboardTab, setDashboardTab] = useState('liveStats');
+  const [analyticsTab, setAnalyticsTab] = useState('revenue');
 
   const mainLeft = collapsed ? 'var(--sidebar-collapsed)' : 'var(--sidebar-width)';
 
@@ -44,6 +46,7 @@ export default function AppLayout() {
       case 'rbac':        return <RbacPage />;
       case 'subscriptions': return <SubscriptionsPage />;
       case 'plans':         return <PlansPage />;
+      case 'analytics':     return <AnalyticsPage activeTab={analyticsTab} />;
       default:        return <DashboardTable />;
 
     }
@@ -59,11 +62,14 @@ export default function AppLayout() {
         activePage={activePage}
         dashboardTab={dashboardTab}
         onDashboardTabChange={setDashboardTab}
+        analyticsTab={analyticsTab}
+        onAnalyticsTabChange={setAnalyticsTab}
         onNavigate={handleNavigate}
       />
       <Header
         activePage={activePage}
         dashboardTab={dashboardTab}
+        analyticsTab={analyticsTab}
         sidebarCollapsed={collapsed}
         onMenuToggle={() => setMobileNavOpen(o => !o)}
       />
