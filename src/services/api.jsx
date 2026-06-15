@@ -1264,6 +1264,80 @@ export const apiFetchSubscriptions = async (accessToken, params = {}) => {
   };
 };
 
+// GET /admin/subscriptions/{id}
+export const apiFetchSubscriptionDetail = async (accessToken, id) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/subscriptions/${id}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+// GET /admin/subscriptions/{id}/history
+export const apiFetchSubscriptionHistory = async (accessToken, id) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/subscriptions/${id}/history`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+// PATCH /admin/subscriptions/{id} - partial update (admin+)
+export const apiUpdateSubscription = async (accessToken, id, data) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const payload = {};
+  if (data.auto_renew     !== undefined) payload.auto_renew     = data.auto_renew;
+  if (data.billing_cycle  !== undefined) payload.billing_cycle  = data.billing_cycle;
+  if (data.cancel_reason  !== undefined) payload.cancel_reason  = data.cancel_reason;
+  if (data.next_billing_at !== undefined) payload.next_billing_at = data.next_billing_at;
+  payload.reason = data.reason;
+  const res = await request(`${BASE}/admin/subscriptions/${id}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(payload),
+  });
+  return res.data || res;
+};
+
+// POST /admin/subscriptions/{id}/cancel - force-cancel on behalf of a user (admin+)
+export const apiCancelSubscription = async (accessToken, id, reason) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/subscriptions/${id}/cancel`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ reason }),
+  });
+  return res.data || res;
+};
+
+// POST /admin/subscriptions/{id}/extend-trial - extend trial period by N days (admin+)
+export const apiExtendTrial = async (accessToken, id, extendDays, reason) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/subscriptions/${id}/extend-trial`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ extend_days: extendDays, reason }),
+  });
+  return res.data || res;
+};
+
+// POST /admin/subscriptions/{id}/upgrade - reassign to a new plan (admin+)
+export const apiUpgradeSubscription = async (accessToken, id, data) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/subscriptions/${id}/upgrade`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({
+      new_plan_id: data.new_plan_id,
+      reason:      data.reason,
+      prorate:     !!data.prorate,
+    }),
+  });
+  return res.data || res;
+};
+
 // GET /admin/subscription-plans - list all subscription plan definitions
 export const apiFetchSubscriptionPlans = async (accessToken) => {
   if (!accessToken) throw new Error('Unauthorized');

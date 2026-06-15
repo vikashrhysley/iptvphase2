@@ -62,6 +62,8 @@
 }
 .sb-table tr:last-child td { border-bottom:none; }
 .sb-table tr:hover td { background:rgba(255,255,255,0.02); }
+.sb-row { cursor:pointer; }
+.sb-row:hover td { background:rgba(0,212,255,0.04); }
 
 .sb-mono   { font-family:monospace; font-size:0.78rem; color:var(--text-muted); }
 .sb-nowrap { white-space:nowrap; }
