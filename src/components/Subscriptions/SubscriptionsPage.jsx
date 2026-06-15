@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchSubscriptions, setSubscriptionFilters, clearSubscriptionFilters } from '../../store/slices/subscriptionsSlice';
+import { fmtDate, shortId, statusClass, planClass, STATUS_OPTIONS } from './subscriptionsHelpers';
+import SubscriptionDetailPage from './SubscriptionDetailPage';
 import './SubscriptionsPage.css';
 
 /* ── Icons ─────────────────────────────────────────────── */
@@ -9,45 +11,6 @@ const ChevLeft    = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="
 const ChevRight   = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>;
 const CheckIcon   = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>;
 const XIcon       = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
-
-/* ── Helpers ────────────────────────────────────────────── */
-const fmtDate = (iso) => {
-  if (!iso) return '—';
-  try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch { return '—'; }
-};
-const shortId = (id) => (id ? `${String(id).slice(0, 8)}…` : '—');
-
-const STATUS_CLASS = {
-  active:     'sb-active',
-  trialing:   'sb-trialing',
-  trial:      'sb-trialing',
-  past_due:   'sb-past-due',
-  paused:     'sb-paused',
-  cancelled:  'sb-cancelled',
-  canceled:   'sb-cancelled',
-  expired:    'sb-expired',
-  incomplete: 'sb-past-due',
-  unpaid:     'sb-past-due',
-};
-const statusClass = (s) => STATUS_CLASS[(s || '').toLowerCase()] || 'sb-unknown';
-
-const planClass = (p) => {
-  const v = (p || '').toLowerCase();
-  if (v.includes('trial'))   return 'sb-plan-trial';
-  if (v.includes('life'))    return 'sb-plan-lifetime';
-  if (v.includes('premium') || v.includes('pro')) return 'sb-plan-premium';
-  return 'sb-plan-default';
-};
-
-const STATUS_OPTIONS = [
-  { value: '',          label: 'All Status' },
-  { value: 'active',    label: 'Active' },
-  { value: 'trialing',  label: 'Trialing' },
-  { value: 'past_due',  label: 'Past Due' },
-  { value: 'paused',    label: 'Paused' },
-  { value: 'cancelled', label: 'Cancelled' },
-  { value: 'expired',   label: 'Expired' },
-];
 
 /* ── Pagination ─────────────────────────────────────────── */
 function Pagination({ current, totalPages, total, pageSize, onPage }) {
@@ -81,6 +44,7 @@ export default function SubscriptionsPage() {
 
   const [userIdInput, setUserIdInput] = useState(filters.user_id || '');
   const [planTypeInput, setPlanTypeInput] = useState(filters.plan_type || '');
+  const [detailSubscriptionId, setDetailSubscriptionId] = useState(null);
   const debounceRef = useRef(null);
   const totalPages  = Math.max(1, Math.ceil(total / (pageSize || 20)));
 
@@ -109,6 +73,11 @@ export default function SubscriptionsPage() {
     p.page_size = filters.page_size;
     dispatch(fetchSubscriptions(p));
   }, [dispatch, filters.status, filters.plan_type, filters.user_id, filters.date_from, filters.date_to, filters.page, filters.page_size]);
+
+  /* All hooks above — conditional render AFTER */
+  if (detailSubscriptionId) {
+    return <SubscriptionDetailPage subscriptionId={detailSubscriptionId} onBack={() => setDetailSubscriptionId(null)} />;
+  }
 
   const hasActiveFilters = filters.status || filters.plan_type || filters.user_id || filters.date_from || filters.date_to;
 
@@ -192,7 +161,7 @@ export default function SubscriptionsPage() {
               </thead>
               <tbody>
                 {subscriptions.length ? subscriptions.map(sub => (
-                  <tr key={sub.id}>
+                  <tr key={sub.id} className="sb-row" onClick={() => setDetailSubscriptionId(sub.id)}>
                     <td>
                       <div className="sb-user-email">{sub.user_email || '—'}</div>
                       <div className="sb-user-id">{shortId(sub.user_id)}</div>
