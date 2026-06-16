@@ -186,7 +186,7 @@
   flex-direction:row; align-items:center; gap:10px;
 }
 .sdp-checkbox-field span {
-  text-transform:none; font-weight:600; letter-spacing:normal; color:var(--text-secondary); font-size:0.85rem;
+  text-transform:none; font-weight:500; letter-spacing:normal; color:var(--text-secondary); font-size:0.85rem;
 }
 .sdp-checkbox-field input[type="checkbox"] {
   width:18px; height:18px; min-height:0; flex-shrink:0;

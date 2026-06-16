@@ -1347,3 +1347,23 @@ export const apiFetchSubscriptionPlans = async (accessToken) => {
   const raw = res.data || res;
   return Array.isArray(raw) ? raw : Array.isArray(raw.data) ? raw.data : [];
 };
+
+// GET /admin/subscription-plans/{id} - full plan object + usage_stats (viewer+)
+export const apiFetchPlanDetail = async (accessToken, id) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/subscription-plans/${id}`, {
+    method: 'GET', headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+// PATCH /admin/subscription-plans/{id} - activate or deactivate a plan (superadmin)
+export const apiTogglePlanStatus = async (accessToken, id, isActive) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/subscription-plans/${id}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ is_active: isActive }),
+  });
+  return res.data || res;
+};

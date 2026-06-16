@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchSubscriptionPlans } from '../../store/slices/plansSlice';
+import PlanDetailPage from './PlanDetailPage';
 import './PlansPage.css';
 
 /* ── Icons ─────────────────────────────────────────────── */
@@ -22,13 +23,13 @@ const planClass = (p) => {
 };
 
 /* ── Plan Card ──────────────────────────────────────────── */
-function PlanCard({ plan }) {
+function PlanCard({ plan, onClick }) {
   const features = plan.features || {};
   const hd   = !!features.hd;
   const four = !!features['4k'];
 
   return (
-    <div className={`pp-card${!plan.is_active ? ' inactive' : ''}`}>
+    <div className={`pp-card${!plan.is_active ? ' inactive' : ''}`} onClick={onClick} role="button" tabIndex={0}>
       <div className="pp-card-top">
         <span className={`pp-type-pill ${planClass(plan.plan_type)}`}>{plan.plan_type || '—'}</span>
         <div className="pp-badges">
@@ -73,8 +74,11 @@ function PlanCard({ plan }) {
 export default function PlansPage() {
   const dispatch = useDispatch();
   const { plans, loading, error } = useSelector((s) => s.plans);
+  const [detailPlanId, setDetailPlanId] = useState(null);
 
   useEffect(() => { dispatch(fetchSubscriptionPlans()); }, [dispatch]);
+
+  if (detailPlanId) return <PlanDetailPage planId={detailPlanId} onBack={() => setDetailPlanId(null)} />;
 
   const totalPlans  = plans.length;
   const activePlans = plans.filter(p => p.is_active).length;
@@ -120,7 +124,7 @@ export default function PlansPage() {
         <div className="pp-empty">No subscription plans found.</div>
       ) : (
         <div className="pp-grid">
-          {plans.map(plan => <PlanCard key={plan.id} plan={plan} />)}
+          {plans.map(plan => <PlanCard key={plan.id} plan={plan} onClick={() => setDetailPlanId(plan.id)} />)}
         </div>
       )}
     </div>
