@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchLicenses, fetchLicenseStats, fetchExpiringLicenses,
@@ -141,7 +142,7 @@ function EditModalForm({ editModal, actionLoading }) {
     dispatch(editLicense({ licenseId: getLicId(editModal), data }));
   };
 
-  return (
+  return createPortal(
     <div className="lc-modal-overlay" onClick={e => e.target === e.currentTarget && dispatch(closeEditModal())}>
       <form className="lc-modal" onSubmit={submit}>
         <div className="lc-modal-title"><EditIcon /> Edit License</div>
@@ -190,7 +191,8 @@ function EditModalForm({ editModal, actionLoading }) {
           </button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body
   );
 }
 
