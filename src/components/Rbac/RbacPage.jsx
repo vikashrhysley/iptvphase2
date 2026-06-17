@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchRbacRoles,
@@ -211,7 +212,7 @@ function AssignUserModal({ currentRole, user, assigning, assignError, onClose, o
     onSubmit(selectedRoleId, { user_id: user.id, reason });
   };
 
-  return (
+  return createPortal(
     <div className="rb-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="rb-modal" style={{ maxWidth: 500 }}>
         <div className="rb-modal-header">
@@ -298,7 +299,8 @@ function AssignUserModal({ currentRole, user, assigning, assignError, onClose, o
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -328,7 +330,7 @@ function CreateModuleModal({ creatingModule, createModuleError, onClose, onSubmi
     onSubmit({ name: name.trim(), display_name: displayName.trim(), available_actions: actions, description: desc });
   };
 
-  return (
+  return createPortal(
     <div className="rb-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="rb-modal" style={{ maxWidth: 480 }}>
         <div className="rb-modal-header">
@@ -409,7 +411,8 @@ function CreateModuleModal({ creatingModule, createModuleError, onClose, onSubmi
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -502,7 +505,7 @@ function AssignedUsersModal({ role, detail, loading, error, onClose, onAssign })
   const users = detail?.users || [];
   const count = detail?.user_count ?? users.length;
 
-  return (
+  return createPortal(
     <div className="rb-modal-overlay rb-users-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="rb-modal rb-users-modal">
         {/* Header */}
@@ -598,7 +601,8 @@ function AssignedUsersModal({ role, detail, loading, error, onClose, onAssign })
           <button className="rb-cancel-btn" onClick={onClose}>Close</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -637,7 +641,7 @@ function CreateRoleModal({ modules, creating, createError, onClose, onSubmit }) 
     ? modules
     : [];
 
-  return (
+  return createPortal(
     <div className="rb-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="rb-modal">
         <div className="rb-modal-header">
@@ -739,7 +743,8 @@ function CreateRoleModal({ modules, creating, createError, onClose, onSubmit }) 
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -766,7 +771,7 @@ function EditRoleModal({ role, updating, updateError, onClose, onSubmit }) {
     onSubmit(role.id, updates);
   };
 
-  return (
+  return createPortal(
     <div className="rb-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="rb-modal" style={{ maxWidth: 480 }}>
         <div className="rb-modal-header">
@@ -828,7 +833,8 @@ function EditRoleModal({ role, updating, updateError, onClose, onSubmit }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -838,7 +844,7 @@ function DeleteConfirmModal({ role, deleting, deleteError, onClose, onConfirm })
   const isSystem   = role.is_system;
   const canDelete  = !hasUsers && !isSystem;
 
-  return (
+  return createPortal(
     <div className="rb-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="rb-modal rb-confirm-modal">
         <div className="rb-modal-header">
@@ -885,7 +891,8 @@ function DeleteConfirmModal({ role, deleting, deleteError, onClose, onConfirm })
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -1290,7 +1297,7 @@ function PermMatrix({ role, modules, saving, saveError, onBack, onSave, detail, 
 
 // ─── Delete module confirm modal ─────────────────────────
 function DeleteModuleModal({ module: mod, deletingModule, deleteModuleError, onClose, onConfirm }) {
-  return (
+  return createPortal(
     <div className="rb-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="rb-modal rb-confirm-modal">
         <div className="rb-modal-header">
@@ -1332,7 +1339,8 @@ function DeleteModuleModal({ module: mod, deletingModule, deleteModuleError, onC
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

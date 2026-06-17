@@ -187,9 +187,7 @@ export default function Sidebar({
 }) {
   const dispatch = useDispatch();
   const { accessToken, user, loading: logoutLoading } = useSelector(s => s.auth);
-  const [openSubmenu, setOpenSubmenu] = useState(
-    activePage === 'home' ? 'home' : activePage === 'analytics' ? 'analytics' : null
-  );
+  const [openSubmenu, setOpenSubmenu] = useState(null);
   const [sidebarProfile, setSidebarProfile] = useState(null);
 
   useEffect(() => {
