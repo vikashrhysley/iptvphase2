@@ -7,7 +7,7 @@
 /* ── Header ── */
 .lc-header   { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:20px; }
 .lc-title    { font-family:var(--font-display); font-size:1.25rem !important; font-weight:700; margin:0 !important; color:var(--text-primary); }
-.lc-subtitle { margin-top:5px; color:var(--text-muted); font-size:0.85rem; }
+.lc-subtitle { margin-top:5px; color:var(--text-muted); font-size:0.85rem; text-align:left; }
 
 /* ── Stats ── */
 .lc-stats-shimmer {

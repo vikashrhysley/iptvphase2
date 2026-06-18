@@ -527,6 +527,7 @@ export default function AuditPage() {
           <div className="al-hero-icon"><LogIcon /></div>
           <div>
             <h1 className="al-hero-title">Audit Logs</h1>
+            <p className="al-hero-sub">Track every admin action across the platform with timestamps and full details.</p>
           </div>
         </div>
       </div>

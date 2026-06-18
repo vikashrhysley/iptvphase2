@@ -33,6 +33,7 @@
   margin-top: 3px;
   font-size: 0.8rem;
   color: var(--text-muted);
+  text-align: left;
 }
 
 .hb-refresh,

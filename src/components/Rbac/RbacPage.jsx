@@ -1594,6 +1594,7 @@ export default function RbacPage() {
           <div className="rb-hero-icon"><ShieldIcon /></div>
           <div>
             <h1 className="rb-hero-title">RBAC</h1>
+            <p className="rb-hero-sub">Manage roles, permissions, and module access controls across the platform.</p>
           </div>
         </div>
         <button className="rb-refresh-btn" onClick={() => {

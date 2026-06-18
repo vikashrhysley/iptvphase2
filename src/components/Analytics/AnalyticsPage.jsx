@@ -280,10 +280,6 @@ function RevenueAnalytics() {
         <div className="an-empty">No data available.</div>
       ) : (
         <>
-          {(revenue.start_date || revenue.end_date) && (
-            <div className="an-period">{revenue.start_date} → {revenue.end_date}</div>
-          )}
-
           <div className="an-stats-row">
             <div className="an-stat-card" style={{ '--asc': '#00d4ff' }}>
               <div className="an-stat-accent" />

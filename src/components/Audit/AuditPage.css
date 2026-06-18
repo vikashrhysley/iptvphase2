@@ -77,6 +77,7 @@
   font-size: 0.78rem;
   color: var(--text-muted, #64748b);
   margin: 0;
+  text-align: left;
 }
 
 .al-hero-right {
@@ -357,13 +358,16 @@
   cursor: pointer;
   padding: 0;
   font-family: inherit;
+  color-scheme: dark;
 }
 
 .al-filter-date-input::-webkit-calendar-picker-indicator {
-  filter: invert(0.5) sepia(1) hue-rotate(190deg) saturate(2);
+  filter: invert(65%) sepia(92%) saturate(800%) hue-rotate(162deg) brightness(105%);
   cursor: pointer;
-  opacity: 0.7;
+  opacity: 0.6;
+  transition: opacity 0.15s;
 }
+.al-filter-date-input::-webkit-calendar-picker-indicator:hover { opacity: 1; }
 
 .al-date-sep {
   color: var(--text-muted, #475569);

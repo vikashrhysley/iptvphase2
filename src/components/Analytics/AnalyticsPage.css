@@ -20,8 +20,14 @@
   min-height:36px; padding:8px 12px; border-radius:var(--radius-md);
   border:1px solid var(--border-subtle); background:var(--bg-surface); color:var(--text-primary);
   font-family:var(--font-body); font-size:0.82rem; outline:none; transition:all var(--transition-fast);
+  color-scheme:dark;
 }
 .an-date-input:focus { border-color:var(--accent-primary); box-shadow:0 0 0 3px rgba(0,212,255,0.08); }
+.an-date-input::-webkit-calendar-picker-indicator {
+  filter:invert(65%) sepia(92%) saturate(800%) hue-rotate(162deg) brightness(105%);
+  cursor:pointer; opacity:0.6; transition:opacity 0.15s;
+}
+.an-date-input::-webkit-calendar-picker-indicator:hover { opacity:1; }
 
 .an-apply-btn, .an-reset-btn {
   min-height:36px; padding:8px 18px; border-radius:var(--radius-md);

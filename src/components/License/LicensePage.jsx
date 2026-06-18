@@ -284,6 +284,7 @@ export default function LicensePage() {
       <div className="lc-header">
         <div>
           <h1 className="lc-title">License Center</h1>
+          <p className="lc-subtitle">Manage, assign, and track all subscriber licenses and their activation status.</p>
         </div>
       </div>
 

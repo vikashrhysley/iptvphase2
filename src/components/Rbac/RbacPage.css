@@ -61,7 +61,7 @@
   margin: 0; letter-spacing: -0.01em;
   text-align: left;
 }
-.rb-hero-sub { font-size: 0.78rem; color: var(--text-muted, #64748b); margin: 0; }
+.rb-hero-sub { font-size: 0.78rem; color: var(--text-muted, #64748b); margin: 0; text-align: left; }
 
 .rb-refresh-btn {
   display: inline-flex; align-items: center; gap: 6px;
