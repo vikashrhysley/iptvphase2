@@ -1,5 +1,5 @@
 // src/pages/AppLayout.js
-import { useState } from 'react';
+import React, { useState } from 'react';
 import Sidebar from '../components/Layout/Sidebar';
 import Header from '../components/Layout/Header';
 import DashboardTable from '../components/Dashboard/DashboardTable';
@@ -17,6 +17,37 @@ import PlansPage         from '../components/Plans/PlansPage';
 import AnalyticsPage     from '../components/Analytics/AnalyticsPage';
 
 import './AppLayout.css';
+
+class PageErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  componentDidCatch(error, info) {
+    console.error('[PageErrorBoundary]', error, info);
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 32, color: '#f87171', fontFamily: 'monospace' }}>
+          <h2 style={{ marginBottom: 12 }}>Page crashed — check the browser console (F12) for details.</h2>
+          <pre style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>{this.state.error.message}</pre>
+          <pre style={{ whiteSpace: 'pre-wrap', fontSize: 11, opacity: 0.6, marginTop: 8 }}>{this.state.error.stack}</pre>
+          <button
+            style={{ marginTop: 16, padding: '6px 16px', cursor: 'pointer' }}
+            onClick={() => this.setState({ error: null })}
+          >
+            Retry
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
@@ -74,7 +105,9 @@ export default function AppLayout() {
         onMenuToggle={() => setMobileNavOpen(o => !o)}
       />
       <main className="app-main" style={{ marginLeft: mainLeft }}>
-        {renderPage()}
+        <PageErrorBoundary key={activePage}>
+          {renderPage()}
+        </PageErrorBoundary>
       </main>
     </div>
   );

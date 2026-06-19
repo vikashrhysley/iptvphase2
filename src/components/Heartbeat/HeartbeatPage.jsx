@@ -144,6 +144,7 @@ export default function HeartbeatPage() {
         <div className="hb-section-head">
           <div>
             <div className="hb-title">Heartbeat Monitoring</div>
+            <p className="hb-subtitle">Monitor live device status and detect offline or idle connections in real time.</p>
           </div>
           <button className="hb-refresh" onClick={() => dispatch(fetchHeartbeatStats())} disabled={statsLoading}>
             {statsLoading ? 'Refreshing...' : 'Refresh'}

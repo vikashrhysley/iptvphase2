@@ -20,8 +20,14 @@
   min-height:36px; padding:8px 12px; border-radius:var(--radius-md);
   border:1px solid var(--border-subtle); background:var(--bg-surface); color:var(--text-primary);
   font-family:var(--font-body); font-size:0.82rem; outline:none; transition:all var(--transition-fast);
+  color-scheme:dark;
 }
 .an-date-input:focus { border-color:var(--accent-primary); box-shadow:0 0 0 3px rgba(0,212,255,0.08); }
+.an-date-input::-webkit-calendar-picker-indicator {
+  filter:invert(65%) sepia(92%) saturate(800%) hue-rotate(162deg) brightness(105%);
+  cursor:pointer; opacity:0.6; transition:opacity 0.15s;
+}
+.an-date-input::-webkit-calendar-picker-indicator:hover { opacity:1; }
 
 .an-apply-btn, .an-reset-btn {
   min-height:36px; padding:8px 18px; border-radius:var(--radius-md);
@@ -297,9 +303,9 @@
 .an-chart-tooltip.align-start { transform:translate(0, calc(-100% - 14px)); }
 .an-chart-tooltip.align-end   { transform:translate(-100%, calc(-100% - 14px)); }
 
-.an-tt-date { font-size:0.74rem; font-weight:800; color:var(--text-primary); margin-bottom:6px; }
-.an-tt-row  { display:flex; justify-content:space-between; gap:14px; font-size:0.72rem; color:var(--text-muted); padding:2px 0; }
-.an-tt-row strong { color:var(--text-primary); font-weight:800; }
+.an-tt-date { font-size:0.74rem; font-weight:800; color:#f1f5f9; margin-bottom:6px; }
+.an-tt-row  { display:flex; justify-content:space-between; gap:14px; font-size:0.72rem; color:#94a3b8; padding:2px 0; }
+.an-tt-row strong { color:#e2e8f0; font-weight:800; }
 .an-tt-row strong.pos { color:#10b981; }
 .an-tt-row strong.neg { color:#ef4444; }
 

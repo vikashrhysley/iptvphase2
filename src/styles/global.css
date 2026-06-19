@@ -44,8 +44,8 @@
   --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
 
-  --font-display: 'Syne', sans-serif;
-  --font-body: 'DM Sans', sans-serif;
+  --font-display: 'Raleway', sans-serif;
+  --font-body: 'Lato', sans-serif;
 }
 /* ── Light mode overrides ────────────────────────────── */
 [data-theme="light"] {

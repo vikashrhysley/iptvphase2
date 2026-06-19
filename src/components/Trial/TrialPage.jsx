@@ -286,6 +286,7 @@ export default function TrialPage() {
       <div className="tp-page-header">
         <div>
           <h1 className="tp-page-title">System Configuration</h1>
+          <p className="tp-page-sub">Configure trial limits, device policies, and runtime settings for the platform.</p>
         </div>
         {isSuperAdmin && (
           <div className="tp-header-actions">

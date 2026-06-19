@@ -37,8 +37,13 @@
   background-repeat:no-repeat; background-position:right 9px center;
 }
 .sb-text-input { min-width:140px; }
-.sb-date-input { min-width:150px; }
-.sb-select:focus, .sb-text-input:focus, .sb-date-input:focus { border-color:var(--accent-primary); }
+.sb-date-input { min-width:150px; color-scheme:dark; }
+.sb-date-input::-webkit-calendar-picker-indicator {
+  filter:invert(65%) sepia(92%) saturate(800%) hue-rotate(162deg) brightness(105%);
+  cursor:pointer; opacity:0.6; transition:opacity 0.15s;
+}
+.sb-date-input::-webkit-calendar-picker-indicator:hover { opacity:1; }
+.sb-select:focus, .sb-text-input:focus, .sb-date-input:focus { border-color:var(--accent-primary); box-shadow:0 0 0 3px rgba(0,212,255,0.08); }
 
 .sb-clear-btn {
   align-self:flex-end; min-height:36px; padding:0 12px;

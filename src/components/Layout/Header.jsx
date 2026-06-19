@@ -1,5 +1,4 @@
 // src/components/Layout/Header.js
-import { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import {
   fetchDashboardOverview,
@@ -61,12 +60,6 @@ export default function Header({ activePage, dashboardTab, analyticsTab, sidebar
   const { user }   = useSelector(s => s.auth);
   const dispatch   = useDispatch();
   const { theme, toggleTheme } = useTheme();
-  const [time, setTime] = useState(new Date());
-
-  useEffect(() => {
-    const t = setInterval(() => setTime(new Date()), 1000);
-    return () => clearInterval(t);
-  }, []);
 
   const left = sidebarCollapsed ? 'var(--sidebar-collapsed)' : 'var(--sidebar-width)';
   const breadcrumb = activePage === 'home'
@@ -99,10 +92,7 @@ export default function Header({ activePage, dashboardTab, analyticsTab, sidebar
         <span className="header-breadcrumb">{breadcrumb}</span>
       </div>
       <div className="header-right">
-        <span className="header-time">
-          {time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-        </span>
-        <span className={`role-badge ${user?.role}`}>
+<span className={`role-badge ${user?.role}`}>
           {user?.role === 'superadmin' ? 'Super Admin' : user?.role}
         </span>
 

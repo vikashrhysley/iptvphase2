@@ -130,12 +130,21 @@ const ChevRight = () => (
   </svg>
 );
 
-function StatsCard({ icon, label, value, tone }) {
+function StatsGroupCard({ title, accent, icon, items }) {
   return (
-    <div className={`au-stats-card ${tone || ''}`}>
-      <span className="au-stats-icon">{icon}</span>
-      <div className="au-stats-value">{value}</div>
-      <div className="au-stats-label">{label}</div>
+    <div className={`au-sg-card ${accent}`}>
+      <div className="au-sg-header">
+        <span className="au-sg-icon">{icon}</span>
+        <span className="au-sg-title">{title}</span>
+      </div>
+      <div className="au-sg-body">
+        {items.map(({ label, value, tone }) => (
+          <div key={label} className="au-sg-row">
+            <span className="au-sg-label">{label}</span>
+            <span className={`au-sg-val${tone ? ` ${tone}` : ''}`}>{value}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -566,48 +575,43 @@ export default function AdminUsersPage() {
   const totalPages = Math.max(1, Math.ceil(total / (pageSize || 1)));
 
   const statsCards = useMemo(() => {
-    const s = stats || {};
-    const byRole = s.by_role || {};
-    const byStatus = s.by_status || {};
-
-    const totalCount = s.total ?? 0;
+    const root     = stats || {};
+    const counts   = root.stats    || {};   // { total, superadmin, admin, viewer }
+    const byStatus = root.by_status || {};  // { active, disabled, totp_enabled, totp_not_set, locked_accounts }
+    const newUsers = root.new_users || {};  // { new_24h, new_7d, last_login_24h }
 
     return [
       {
-        label: 'Total',
-        value: totalCount,
-        tone: 'cyan',
-        icon: '👥',
+        title: 'Stats',
+        accent: 'cyan',
+        icon: '📊',
+        items: [
+          { label: 'Total Users',  value: counts.total      ?? 0 },
+          { label: 'Super Admins', value: counts.superadmin ?? 0 },
+          { label: 'Admins',       value: counts.admin      ?? 0 },
+          { label: 'Viewers',      value: counts.viewer     ?? 0 },
+          { label: '2FA Enabled',  value: byStatus.totp_enabled    ?? 0 },
+          { label: 'Locked',       value: byStatus.locked_accounts ?? 0, tone: 'red' },
+        ],
       },
       {
-        label: 'Active',
-        value: byStatus.active ?? 0,
-        tone: 'green',
+        title: 'Status',
+        accent: 'green',
         icon: '✅',
+        items: [
+          { label: 'Active',   value: byStatus.active   ?? 0, tone: 'green' },
+          { label: 'Disabled', value: byStatus.disabled ?? 0, tone: 'red' },
+        ],
       },
       {
-        label: '2FA Enabled',
-        value: s.totp_enabled ?? 0,
-        tone: 'violet',
-        icon: '🔑',
-      },
-      {
-        label: 'Locked',
-        value: s.locked_accounts ?? 0,
-        tone: 'red',
-        icon: <LockIcon />,
-      },
-      {
-        label: 'Super Admins',
-        value: byRole.superadmin ?? 0,
-        tone: 'amber',
-        icon: '🛡️',
-      },
-      {
-        label: 'Admins',
-        value: byRole.admin ?? 0,
-        tone: 'blue',
-        icon: '🧩',
+        title: 'New Users',
+        accent: 'blue',
+        icon: '🆕',
+        items: [
+          { label: 'Last 24h',       value: newUsers.new_24h        ?? 0 },
+          { label: 'Last 7 Days',    value: newUsers.new_7d         ?? 0 },
+          { label: 'Logins (24h)',   value: newUsers.last_login_24h ?? 0 },
+        ],
       },
     ];
   }, [stats]);
@@ -706,12 +710,12 @@ export default function AdminUsersPage() {
           <div className="au-error-row">Failed to load stats: {statsError}</div>
         ) : (
           statsCards.map((c) => (
-            <StatsCard
-              key={c.label}
+            <StatsGroupCard
+              key={c.title}
+              title={c.title}
+              accent={c.accent}
               icon={c.icon}
-              label={c.label}
-              value={c.value ?? 0}
-              tone={c.tone}
+              items={c.items}
             />
           ))
         )}
