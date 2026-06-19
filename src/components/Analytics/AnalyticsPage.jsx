@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchRevenueAnalytics, setRevenueFilters, clearRevenueFilters, fetchUserAnalytics, setUsersFilters, clearUsersFilters, fetchDeviceAnalytics, fetchLicenseAnalytics, fetchFunnelAnalytics, setFunnelFilters, clearFunnelFilters, fetchChurnAnalytics, setChurnFilters, clearChurnFilters } from '../../store/slices/analyticsSlice';
 import './AnalyticsPage.css';
@@ -217,11 +217,27 @@ function RevenueChart({ daily }) {
 }
 
 /* ── Revenue tab ────────────────────────────────────────── */
+const REV_PAGE_SIZE = 10;
+
+function SortIcon({ field, active, dir }) {
+  return (
+    <span className={`an-sort-icon${active ? ' active' : ''}`}>
+      <span className={active && dir === 'asc'  ? 'on' : ''}>▲</span>
+      <span className={active && dir === 'desc' ? 'on' : ''}>▼</span>
+    </span>
+  );
+}
+
 function RevenueAnalytics() {
   const dispatch = useDispatch();
   const { revenue, loading, error, revenueFilters } = useSelector(s => s.analytics);
   const [startDate, setStartDate] = useState(revenueFilters.start_date);
   const [endDate, setEndDate]     = useState(revenueFilters.end_date);
+
+  const [groupBy,   setGroupBy]   = useState('day');
+  const [sortField, setSortField] = useState('date');
+  const [sortDir,   setSortDir]   = useState('asc');
+  const [page,      setPage]      = useState(1);
 
   useEffect(() => {
     dispatch(fetchRevenueAnalytics(revenueFilters));
@@ -232,6 +248,7 @@ function RevenueAnalytics() {
     const next = { start_date: startDate, end_date: endDate };
     dispatch(setRevenueFilters(next));
     dispatch(fetchRevenueAnalytics(next));
+    setPage(1);
   };
 
   const resetFilters = () => {
@@ -239,37 +256,82 @@ function RevenueAnalytics() {
     setEndDate('');
     dispatch(clearRevenueFilters());
     dispatch(fetchRevenueAnalytics({}));
+    setPage(1);
   };
 
-  const daily = revenue?.daily || [];
+  const raw    = revenue?.daily || [];
   const growth = revenue?.revenue_growth_pct ?? 0;
   const hasFilters = !!(revenueFilters.start_date || revenueFilters.end_date);
+
+  /* group rows by day / week / month */
+  const grouped = useMemo(() => {
+    if (groupBy === 'day') return raw.map(d => ({ ...d, _label: fmtDay(d.date) }));
+
+    const map = new Map();
+    raw.forEach(d => {
+      const dt = new Date(d.date + 'T00:00:00');
+      let key, label;
+      if (groupBy === 'month') {
+        key   = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+        label = dt.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+      } else {
+        const dow     = (dt.getDay() + 6) % 7;
+        const monday  = new Date(dt); monday.setDate(dt.getDate() - dow);
+        const sunday  = new Date(monday); sunday.setDate(monday.getDate() + 6);
+        key   = monday.toISOString().slice(0, 10);
+        const s = (x) => x.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        label = `${s(monday)} – ${s(sunday)}`;
+      }
+      if (!map.has(key)) {
+        map.set(key, { date: key, _label: label, revenue_cents: 0, refunds_cents: 0, successful_transactions: 0, failed_transactions: 0 });
+      }
+      const r = map.get(key);
+      r.revenue_cents            += d.revenue_cents            ?? 0;
+      r.refunds_cents            += d.refunds_cents            ?? 0;
+      r.successful_transactions  += d.successful_transactions  ?? 0;
+      r.failed_transactions      += d.failed_transactions      ?? 0;
+    });
+    return [...map.values()];
+  }, [raw, groupBy]);
+
+  /* sort */
+  const sorted = useMemo(() => {
+    const fieldMap = { date: 'date', revenue: 'revenue_cents', refunds: 'refunds_cents', successful: 'successful_transactions', failed: 'failed_transactions' };
+    const key = fieldMap[sortField] || 'date';
+    return [...grouped].sort((a, b) => {
+      const va = a[key], vb = b[key];
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ?  1 : -1;
+      return 0;
+    });
+  }, [grouped, sortField, sortDir]);
+
+  /* paginate */
+  const totalRows  = sorted.length;
+  const totalPages = Math.max(1, Math.ceil(totalRows / REV_PAGE_SIZE));
+  const pageRows   = sorted.slice((page - 1) * REV_PAGE_SIZE, page * REV_PAGE_SIZE);
+
+  const handleSort = (field) => {
+    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortField(field); setSortDir('asc'); }
+    setPage(1);
+  };
+
+  const handleGroup = (g) => { setGroupBy(g); setPage(1); };
 
   return (
     <div className="an-section">
       <div className="an-toolbar">
         <div className="an-filter">
           <label>Start Date</label>
-          <input
-            type="date"
-            className="an-date-input"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-          />
+          <input type="date" className="an-date-input" value={startDate} onChange={e => setStartDate(e.target.value)} />
         </div>
         <div className="an-filter">
           <label>End Date</label>
-          <input
-            type="date"
-            className="an-date-input"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-          />
+          <input type="date" className="an-date-input" value={endDate} onChange={e => setEndDate(e.target.value)} />
         </div>
         <button className="an-apply-btn" onClick={applyFilters}>Apply</button>
-        {hasFilters && (
-          <button className="an-reset-btn" onClick={resetFilters}>Reset</button>
-        )}
+        {hasFilters && <button className="an-reset-btn" onClick={resetFilters}>Reset</button>}
       </div>
 
       {loading ? (
@@ -310,7 +372,7 @@ function RevenueAnalytics() {
               <span className="an-card-title">Daily Revenue Breakdown</span>
             </div>
 
-            {daily.length === 0 ? (
+            {raw.length === 0 ? (
               <div className="an-empty">No daily data for this period.</div>
             ) : (
               <>
@@ -320,23 +382,40 @@ function RevenueAnalytics() {
                   <span className="an-legend-item"><i className="an-legend-swatch refund" /> Refund issued</span>
                 </div>
 
-                <RevenueChart daily={daily} />
+                <RevenueChart daily={raw} />
+
+                {/* Group + row-count controls */}
+                <div className="an-table-controls">
+                  <div className="an-group-btns">
+                    {['day','week','month'].map(g => (
+                      <button key={g} className={`an-group-btn${groupBy === g ? ' active' : ''}`} onClick={() => handleGroup(g)}>
+                        {g.charAt(0).toUpperCase() + g.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="an-row-count">
+                    {totalRows === 0 ? 'No results' : `${(page-1)*REV_PAGE_SIZE+1}–${Math.min(page*REV_PAGE_SIZE, totalRows)} of ${totalRows}`}
+                  </span>
+                </div>
 
                 <div className="an-table-scroll">
                   <table className="an-table">
                     <thead>
                       <tr>
-                        <th>Date</th>
-                        <th>Revenue</th>
-                        <th>Refunds</th>
-                        <th>Successful</th>
-                        <th>Failed</th>
+                        {[['date','Date'],['revenue','Revenue'],['refunds','Refunds'],['successful','Successful'],['failed','Failed']].map(([f,label]) => (
+                          <th key={f} className="an-th-sort" onClick={() => handleSort(f)}>
+                            {label}
+                            <SortIcon field={f} active={sortField === f} dir={sortDir} />
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {daily.map(d => (
+                      {pageRows.length === 0 ? (
+                        <tr><td colSpan={5} className="an-empty">No data for this period.</td></tr>
+                      ) : pageRows.map(d => (
                         <tr key={d.date}>
-                          <td>{fmtDay(d.date)}</td>
+                          <td>{d._label}</td>
                           <td className="an-cell-revenue">{fmtCents(d.revenue_cents)}</td>
                           <td className="an-cell-refund">{fmtCents(d.refunds_cents)}</td>
                           <td>{(d.successful_transactions ?? 0).toLocaleString()}</td>
@@ -346,6 +425,27 @@ function RevenueAnalytics() {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="an-pagination">
+                    <button className="an-pg-btn" onClick={() => setPage(1)} disabled={page === 1}>«</button>
+                    <button className="an-pg-btn" onClick={() => setPage(p => Math.max(1, p-1))} disabled={page === 1}>‹</button>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                      .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+                      .reduce((acc, p, i, arr) => {
+                        if (i > 0 && p - arr[i-1] > 1) acc.push('…');
+                        acc.push(p);
+                        return acc;
+                      }, [])
+                      .map((p, i) => typeof p === 'string'
+                        ? <span key={`e${i}`} className="an-pg-ellipsis">{p}</span>
+                        : <button key={p} className={`an-pg-btn${p === page ? ' active' : ''}`} onClick={() => setPage(p)}>{p}</button>
+                      )}
+                    <button className="an-pg-btn" onClick={() => setPage(p => Math.min(totalPages, p+1))} disabled={page === totalPages}>›</button>
+                    <button className="an-pg-btn" onClick={() => setPage(totalPages)} disabled={page === totalPages}>»</button>
+                  </div>
+                )}
               </>
             )}
           </div>
