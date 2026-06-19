@@ -68,11 +68,15 @@
 
 .au-stats-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-  align-items: start;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto auto;
   gap: 14px;
   margin: 18px 0 24px;
   width: 100%;
+}
+/* Stats card spans both rows so Status + New Users stack beside it */
+.au-stats-grid > .au-sg-card:first-child {
+  grid-row: 1 / 3;
 }
 
 .au-stats-card {
@@ -131,6 +135,83 @@
   letter-spacing: 0.08em;
   font-weight: 700;
 }
+
+/* ── Grouped stat cards ── */
+.au-sg-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.au-sg-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+}
+.au-sg-card.cyan::before  { background: linear-gradient(90deg, var(--accent-primary), #00a8cc); }
+.au-sg-card.green::before { background: linear-gradient(90deg, #10b981, #34d399); }
+.au-sg-card.blue::before  { background: linear-gradient(90deg, #0284c7, #38bdf8); }
+.au-sg-card:hover {
+  border-color: var(--border-medium);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.32);
+  transform: translateY(-2px);
+}
+
+.au-sg-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 15px 20px 13px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: rgba(255,255,255,0.02);
+}
+.au-sg-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.88rem;
+  flex-shrink: 0;
+}
+.au-sg-card.cyan  .au-sg-icon { background: rgba(0,212,255,0.12); }
+.au-sg-card.green .au-sg-icon { background: rgba(16,185,129,0.12); }
+.au-sg-card.blue  .au-sg-icon { background: rgba(2,132,199,0.12); }
+
+.au-sg-title {
+  font-size: 0.69rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+
+.au-sg-body { padding: 4px 0 6px; }
+.au-sg-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  transition: background 0.12s;
+}
+.au-sg-row:last-child { border-bottom: none; }
+.au-sg-row:hover { background: rgba(255,255,255,0.03); }
+.au-sg-label { font-size: 0.83rem; color: var(--text-muted); }
+.au-sg-val {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  min-width: 28px;
+  text-align: right;
+}
+.au-sg-val.green { color: #34d399; }
+.au-sg-val.red   { color: #f87171; }
 
 .au-toolbar {
   display: flex;
@@ -600,7 +681,7 @@
   inset: 0;
   z-index: 1000;
   display: flex;
-  /* align-items: center; */
+  align-items: center;
   justify-content: center;
   padding: 22px;
   background: rgba(2, 6, 23, 0.72);
@@ -981,7 +1062,11 @@
   }
 
   .au-stats-grid {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+  .au-stats-grid > .au-sg-card:first-child {
+    grid-row: auto;
   }
 
   .au-create-btn {
@@ -1014,9 +1099,4 @@
   }
 }
 
-@media (min-width: 761px) and (max-width: 1180px) {
-  .au-stats-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
-}
 

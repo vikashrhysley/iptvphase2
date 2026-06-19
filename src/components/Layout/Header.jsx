@@ -1,5 +1,4 @@
 // src/components/Layout/Header.js
-import { useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import {
   fetchDashboardOverview,

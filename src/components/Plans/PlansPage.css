@@ -24,7 +24,10 @@
 
 /* ── Plans grid ── */
 .pp-grid {
-  display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px;
+  display:grid; grid-template-columns:repeat(3,1fr); gap:16px;
+}
+@media (max-width:1100px) {
+  .pp-grid { grid-template-columns:repeat(2,1fr); }
 }
 
 .pp-card {
@@ -62,10 +65,10 @@
 .pp-code { font-family:monospace; font-size:0.74rem; color:var(--text-muted); margin-top:-8px; }
 
 /* Price */
-.pp-price { display:flex; align-items:baseline; gap:6px; }
-.pp-price-amount   { font-family:var(--font-display); font-size:1.5rem; font-weight:600; color:var(--text-primary); }
-.pp-price-cycle    { font-size:0.8rem; color:var(--text-muted); text-transform:capitalize; }
-.pp-price-currency { margin-left:auto; font-size:0.7rem; font-weight:700; color:var(--text-muted); }
+.pp-price { display:flex; align-items:baseline; gap:6px; flex-wrap:nowrap; }
+.pp-price-amount   { font-family:var(--font-display); font-size:1.5rem; font-weight:600; color:var(--text-primary); white-space:nowrap; }
+.pp-price-cycle    { font-size:0.8rem; color:var(--text-muted); text-transform:capitalize; white-space:nowrap; }
+.pp-price-currency { margin-left:auto; font-size:0.7rem; font-weight:700; color:var(--text-muted); white-space:nowrap; }
 
 /* Active licenses highlight */
 .pp-licenses {

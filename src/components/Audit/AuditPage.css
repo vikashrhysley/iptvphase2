@@ -25,10 +25,11 @@
   gap: 16px;
   margin-bottom: 22px;
   padding: 22px 24px;
-  background: var(--bg-card, #161b2e);
+  background:
+    linear-gradient(90deg, #6366f1, #8b5cf6, #06b6d4) top / 100% 2px no-repeat,
+    var(--bg-card, #161b2e);
   border: 1px solid var(--border-subtle, rgba(255,255,255,0.07));
   border-radius: 14px;
-  /* no overflow:hidden — keeps dropdown visible */
 }
 
 .al-hero-glow {
@@ -38,14 +39,6 @@
   border-radius: 14px 0 0 14px;
   background: radial-gradient(ellipse at 30% 50%, rgba(99,102,241,0.14) 0%, transparent 70%);
   pointer-events: none;
-}
-
-.al-hero::after {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, #6366f1, #8b5cf6, #06b6d4);
 }
 
 .al-hero-left {

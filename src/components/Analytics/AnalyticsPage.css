@@ -303,9 +303,9 @@
 .an-chart-tooltip.align-start { transform:translate(0, calc(-100% - 14px)); }
 .an-chart-tooltip.align-end   { transform:translate(-100%, calc(-100% - 14px)); }
 
-.an-tt-date { font-size:0.74rem; font-weight:800; color:var(--text-primary); margin-bottom:6px; }
-.an-tt-row  { display:flex; justify-content:space-between; gap:14px; font-size:0.72rem; color:var(--text-muted); padding:2px 0; }
-.an-tt-row strong { color:var(--text-primary); font-weight:800; }
+.an-tt-date { font-size:0.74rem; font-weight:800; color:#f1f5f9; margin-bottom:6px; }
+.an-tt-row  { display:flex; justify-content:space-between; gap:14px; font-size:0.72rem; color:#94a3b8; padding:2px 0; }
+.an-tt-row strong { color:#e2e8f0; font-weight:800; }
 .an-tt-row strong.pos { color:#10b981; }
 .an-tt-row strong.neg { color:#ef4444; }
 
