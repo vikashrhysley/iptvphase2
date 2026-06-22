@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { apiFetchSubscriptions, apiFetchSubscriptionDetail, apiFetchSubscriptionHistory, apiUpdateSubscription, apiCancelSubscription, apiExtendTrial, apiUpgradeSubscription } from '../../services/api';
+import { apiFetchSubscriptions, apiFetchSubscriptionDetail, apiFetchSubscriptionHistory, apiUpdateSubscription, apiCancelSubscription, apiExtendTrial } from '../../services/api';
 
 const DEFAULT_FILTERS = {
   status:    '',
@@ -65,15 +65,6 @@ export const extendTrial = createAsyncThunk('subscriptions/extendTrial',
   }
 );
 
-export const upgradeSubscription = createAsyncThunk('subscriptions/upgrade',
-  async ({ id, data }, { getState, rejectWithValue }) => {
-    try {
-      const { accessToken } = getState().auth;
-      return await apiUpgradeSubscription(accessToken, id, data);
-    } catch (err) { return rejectWithValue(err.message); }
-  }
-);
-
 const subscriptionsSlice = createSlice({
   name: 'subscriptions',
   initialState: {
@@ -107,11 +98,6 @@ const subscriptionsSlice = createSlice({
     extendSuccess: false,
     extendedDaysRemaining: null,
 
-    upgradeLoading: false,
-    upgradeError:   null,
-    upgradeSuccess: false,
-    upgradeResult:  null,
-
     filters: { ...DEFAULT_FILTERS },
   },
   reducers: {
@@ -134,10 +120,6 @@ const subscriptionsSlice = createSlice({
       s.extendError = null;
       s.extendSuccess = false;
       s.extendedDaysRemaining = null;
-      s.upgradeLoading = false;
-      s.upgradeError = null;
-      s.upgradeSuccess = false;
-      s.upgradeResult = null;
     },
     clearUpdateState(s) {
       s.updateLoading = false;
@@ -154,12 +136,6 @@ const subscriptionsSlice = createSlice({
       s.extendError = null;
       s.extendSuccess = false;
       s.extendedDaysRemaining = null;
-    },
-    clearUpgradeState(s) {
-      s.upgradeLoading = false;
-      s.upgradeError = null;
-      s.upgradeSuccess = false;
-      s.upgradeResult = null;
     },
   },
   extraReducers: (b) => {
@@ -214,15 +190,8 @@ const subscriptionsSlice = createSlice({
        }
      })
      .addCase(extendTrial.rejected, (s, a) => { s.extendLoading = false; s.extendError = a.payload; })
-     .addCase(upgradeSubscription.pending, (s) => { s.upgradeLoading = true; s.upgradeError = null; s.upgradeSuccess = false; })
-     .addCase(upgradeSubscription.fulfilled, (s, a) => {
-       s.upgradeLoading = false;
-       s.upgradeSuccess = true;
-       s.upgradeResult  = a.payload || null;
-     })
-     .addCase(upgradeSubscription.rejected, (s, a) => { s.upgradeLoading = false; s.upgradeError = a.payload; });
   },
 });
 
-export const { setSubscriptionFilters, clearSubscriptionFilters, clearSubscriptionDetail, clearUpdateState, clearCancelState, clearExtendState, clearUpgradeState } = subscriptionsSlice.actions;
+export const { setSubscriptionFilters, clearSubscriptionFilters, clearSubscriptionDetail, clearUpdateState, clearCancelState, clearExtendState } = subscriptionsSlice.actions;
 export default subscriptionsSlice.reducer;

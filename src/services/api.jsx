@@ -1323,21 +1323,6 @@ export const apiExtendTrial = async (accessToken, id, extendDays, reason) => {
   return res.data || res;
 };
 
-// POST /admin/subscriptions/{id}/upgrade - reassign to a new plan (admin+)
-export const apiUpgradeSubscription = async (accessToken, id, data) => {
-  if (!accessToken) throw new Error('Unauthorized');
-  const res = await request(`${BASE}/admin/subscriptions/${id}/upgrade`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${accessToken}` },
-    body: JSON.stringify({
-      new_plan_id: data.new_plan_id,
-      reason:      data.reason,
-      prorate:     !!data.prorate,
-    }),
-  });
-  return res.data || res;
-};
-
 // GET /admin/subscription-plans - list all subscription plan definitions
 export const apiFetchSubscriptionPlans = async (accessToken) => {
   if (!accessToken) throw new Error('Unauthorized');
@@ -1353,6 +1338,28 @@ export const apiFetchPlanDetail = async (accessToken, id) => {
   if (!accessToken) throw new Error('Unauthorized');
   const res = await request(`${BASE}/admin/subscription-plans/${id}`, {
     method: 'GET', headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+// POST /admin/subscription-plans - create a new plan (superadmin)
+export const apiCreatePlan = async (accessToken, data) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/subscription-plans`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return res.data || res;
+};
+
+// PUT /admin/subscription-plans/{id} - update editable plan fields (superadmin)
+export const apiUpdatePlan = async (accessToken, id, data) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/subscription-plans/${id}`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
   });
   return res.data || res;
 };

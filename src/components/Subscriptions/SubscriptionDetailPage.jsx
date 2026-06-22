@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchSubscriptionDetail, fetchSubscriptionHistory, clearSubscriptionDetail, updateSubscription, clearUpdateState, cancelSubscription, clearCancelState, extendTrial, clearExtendState, upgradeSubscription, clearUpgradeState } from '../../store/slices/subscriptionsSlice';
-import { fetchSubscriptionPlans } from '../../store/slices/plansSlice';
+import { fetchSubscriptionDetail, fetchSubscriptionHistory, clearSubscriptionDetail, updateSubscription, clearUpdateState, cancelSubscription, clearCancelState, extendTrial, clearExtendState } from '../../store/slices/subscriptionsSlice';
 import { fmtDateTime, shortId, statusClass, planClass, ptStatusClass } from './subscriptionsHelpers';
 import './SubscriptionsPage.css';
 import './SubscriptionDetailPage.css';
@@ -13,7 +12,6 @@ const XIcon = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" 
 const CheckIcon = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>;
 const BanIcon = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>;
 const ClockIcon = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16.5 14.5"/></svg>;
-const UpgradeIcon = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="16 12 12 8 8 12"/><line x1="12" y1="16" x2="12" y2="8"/></svg>;
 
 /* ── Detail Field ───────────────────────────────────────── */
 function InfoField({ label, value, mono, full }) {
@@ -260,97 +258,6 @@ function ExtendTrialModal({ sub, onClose }) {
   );
 }
 
-/* ── Upgrade / Change Plan Modal ─────────────────────────── */
-function UpgradePlanModal({ sub, onClose }) {
-  const dispatch = useDispatch();
-  const { upgradeLoading, upgradeError, upgradeSuccess, upgradeResult } = useSelector((s) => s.subscriptions);
-  const { plans, loading: plansLoading } = useSelector((s) => s.plans);
-  const [newPlanId, setNewPlanId] = useState('');
-  const [prorate, setProrate] = useState(true);
-  const [reason, setReason] = useState('');
-  const [localError, setLocalError] = useState('');
-
-  useEffect(() => {
-    dispatch(fetchSubscriptionPlans());
-  }, [dispatch]);
-
-  const set = (setter) => (val) => {
-    setter(val);
-    setLocalError('');
-    if (upgradeError) dispatch(clearUpgradeState());
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!newPlanId) { setLocalError('Select a plan to reassign this subscription to.'); return; }
-    if (!reason.trim()) { setLocalError('Reason is required for the audit log.'); return; }
-    dispatch(clearUpgradeState());
-    const result = await dispatch(upgradeSubscription({ id: sub.id, data: { new_plan_id: newPlanId, reason: reason.trim(), prorate } }));
-    if (upgradeSubscription.fulfilled.match(result)) {
-      dispatch(fetchSubscriptionDetail(sub.id));
-    }
-  };
-
-  return (
-    <div className="sdp-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <form className="sdp-modal" onSubmit={handleSubmit}>
-        <div className="sdp-modal-header">
-          <div className="sdp-modal-title"><UpgradeIcon /> Change Plan</div>
-          <button type="button" className="sdp-modal-close" onClick={onClose}><XIcon /></button>
-        </div>
-        <p className="sdp-modal-sub">
-          Reassign this subscription to a new plan. This does not process any payment — billing is coordinated externally.
-          The prorate flag is recorded as metadata only. Changes are written to the audit log.
-        </p>
-
-        <div className="sdp-modal-grid">
-          <label className="sdp-modal-field sdp-field-full">
-            <span>New Plan <span className="sdp-required">*</span></span>
-            <select value={newPlanId} onChange={(e) => set(setNewPlanId)(e.target.value)} disabled={upgradeLoading || plansLoading}>
-              <option value="">{plansLoading ? 'Loading plans…' : 'Select a plan…'}</option>
-              {plans.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {(p.name || p.plan_code)}{p.plan_type ? ` — ${p.plan_type}` : ''}{p.amount_display != null ? ` (${p.amount_display} ${p.currency || ''})`.trim() : ''}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="sdp-modal-field sdp-checkbox-field sdp-field-full">
-            <input type="checkbox" checked={prorate} onChange={(e) => set(setProrate)(e.target.checked)} disabled={upgradeLoading} />
-            <span>Prorate (metadata only — does not affect billing)</span>
-          </label>
-
-          <label className="sdp-modal-field sdp-field-full">
-            <span>Reason <span className="sdp-required">*</span></span>
-            <textarea value={reason} onChange={(e) => set(setReason)(e.target.value)}
-              placeholder="Describe why this subscription is being reassigned…" rows={3} disabled={upgradeLoading} />
-          </label>
-        </div>
-
-        {(localError || upgradeError) && (
-          <div className="sdp-modal-error">{localError || upgradeError}</div>
-        )}
-        {upgradeSuccess && (
-          <div className="sdp-modal-success">
-            <CheckIcon /> Plan updated to {upgradeResult?.new_plan_type || 'new plan'}{upgradeResult?.new_amount_cents != null ? ` (${(upgradeResult.new_amount_cents / 100).toFixed(2)})` : ''}.
-          </div>
-        )}
-
-        <div className="sdp-modal-actions">
-          <button type="button" className="sdp-btn-cancel" onClick={onClose} disabled={upgradeLoading}>
-            {upgradeSuccess ? 'Close' : 'Cancel'}
-          </button>
-          <button type="submit" className="sdp-btn-save" disabled={upgradeLoading || upgradeSuccess}>
-            {upgradeLoading ? <span className="sdp-mini-spin" /> : <UpgradeIcon />}
-            {upgradeLoading ? 'Saving…' : upgradeSuccess ? 'Updated' : 'Reassign Plan'}
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
 /* ── Main Component ─────────────────────────────────────── */
 export default function SubscriptionDetailPage({ subscriptionId, onBack }) {
   const dispatch = useDispatch();
@@ -359,7 +266,6 @@ export default function SubscriptionDetailPage({ subscriptionId, onBack }) {
   const [showEdit, setShowEdit] = useState(false);
   const [showCancel, setShowCancel] = useState(false);
   const [showExtend, setShowExtend] = useState(false);
-  const [showUpgrade, setShowUpgrade] = useState(false);
   const transactions = sub?.payment_transactions || [];
 
   useEffect(() => {
@@ -383,11 +289,6 @@ export default function SubscriptionDetailPage({ subscriptionId, onBack }) {
     setShowExtend(false);
   };
 
-  const handleCloseUpgrade = () => {
-    dispatch(clearUpgradeState());
-    setShowUpgrade(false);
-  };
-
   const isCancellable = sub && !['cancelled', 'canceled', 'expired'].includes((sub.status || '').toLowerCase());
   const isTrial = sub && ((sub.status || '').toLowerCase().includes('trial') || (sub.plan_type || '').toLowerCase().includes('trial'));
 
@@ -400,9 +301,6 @@ export default function SubscriptionDetailPage({ subscriptionId, onBack }) {
             <button className="sdp-edit-btn" onClick={() => setShowEdit(true)}><EditIcon /> Update Subscription</button>
             {isTrial && (
               <button className="sdp-extend-btn" onClick={() => setShowExtend(true)}><ClockIcon /> Extend Trial</button>
-            )}
-            {isCancellable && (
-              <button className="sdp-upgrade-btn" onClick={() => setShowUpgrade(true)}><UpgradeIcon /> Change Plan</button>
             )}
             {isCancellable && (
               <button className="sdp-cancel-sub-btn" onClick={() => setShowCancel(true)}><BanIcon /> Cancel Subscription</button>
@@ -552,9 +450,6 @@ export default function SubscriptionDetailPage({ subscriptionId, onBack }) {
         <ExtendTrialModal sub={sub} onClose={handleCloseExtend} />
       )}
 
-      {showUpgrade && sub && (
-        <UpgradePlanModal sub={sub} onClose={handleCloseUpgrade} />
-      )}
     </div>
   );
 }

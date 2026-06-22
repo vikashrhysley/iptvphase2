@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { apiFetchSubscriptionPlans, apiFetchPlanDetail, apiTogglePlanStatus } from '../../services/api';
+import { apiFetchSubscriptionPlans, apiFetchPlanDetail, apiTogglePlanStatus, apiCreatePlan, apiUpdatePlan } from '../../services/api';
 
 export const fetchSubscriptionPlans = createAsyncThunk('plans/fetchAll',
   async (_, { getState, rejectWithValue }) => {
@@ -15,6 +15,24 @@ export const fetchPlanDetail = createAsyncThunk('plans/fetchDetail',
     try {
       const { accessToken } = getState().auth;
       return await apiFetchPlanDetail(accessToken, id);
+    } catch (err) { return rejectWithValue(err.message); }
+  }
+);
+
+export const createPlan = createAsyncThunk('plans/create',
+  async (data, { getState, rejectWithValue }) => {
+    try {
+      const { accessToken } = getState().auth;
+      return await apiCreatePlan(accessToken, data);
+    } catch (err) { return rejectWithValue(err.message); }
+  }
+);
+
+export const updatePlan = createAsyncThunk('plans/update',
+  async ({ id, data }, { getState, rejectWithValue }) => {
+    try {
+      const { accessToken } = getState().auth;
+      return await apiUpdatePlan(accessToken, id, data);
     } catch (err) { return rejectWithValue(err.message); }
   }
 );
@@ -42,8 +60,26 @@ const plansSlice = createSlice({
     toggleLoading: false,
     toggleError:   null,
     toggleSuccess: false,
+
+    createLoading: false,
+    createError:   null,
+    createSuccess: false,
+
+    updateLoading: false,
+    updateError:   null,
+    updateSuccess: false,
   },
   reducers: {
+    clearCreateState(s) {
+      s.createLoading = false;
+      s.createError   = null;
+      s.createSuccess = false;
+    },
+    clearUpdateState(s) {
+      s.updateLoading = false;
+      s.updateError   = null;
+      s.updateSuccess = false;
+    },
     clearPlanDetail(s) {
       s.selectedPlan = null;
       s.detailLoading = false;
@@ -65,6 +101,18 @@ const plansSlice = createSlice({
      .addCase(fetchPlanDetail.pending, (s) => { s.detailLoading = true; s.detailError = null; })
      .addCase(fetchPlanDetail.fulfilled, (s, a) => { s.detailLoading = false; s.selectedPlan = a.payload; })
      .addCase(fetchPlanDetail.rejected, (s, a) => { s.detailLoading = false; s.detailError = a.payload; })
+     .addCase(createPlan.pending,    (s) => { s.createLoading = true; s.createError = null; s.createSuccess = false; })
+     .addCase(createPlan.fulfilled,  (s, a) => { s.createLoading = false; s.createSuccess = true; s.plans = [a.payload, ...s.plans]; })
+     .addCase(createPlan.rejected,   (s, a) => { s.createLoading = false; s.createError = a.payload; })
+     .addCase(updatePlan.pending,    (s) => { s.updateLoading = true; s.updateError = null; s.updateSuccess = false; })
+     .addCase(updatePlan.fulfilled,  (s, a) => {
+       s.updateLoading = false; s.updateSuccess = true;
+       const updated = a.payload || {};
+       s.selectedPlan = { ...s.selectedPlan, ...updated };
+       const idx = s.plans.findIndex((p) => p.id === a.meta.arg.id);
+       if (idx !== -1) s.plans[idx] = { ...s.plans[idx], ...updated };
+     })
+     .addCase(updatePlan.rejected,   (s, a) => { s.updateLoading = false; s.updateError = a.payload; })
      .addCase(togglePlanStatus.pending, (s) => { s.toggleLoading = true; s.toggleError = null; s.toggleSuccess = false; })
      .addCase(togglePlanStatus.fulfilled, (s, a) => {
        s.toggleLoading = false;
@@ -79,5 +127,5 @@ const plansSlice = createSlice({
   },
 });
 
-export const { clearPlanDetail, clearToggleState } = plansSlice.actions;
+export const { clearPlanDetail, clearToggleState, clearCreateState, clearUpdateState } = plansSlice.actions;
 export default plansSlice.reducer;

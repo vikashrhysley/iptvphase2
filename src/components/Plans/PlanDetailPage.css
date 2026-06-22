@@ -133,7 +133,53 @@
   border-radius:50%; animation:spin 0.7s linear infinite;
 }
 
+/* ── Edit Plan button ── */
+.pdp-edit-btn {
+  display:inline-flex; align-items:center; gap:8px;
+  padding:8px 16px; border-radius:var(--radius-md);
+  border:1px solid var(--border-subtle); background:var(--bg-surface); color:var(--text-secondary);
+  font-size:0.82rem; font-weight:800; font-family:var(--font-body);
+  cursor:pointer; transition:all var(--transition-fast);
+}
+.pdp-edit-btn:hover { color:var(--accent-primary); border-color:var(--accent-primary); background:var(--bg-raised); }
+
+/* ── Edit Plan Modal overrides ── */
+.pdp-edit-modal { width:min(640px,100%); }
+
+.pdp-edit-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:16px; }
+.pdp-edit-field { display:flex; flex-direction:column; gap:6px; }
+.pdp-edit-full  { grid-column:1 / -1; }
+.pdp-edit-field span {
+  font-size:0.72rem; font-weight:700; text-transform:uppercase;
+  letter-spacing:0.07em; color:var(--text-muted);
+}
+.pdp-required { color:#f87171; }
+.pdp-edit-field input,
+.pdp-edit-field select,
+.pdp-edit-field textarea {
+  padding:8px 11px; border-radius:var(--radius-md);
+  border:1px solid var(--border-subtle); background:var(--bg-surface); color:var(--text-primary);
+  font-family:var(--font-body); font-size:0.83rem; outline:none;
+  transition:border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+.pdp-edit-field input:focus,
+.pdp-edit-field select:focus,
+.pdp-edit-field textarea:focus {
+  border-color:var(--accent-primary); box-shadow:0 0 0 3px rgba(0,212,255,0.08);
+}
+.pdp-edit-field textarea { resize:vertical; }
+
+.pdp-edit-checks { display:flex; flex-wrap:wrap; gap:12px 22px; align-items:center; }
+.pdp-check-label {
+  display:flex; align-items:center; gap:7px; font-size:0.81rem;
+  color:var(--text-secondary); cursor:pointer; user-select:none;
+}
+.pdp-check-label input[type="checkbox"] {
+  width:15px; height:15px; accent-color:var(--accent-primary); cursor:pointer;
+}
+
 @media (max-width:760px) {
   .pdp-cards { grid-template-columns:1fr; }
   .pdp-grid  { grid-template-columns:1fr; }
+  .pdp-edit-grid { grid-template-columns:1fr; }
 }
