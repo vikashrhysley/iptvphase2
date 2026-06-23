@@ -329,6 +329,54 @@ export const apiFetchChurnAnalytics = async (accessToken, params = {}) => {
   return res.data || res;
 };
 
+// GET /admin/analytics/risk
+export const apiFetchRiskAnalytics = async (accessToken, params = {}) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const query = new URLSearchParams();
+  if (params.start_date) query.set('start_date', params.start_date);
+  if (params.end_date)   query.set('end_date',   params.end_date);
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  const res = await request(`${BASE}/admin/analytics/risk${qs}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+export const apiFetchSystemAnalytics = async (accessToken) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/analytics/system`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+export const apiFetchGeoAnalytics = async (accessToken, params = {}) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const query = new URLSearchParams();
+  if (params.limit) query.set('limit', params.limit);
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  const res = await request(`${BASE}/admin/analytics/geo${qs}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+export const apiFetchSecurityAnalytics = async (accessToken, params = {}) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const query = new URLSearchParams();
+  if (params.start_date) query.set('start_date', params.start_date);
+  if (params.end_date)   query.set('end_date',   params.end_date);
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  const res = await request(`${BASE}/admin/analytics/security${qs}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
 // ── Device APIs ──────────────────────────────────────────────
 // GET /admin/devices/stats
 export const apiFetchDeviceStats = async (accessToken) => {
@@ -430,6 +478,17 @@ export const apiUpdateDeviceStatus = async (accessToken, deviceId, status, reaso
     body: JSON.stringify(payload),
   });
   return { success: true, deviceId, status, ...(res.data || res) };
+};
+
+// POST /admin/devices/{id}/replace — mark device as replaced (query param reason)
+export const apiReplaceDevice = async (accessToken, deviceId, reason) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const qs = reason?.trim() ? `?reason=${encodeURIComponent(reason.trim())}` : '';
+  const res = await request(`${BASE}/admin/devices/${deviceId}/replace${qs}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return { success: true, deviceId, ...(res.data || res) };
 };
 
 // POST /admin/devices/{id}/revoke
@@ -915,6 +974,20 @@ export const apiFetchUserActivity = async (accessToken, userId, params = {}) => 
     page:     raw.page     ?? raw.current_page   ?? meta.page     ?? params.page ?? 1,
     pageSize: raw.page_size ?? raw.pageSize      ?? meta.page_size ?? params.page_size ?? 20,
   };
+};
+
+// POST /admin/app-users/{id}/review - flag user for manual security review
+export const apiFlagUserForReview = async (accessToken, userId, data) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const payload = { reason: data.reason };
+  if (data.notes?.trim())  payload.notes    = data.notes.trim();
+  if (data.priority)       payload.priority = data.priority;
+  const res = await request(`${BASE}/admin/app-users/${userId}/review`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return res.data || res;
 };
 
 // PATCH /admin/app-users/{id} - update profile fields

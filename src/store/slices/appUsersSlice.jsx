@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { apiFetchUserLoginHistory, apiFetchUserActivity, apiUpdateAppUser, apiFetchAppUserDetail, apiFetchAppUsers, apiFetchAppUsersStats } from '../../services/api';
+import { apiFetchUserLoginHistory, apiFetchUserActivity, apiUpdateAppUser, apiFlagUserForReview, apiFetchAppUserDetail, apiFetchAppUsers, apiFetchAppUsersStats } from '../../services/api';
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -21,6 +21,18 @@ export const fetchUserActivity = createAsyncThunk(
     try {
       const { accessToken } = getState().auth;
       return await apiFetchUserActivity(accessToken, userId, params);
+    } catch (err) {
+      return rejectWithValue(err.message);
+    }
+  }
+);
+
+export const flagUserForReview = createAsyncThunk(
+  'appUsers/flagForReview',
+  async ({ userId, data }, { getState, rejectWithValue }) => {
+    try {
+      const { accessToken } = getState().auth;
+      return await apiFlagUserForReview(accessToken, userId, data);
     } catch (err) {
       return rejectWithValue(err.message);
     }
@@ -98,6 +110,10 @@ const appUsersSlice = createSlice({
     updateError: null,
     updateSuccess: false,
 
+    reviewLoading: false,
+    reviewError: null,
+    reviewSuccess: false,
+
     activityItems: [],
     activityTotal: 0,
     activityPage: 1,
@@ -146,11 +162,19 @@ const appUsersSlice = createSlice({
       state.updateLoading = false;
       state.updateError   = null;
       state.updateSuccess = false;
+      state.reviewLoading = false;
+      state.reviewError   = null;
+      state.reviewSuccess = false;
     },
     clearUpdateState(state) {
       state.updateLoading = false;
       state.updateError   = null;
       state.updateSuccess = false;
+    },
+    clearReviewState(state) {
+      state.reviewLoading = false;
+      state.reviewError   = null;
+      state.reviewSuccess = false;
     },
     setActivityFilters(state, action) {
       state.activityFilters = { ...state.activityFilters, ...action.payload };
@@ -218,6 +242,24 @@ const appUsersSlice = createSlice({
       .addCase(fetchUserActivity.rejected, (s, a) => {
         s.activityLoading = false;
         s.activityError   = a.payload;
+      });
+
+    b.addCase(flagUserForReview.pending, (s) => {
+      s.reviewLoading = true;
+      s.reviewError   = null;
+      s.reviewSuccess = false;
+    })
+      .addCase(flagUserForReview.fulfilled, (s, a) => {
+        s.reviewLoading = false;
+        s.reviewSuccess = true;
+        if (s.selectedUser) {
+          s.selectedUser.flagged_for_review = a.payload?.flagged_for_review ?? true;
+          s.selectedUser.flagged_at         = a.payload?.flagged_at ?? new Date().toISOString();
+        }
+      })
+      .addCase(flagUserForReview.rejected, (s, a) => {
+        s.reviewLoading = false;
+        s.reviewError   = a.payload;
       });
 
     b.addCase(updateAppUser.pending, (s) => {
@@ -290,7 +332,7 @@ const appUsersSlice = createSlice({
 
 export const {
   setFilters, clearFilters,
-  clearSelectedUser, clearUpdateState,
+  clearSelectedUser, clearUpdateState, clearReviewState,
   setActivityFilters, clearActivityState,
   setLoginHistoryFilters, clearLoginHistoryState,
 } = appUsersSlice.actions;
