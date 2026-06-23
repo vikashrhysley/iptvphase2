@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchAppUserDetail, clearSelectedUser, updateAppUser, clearUpdateState } from '../../store/slices/appUsersSlice';
+import { fetchAppUserDetail, clearSelectedUser, updateAppUser, clearUpdateState, flagUserForReview, clearReviewState } from '../../store/slices/appUsersSlice';
 import UserActivityPage from './UserActivityPage';
 import UserLoginHistory from './UserLoginHistory';
 import './AppUserDetail.css';
@@ -36,6 +36,12 @@ const LoginHistoryIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
     <circle cx="12" cy="12" r="10" />
     <polyline points="12 6 12 12 16 14" />
+  </svg>
+);
+const FlagIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+    <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+    <line x1="4" y1="22" x2="4" y2="15" />
   </svg>
 );
 
@@ -97,6 +103,95 @@ function SectionCard({ title, children }) {
     <div className="udd-card">
       <div className="udd-card-title">{title}</div>
       {children}
+    </div>
+  );
+}
+
+/* ── Flag for Review Modal ──────────────────────────────── */
+const REVIEW_REASONS = [
+  { value: 'suspicious_login_pattern',    label: 'Suspicious Login Pattern' },
+  { value: 'multiple_country_access',     label: 'Multiple Country Access' },
+  { value: 'high_failed_login_count',     label: 'High Failed Login Count' },
+  { value: 'account_sharing_suspected',   label: 'Account Sharing Suspected' },
+  { value: 'payment_fraud_suspected',     label: 'Payment Fraud Suspected' },
+  { value: 'unusual_activity_pattern',    label: 'Unusual Activity Pattern' },
+  { value: 'manual_review_requested',     label: 'Manual Review Requested' },
+];
+
+function FlagReviewModal({ user, onClose }) {
+  const dispatch = useDispatch();
+  const { reviewLoading, reviewError, reviewSuccess } = useSelector((s) => s.appUsers);
+  const [form, setForm] = useState({ reason: '', notes: '', priority: 'medium' });
+  const [localError, setLocalError] = useState('');
+
+  const set = (key, val) => {
+    setForm((p) => ({ ...p, [key]: val }));
+    setLocalError('');
+    if (reviewError) dispatch(clearReviewState());
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!form.reason) { setLocalError('Reason is required.'); return; }
+    dispatch(clearReviewState());
+    dispatch(flagUserForReview({ userId: user.id, data: form }));
+  };
+
+  return (
+    <div className="udd-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <form className="udd-modal" onSubmit={handleSubmit}>
+        <div className="udd-modal-header">
+          <div className="udd-modal-title udd-modal-title-flag"><FlagIcon /> Flag for Security Review</div>
+          <button type="button" className="udd-modal-close" onClick={onClose}><XIcon /></button>
+        </div>
+        <p className="udd-modal-sub">
+          Flags this user for manual security review. User status is <strong>not</strong> changed.
+          An audit log entry will be written.
+        </p>
+
+        <div className="udd-modal-grid">
+          <label className="udd-modal-field udd-field-full">
+            <span>Reason <span className="udd-required">*</span></span>
+            <select value={form.reason} onChange={(e) => set('reason', e.target.value)} disabled={reviewLoading}>
+              <option value="">Select a reason…</option>
+              {REVIEW_REASONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+            </select>
+          </label>
+
+          <label className="udd-modal-field">
+            <span>Priority</span>
+            <select value={form.priority} onChange={(e) => set('priority', e.target.value)} disabled={reviewLoading}>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </label>
+
+          <label className="udd-modal-field udd-field-full">
+            <span>Notes (optional)</span>
+            <textarea value={form.notes} onChange={(e) => set('notes', e.target.value)}
+              placeholder="Additional context for the security team…"
+              rows={3} disabled={reviewLoading} />
+          </label>
+        </div>
+
+        {(localError || reviewError) && (
+          <div className="udd-modal-error">{localError || reviewError}</div>
+        )}
+        {reviewSuccess && (
+          <div className="udd-modal-success"><CheckIcon /> User flagged for security review.</div>
+        )}
+
+        <div className="udd-modal-actions">
+          <button type="button" className="udd-btn-cancel" onClick={onClose} disabled={reviewLoading}>
+            {reviewSuccess ? 'Close' : 'Cancel'}
+          </button>
+          <button type="submit" className="udd-btn-flag" disabled={reviewLoading || reviewSuccess}>
+            {reviewLoading ? <span className="udd-mini-spin udd-mini-spin-dark" /> : <FlagIcon />}
+            {reviewLoading ? 'Flagging…' : reviewSuccess ? 'Flagged' : 'Flag for Review'}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
@@ -203,6 +298,7 @@ export default function AppUserDetail({ userId, onBack }) {
   const dispatch = useDispatch();
   const { selectedUser: u, detailLoading, detailError } = useSelector((s) => s.appUsers);
   const [showEdit, setShowEdit] = useState(false);
+  const [showFlag, setShowFlag] = useState(false);
   const [showActivity, setShowActivity] = useState(false);
   const [showLoginHistory, setShowLoginHistory] = useState(false);
 
@@ -215,6 +311,11 @@ export default function AppUserDetail({ userId, onBack }) {
   const handleCloseEdit = () => {
     dispatch(clearUpdateState());
     setShowEdit(false);
+  };
+
+  const handleCloseFlag = () => {
+    dispatch(clearReviewState());
+    setShowFlag(false);
   };
 
   if (showActivity && u) {
@@ -253,6 +354,13 @@ export default function AppUserDetail({ userId, onBack }) {
             </button>
             <button className="udd-activity-btn" onClick={() => setShowLoginHistory(true)}>
               <LoginHistoryIcon /> Login History
+            </button>
+            <button
+              className={`udd-flag-btn${u?.flagged_for_review ? ' flagged' : ''}`}
+              onClick={() => setShowFlag(true)}
+              title={u?.flagged_for_review ? `Flagged at ${fmt(u.flagged_at)}` : 'Flag for security review'}
+            >
+              <FlagIcon /> {u?.flagged_for_review ? 'Flagged' : 'Flag for Review'}
             </button>
             <button className="udd-edit-btn" onClick={() => setShowEdit(true)}>
               <EditIcon /> Update User Profile
@@ -507,6 +615,9 @@ export default function AppUserDetail({ userId, onBack }) {
         </>
       )}
 
+      {showFlag && u && (
+        <FlagReviewModal user={u} onClose={handleCloseFlag} />
+      )}
       {showEdit && u && (
         <UpdateProfileModal user={u} onClose={handleCloseEdit} />
       )}

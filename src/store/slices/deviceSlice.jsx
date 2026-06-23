@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { apiFetchDeviceActivity, apiFetchDeviceLoginHistory, apiFetchDeviceDetail, apiFetchDeviceStats, apiFetchAdminDevices, apiUpdateDeviceStatus, apiRevokeDevice } from '../../services/api';
+import { apiFetchDeviceActivity, apiFetchDeviceLoginHistory, apiFetchDeviceDetail, apiFetchDeviceStats, apiFetchAdminDevices, apiUpdateDeviceStatus, apiReplaceDevice, apiRevokeDevice } from '../../services/api';
 
 const DEFAULT_FILTERS = {
   search: '',
@@ -67,6 +67,16 @@ export const updateDeviceStatus = createAsyncThunk(
     try {
       const { accessToken } = getState().auth;
       return await apiUpdateDeviceStatus(accessToken, deviceId, status, reason);
+    } catch (err) { return rejectWithValue(err.message); }
+  }
+);
+
+export const replaceDevice = createAsyncThunk(
+  'devices/replace',
+  async ({ deviceId, reason }, { getState, rejectWithValue }) => {
+    try {
+      const { accessToken } = getState().auth;
+      return await apiReplaceDevice(accessToken, deviceId, reason);
     } catch (err) { return rejectWithValue(err.message); }
   }
 );
@@ -200,6 +210,32 @@ const deviceSlice = createSlice({
        s.toast = { type: 'success', msg: `Device ${newStatus === 'inactive' ? 'deactivated' : newStatus === 'active' ? 'activated' : 'status updated'}.` };
      })
      .addCase(updateDeviceStatus.rejected, (s, a) => {
+       s.actionLoading = null;
+       s.updateLoading = false;
+       s.updateError   = a.payload;
+       s.toast = { type: 'error', msg: a.payload };
+     });
+
+    b.addCase(replaceDevice.pending, (s, a) => {
+       s.actionLoading = a.meta.arg.deviceId;
+       s.updateLoading = true;
+       s.updateError   = null;
+       s.updateSuccess = false;
+     })
+     .addCase(replaceDevice.fulfilled, (s, a) => {
+       s.actionLoading = null;
+       s.updateLoading = false;
+       s.updateSuccess = true;
+       const deviceId  = a.meta.arg.deviceId;
+       const newStatus = a.payload?.status || 'replaced';
+       const d = s.devices.find(d => (d.device_id || d.id) === deviceId);
+       if (d) d.status = newStatus;
+       if (s.selectedDevice && (s.selectedDevice.device_id || s.selectedDevice.id) === deviceId) {
+         s.selectedDevice = { ...s.selectedDevice, status: newStatus };
+       }
+       s.toast = { type: 'success', msg: 'Device marked as replaced.' };
+     })
+     .addCase(replaceDevice.rejected, (s, a) => {
        s.actionLoading = null;
        s.updateLoading = false;
        s.updateError   = a.payload;

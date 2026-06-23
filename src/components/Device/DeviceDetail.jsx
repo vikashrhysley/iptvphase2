@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchDeviceDetail, clearDeviceDetail, updateDeviceStatus, clearUpdateState } from '../../store/slices/deviceSlice';
+import { fetchDeviceDetail, clearDeviceDetail, updateDeviceStatus, replaceDevice, clearUpdateState } from '../../store/slices/deviceSlice';
 import DeviceActivity    from './DeviceActivity';
 import DeviceLoginHistory from './DeviceLoginHistory';
 import './DeviceDetail.css';
@@ -78,20 +78,31 @@ function SectionCard({ title, children }) {
 }
 
 /* ── Update Status Modal ────────────────────────────────── */
+const STATUS_OPTIONS = [
+  { value: 'active',    label: 'Active',    color: '#34d399' },
+  { value: 'blocked',   label: 'Blocked',   color: '#f87171' },
+  { value: 'suspended', label: 'Suspended', color: '#fbbf24' },
+  { value: 'replaced',  label: 'Replaced',  color: '#a78bfa' },
+];
+
 function UpdateStatusModal({ device, onClose }) {
   const dispatch = useDispatch();
   const { updateLoading, updateError, updateSuccess } = useSelector(s => s.devices);
   const [status, setStatus] = useState(device.status || 'active');
   const [reason, setReason] = useState('');
 
+  const isReplaced   = status === 'replaced';
+  const alreadyThat  = status === device.status;
+  const deviceId     = device.device_id || device.id;
+
   const handleSubmit = (e) => {
     e.preventDefault();
     dispatch(clearUpdateState());
-    dispatch(updateDeviceStatus({
-      deviceId: device.device_id || device.id,
-      status,
-      reason,
-    }));
+    if (isReplaced) {
+      dispatch(replaceDevice({ deviceId, reason: reason || 'admin_replacement' }));
+    } else {
+      dispatch(updateDeviceStatus({ deviceId, status, reason }));
+    }
   };
 
   return (
@@ -109,29 +120,41 @@ function UpdateStatusModal({ device, onClose }) {
         <div className="dd-modal-field">
           <label>New Status</label>
           <div className="dd-status-options">
-            {[
-              { value: 'active',    label: 'Active',    color: '#34d399' },
-              { value: 'blocked',   label: 'Blocked',   color: '#f87171' },
-              { value: 'suspended', label: 'Suspended', color: '#fbbf24' },
-            ].map(opt => (
-              <label key={opt.value} className={`dd-status-option${status === opt.value ? ' selected' : ''}`}
-                style={{ '--opt-color': opt.color }}>
-                <input type="radio" name="status" value={opt.value}
-                  checked={status === opt.value}
-                  onChange={() => { setStatus(opt.value); dispatch(clearUpdateState()); }} />
-                <span className="dd-opt-dot" />
-                {opt.label}
-              </label>
-            ))}
+            {STATUS_OPTIONS.map(opt => {
+              const disabled = opt.value === 'replaced' && device.status === 'replaced';
+              return (
+                <label
+                  key={opt.value}
+                  className={`dd-status-option${status === opt.value ? ' selected' : ''}${disabled ? ' dd-opt-disabled' : ''}`}
+                  style={{ '--opt-color': opt.color }}
+                >
+                  <input type="radio" name="status" value={opt.value}
+                    checked={status === opt.value}
+                    disabled={disabled}
+                    onChange={() => { if (!disabled) { setStatus(opt.value); dispatch(clearUpdateState()); } }}
+                  />
+                  <span className="dd-opt-dot" />
+                  {opt.label}
+                </label>
+              );
+            })}
           </div>
         </div>
+
+        {isReplaced && (
+          <div className="dd-replace-warn">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Sets status to <strong>replaced</strong> via a dedicated endpoint. This records a factory reset or device swap.
+            Defaults reason to <code>admin_replacement</code> if left blank.
+          </div>
+        )}
 
         <div className="dd-modal-field">
           <label>Reason <span className="dd-optional">(optional — written to audit log)</span></label>
           <textarea
             value={reason}
             onChange={e => { setReason(e.target.value); dispatch(clearUpdateState()); }}
-            placeholder="Describe why this status change is being made…"
+            placeholder={isReplaced ? 'e.g. factory_reset, device_swap… (default: admin_replacement)' : 'Describe why this status change is being made…'}
             rows={3}
             disabled={updateLoading}
           />
@@ -141,17 +164,19 @@ function UpdateStatusModal({ device, onClose }) {
           <div className="dd-modal-error">{updateError}</div>
         )}
         {updateSuccess && (
-          <div className="dd-modal-success"><CheckIcon /> Status updated successfully.</div>
+          <div className="dd-modal-success">
+            <CheckIcon /> {isReplaced ? 'Device marked as replaced.' : 'Status updated successfully.'}
+          </div>
         )}
 
         <div className="dd-modal-actions">
           <button type="button" className="dd-btn-cancel" onClick={onClose} disabled={updateLoading}>
-            Cancel
+            {updateSuccess ? 'Close' : 'Cancel'}
           </button>
           <button type="submit" className="dd-btn-save"
-            disabled={updateLoading || updateSuccess || status === device.status}>
+            disabled={updateLoading || updateSuccess || alreadyThat}>
             {updateLoading ? <span className="dd-mini-spin" /> : <EditIcon />}
-            {updateLoading ? 'Saving…' : updateSuccess ? 'Saved' : 'Update Status'}
+            {updateLoading ? 'Saving…' : updateSuccess ? 'Saved' : isReplaced ? 'Mark as Replaced' : 'Update Status'}
           </button>
         </div>
       </form>

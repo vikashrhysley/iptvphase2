@@ -23,7 +23,10 @@ const XIcon       = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="
 const LicenseStatIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>;
 const LayersIcon  = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
 const TagIcon     = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r="1.5" fill="currentColor"/></svg>;
-const ClockIcon   = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
+const ClockIcon      = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
+const DownloadIcon   = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
+const ExcelIcon      = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>;
+const PdfIcon        = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h1.5a1.5 1.5 0 0 1 0 3H9v-3z"/><path d="M13 13h2"/><path d="M13 16h2"/></svg>;
 
 /* ── Helpers ────────────────────────────────────────────── */
 const fmtDate = (iso) => {
@@ -64,6 +67,112 @@ const getLicId = (l) => {
   if (!id) console.warn('[License] No ID found on item — available keys:', Object.keys(l || {}));
   return id;
 };
+
+/* ── Export helpers ─────────────────────────────────────── */
+const escCsv = (v) => {
+  if (v == null) return '';
+  const s = String(v);
+  return /[,"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+
+const exportToCSV = (licenses) => {
+  const headers = ['License ID','User Email','User Name','Device Name','Platform','Plan Name','Plan Type','Status','Expiry Date','Days Left','Auto-Renew','Reminder Sent','Issued Date'];
+  const rows = licenses.map(l => [
+    getLicId(l),
+    l.user_email || '',
+    l.user_full_name || '',
+    l.device_name || '',
+    l.device_platform || '',
+    l.plan_name || '',
+    l.plan_type || '',
+    l.status || '',
+    l.expiry_display || fmtDate(l.expires_at),
+    l.days_remaining != null ? l.days_remaining : '',
+    l.auto_renew ? 'Yes' : 'No',
+    l.reminder_sent ? 'Yes' : 'No',
+    fmtDate(l.created_at),
+  ]);
+  const csv = [headers, ...rows].map(r => r.map(escCsv).join(',')).join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `licenses_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+const exportToPDF = (licenses) => {
+  const now = new Date().toLocaleString('en-US', { dateStyle: 'full', timeStyle: 'short' });
+  const rows = licenses.map(l => `<tr>
+    <td>${l.user_email || '—'}</td>
+    <td>${l.user_full_name || '—'}</td>
+    <td>${l.device_name || '—'}</td>
+    <td>${l.device_platform || '—'}</td>
+    <td>${l.plan_name || l.plan_type || '—'}</td>
+    <td>${l.status || '—'}</td>
+    <td>${l.expiry_display || fmtDate(l.expires_at)}</td>
+    <td>${l.days_remaining != null ? l.days_remaining + 'd' : '—'}</td>
+    <td>${l.auto_renew ? 'Yes' : 'No'}</td>
+    <td>${l.reminder_sent ? 'Yes' : 'No'}</td>
+    <td>${fmtDate(l.created_at)}</td>
+  </tr>`).join('');
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>License Export</title><style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111;background:#fff;padding:20px;font-size:11px}
+h1{font-size:16px;margin-bottom:3px;color:#0f172a}
+.meta{font-size:11px;color:#64748b;margin-bottom:14px}
+table{width:100%;border-collapse:collapse}
+th{background:#f1f5f9;border:1px solid #cbd5e1;padding:6px 8px;text-align:left;font-weight:700;white-space:nowrap;font-size:10px;text-transform:uppercase;letter-spacing:.04em}
+td{border:1px solid #e2e8f0;padding:5px 8px;vertical-align:top}
+tr:nth-child(even) td{background:#f8fafc}
+@media print{body{padding:8px}@page{margin:1cm}}
+</style></head><body>
+<h1>License Center Export</h1>
+<p class="meta">Generated: ${now} — ${licenses.length} record(s) on this page</p>
+<table><thead><tr>
+<th>User Email</th><th>User Name</th><th>Device</th><th>Platform</th>
+<th>Plan</th><th>Status</th><th>Expiry</th><th>Days Left</th>
+<th>Auto-Renew</th><th>Reminder</th><th>Issued</th>
+</tr></thead><tbody>${rows}</tbody></table>
+</body></html>`;
+  const win = window.open('', '_blank');
+  if (!win) { alert('Please allow pop-ups to export PDF.'); return; }
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 400);
+};
+
+/* ── Export Dropdown ─────────────────────────────────────── */
+function ExportDropdown({ licenses }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+  return (
+    <div className="lc-export-wrap" ref={ref}>
+      <button className="lc-export-btn" onClick={() => setOpen(v => !v)} disabled={!licenses.length}>
+        <DownloadIcon /> Export
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginLeft:2 }}><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      {open && (
+        <div className="lc-export-menu">
+          <button className="lc-export-item" onClick={() => { exportToCSV(licenses); setOpen(false); }}>
+            <ExcelIcon /> Excel (CSV)
+          </button>
+          <button className="lc-export-item" onClick={() => { exportToPDF(licenses); setOpen(false); }}>
+            <PdfIcon /> PDF
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* ── Toast ─────────────────────────────────────────────── */
 function Toast() {
@@ -286,6 +395,7 @@ export default function LicensePage() {
           <h1 className="lc-title">License Center</h1>
           <p className="lc-subtitle">Manage, assign, and track all subscriber licenses and their activation status.</p>
         </div>
+        <ExportDropdown licenses={licenses} />
       </div>
 
       {/* ── Overview cards ── */}

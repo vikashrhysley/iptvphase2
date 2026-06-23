@@ -80,6 +80,14 @@ const RbacIcon = () => (
   </svg>
 );
 
+const SecurityEventsIcon = () => (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    <line x1="12" y1="9" x2="12" y2="13"/>
+    <line x1="12" y1="17" x2="12.01" y2="17"/>
+  </svg>
+);
+
 const SubscriptionsIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
@@ -140,6 +148,8 @@ const ANALYTICS_SUB_ITEMS = [
   { id: 'licenses', label: 'Licenses' },
   { id: 'funnel', label: 'Funnel' },
   { id: 'churn', label: 'Churn' },
+  { id: 'geo',   label: 'Geo' },
+  { id: 'system', label: 'System' },
 ];
 
 const NAV_ITEMS = [
@@ -153,6 +163,7 @@ const NAV_ITEMS = [
   { id: 'heartbeat', label: 'Heartbeat', icon: <HeartbeatIcon />, page: 'heartbeat' },
   { id: 'license', label: 'License', icon: <LicenseIcon />, page: 'license' },
   { id: 'trial', label: 'System Configuration', icon: <TrialIcon />, page: 'trial' },
+  { id: 'security_events', label: 'Security Events', icon: <SecurityEventsIcon />, page: 'security_events' },
   { id: 'audit', label: 'Audit Logs',         icon: <AuditIcon />, page: 'audit', superadminOnly: true },
   { id: 'rbac',  label: 'RBAC', icon: <RbacIcon />,  page: 'rbac',  superadminOnly: true },
 ];

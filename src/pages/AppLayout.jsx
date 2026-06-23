@@ -14,7 +14,8 @@ import AuditPage      from '../components/Audit/AuditPage';
 import RbacPage       from '../components/Rbac/RbacPage';
 import SubscriptionsPage from '../components/Subscriptions/SubscriptionsPage';
 import PlansPage         from '../components/Plans/PlansPage';
-import AnalyticsPage     from '../components/Analytics/AnalyticsPage';
+import AnalyticsPage         from '../components/Analytics/AnalyticsPage';
+import SecurityEventsPage   from '../components/Security/SecurityEventsPage';
 
 import './AppLayout.css';
 
@@ -77,7 +78,8 @@ export default function AppLayout() {
       case 'rbac':        return <RbacPage />;
       case 'subscriptions': return <SubscriptionsPage />;
       case 'plans':         return <PlansPage />;
-      case 'analytics':     return <AnalyticsPage activeTab={analyticsTab} />;
+      case 'analytics':        return <AnalyticsPage activeTab={analyticsTab} />;
+      case 'security_events':  return <SecurityEventsPage />;
       default:        return <DashboardTable />;
 
     }
