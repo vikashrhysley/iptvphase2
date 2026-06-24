@@ -11,16 +11,53 @@ import {
 } from '../../store/slices/heartbeatSlice';
 import './HeartbeatPage.css';
 
-const STAT_CARDS = [
-  { key: 'total_heartbeats', label: 'Total Heartbeats', suffix: '', accent: 'var(--accent-primary)' },
-  { key: 'total_active_devices', label: 'Active Devices', suffix: '', accent: '#10b981' },
-  { key: 'heartbeats_last_hour', label: 'Last Hour', suffix: '', accent: '#7c3aed' },
-  { key: 'success_rate_pct', label: 'Success Rate', suffix: '%', accent: '#34d399' },
-  { key: 'miss_rate_percent', label: 'Miss Rate', suffix: '%', accent: '#f59e0b' },
-  { key: 'failed_last_hour', label: 'Failed Last Hour', suffix: '', accent: '#f87171' },
-  { key: 'avg_response_ms', label: 'Avg Response', suffix: 'ms', accent: '#00d4ff' },
-  { key: 'high_risk_devices', label: 'High Risk Devices', suffix: '', accent: '#ef4444' },
+// Each card declares where its data lives and how to render it
+const SECTION_CARDS = [
+  {
+    key: 'overview',
+    label: 'Overview',
+    accent: 'var(--accent-primary)',
+    type: 'metrics',
+    getData: s => s?.overview,
+  },
+  {
+    key: 'risk_health',
+    label: 'Risk Health',
+    accent: '#ef4444',
+    type: 'metrics',
+    getData: s => s?.risk_health,
+    skip: ['by_status'], // by_status gets its own card below
+  },
+  {
+    key: 'status',
+    label: 'Status',
+    accent: '#10b981',
+    type: 'status',
+    getData: s => s?.risk_health?.by_status,
+  },
+  {
+    key: 'country',
+    label: 'By Country',
+    accent: '#a78bfa',
+    type: 'country',
+    getData: s => s?.breakdown?.by_country,
+  },
 ];
+
+const fmtKey = k => k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+const fmtMetricValue = (key, val) => {
+  if (val === null || val === undefined) return '—';
+  if (typeof val === 'boolean') return val ? 'Yes' : 'No';
+  if (typeof val === 'string' && /\d{4}-\d{2}-\d{2}T/.test(val)) return fmtDateTime(val);
+  const sfx = /_ms$/.test(key) ? 'ms' : /pct$|percent$/.test(key) ? '%' : '';
+  return fmtNum(val, sfx);
+};
+
+const countryFlag = (code) => {
+  if (!code || code.length !== 2) return '🌐';
+  return code.toUpperCase().split('').map(c => String.fromCodePoint(127397 + c.charCodeAt(0))).join('');
+};
 
 const STATUS_OPTIONS = ['', 'success', 'failed', 'blocked', 'expired'];
 
@@ -154,32 +191,67 @@ export default function HeartbeatPage() {
         {statsError ? (
           <div className="hb-error">{statsError}</div>
         ) : (
-          <div className="hb-stats">
-            {STAT_CARDS.map(card => (
-              <div className="hb-stat-card" style={{ '--hb-accent': card.accent }} key={card.key}>
-                <div className="hb-stat-label">{card.label}</div>
-                <div className="hb-stat-value">{statsLoading ? '...' : fmtNum(stats?.[card.key], card.suffix)}</div>
-              </div>
-            ))}
+          <div className="hb-stats-4">
+            {SECTION_CARDS.map(card => {
+              const data = card.getData(stats);
+              return (
+                <div className="hb-sec-card" style={{ '--hb-accent': card.accent }} key={card.key}>
+                  <div className="hb-sec-card-head">
+                    <span className="hb-sec-title">{card.label}</span>
+                  </div>
+                  <div className="hb-sec-divider" />
+                  {statsLoading ? (
+                    <div className="hb-sec-empty">Loading...</div>
+                  ) : !data ? (
+                    <div className="hb-sec-empty">No data</div>
+                  ) : card.type === 'metrics' ? (
+                    <div className="hb-sec-metrics">
+                      {Object.entries(data)
+                        .filter(([k]) => !card.skip?.includes(k))
+                        .map(([k, v]) => (
+                          <div className="hb-sec-metric-row" key={k}>
+                            <span className="hb-sec-key">{fmtKey(k)}</span>
+                            <span className="hb-sec-val">{fmtMetricValue(k, v)}</span>
+                          </div>
+                        ))}
+                    </div>
+                  ) : card.type === 'status' ? (
+                    <div className="hb-sec-status-grid">
+                      {(Array.isArray(data)
+                        ? data.map(item => [item.status ?? item.name, item.count ?? item.value])
+                        : Object.entries(data)
+                      ).map(([status, count]) => (
+                        <div className="hb-sec-status-item" key={status}>
+                          <span className={statusClass(status)}>{status}</span>
+                          <strong>{fmtNum(count)}</strong>
+                        </div>
+                      ))}
+                      {(Array.isArray(data) ? !data.length : !Object.keys(data).length) && (
+                        <div className="hb-sec-empty">No status data</div>
+                      )}
+                    </div>
+                  ) : card.type === 'country' ? (
+                    <div className="hb-sec-country-list">
+                      {(Array.isArray(data)
+                        ? data
+                        : Object.entries(data).map(([k, v]) => ({ country_code: k, count: v }))
+                      ).slice(0, 8).map((item, i) => (
+                        <div className="hb-sec-country-row" key={item.country_code ?? i}>
+                          <span className="hb-sec-flag">{countryFlag(item.country_code)}</span>
+                          <span className="hb-sec-cc">{item.country_name || item.country_code || '—'}</span>
+                          <span className="hb-sec-count">{fmtNum(item.count)}</span>
+                        </div>
+                      ))}
+                      {(Array.isArray(data) ? !data.length : !Object.keys(data).length) && (
+                        <div className="hb-sec-empty">No country data</div>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         )}
-
-        <div className="hb-insights">
-          <div className="hb-panel">
-            <div className="hb-panel-title">Status Distribution</div>
-            <div className="hb-status-grid">
-              {Object.entries(stats?.by_status || {}).map(([status, count]) => (
-                <div className="hb-status-item" key={status}>
-                  <span className={statusClass(status)}>{status}</span>
-                  <strong>{fmtNum(count)}</strong>
-                </div>
-              ))}
-              {!Object.keys(stats?.by_status || {}).length && <div className="hb-empty-small">No status data</div>}
-            </div>
-          </div>
-          <SmallList title="Top Portals" items={stats?.top_portals} primaryKey="portal_url" secondaryKey="count" />
-          <SmallList title="By Country" items={stats?.by_country} primaryKey="country_code" secondaryKey="count" />
-        </div>
       </section>
 
       <section className="hb-section">
