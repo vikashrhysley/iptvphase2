@@ -1427,3 +1427,49 @@
 .rb-modal-overlay:not(.rb-users-modal-overlay) {
   z-index: 1010;
 }
+
+/* ── Hero right group ── */
+.rb-hero-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+/* ── Export button ── */
+.rb-export-wrap { position: relative; }
+
+.rb-export-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px;
+  background: var(--bg-card, #1a1f36);
+  border: 1px solid var(--border-subtle, rgba(255,255,255,0.10));
+  border-radius: 8px;
+  color: var(--text-secondary, #94a3b8);
+  font-size: 0.8rem; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.rb-export-btn:hover {
+  background: var(--bg-hover, rgba(255,255,255,0.06));
+  color: var(--text-primary, #e2e8f0);
+  border-color: rgba(255,255,255,0.18);
+}
+
+.rb-export-menu {
+  position: absolute; top: calc(100% + 6px); right: 0;
+  min-width: 160px;
+  background: var(--bg-card, #1a1f36);
+  border: 1px solid var(--border-subtle, rgba(255,255,255,0.10));
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+  z-index: 200; overflow: hidden;
+  animation: rb-fade-in 0.14s ease;
+}
+@keyframes rb-fade-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.rb-export-menu button {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 10px 14px;
+  background: none; border: none;
+  color: var(--text-secondary, #94a3b8);
+  font-size: 0.82rem; font-weight: 500;
+  cursor: pointer; text-align: left;
+  transition: background 0.12s, color 0.12s;
+}
+.rb-export-menu button:hover { background: rgba(255,255,255,0.06); color: var(--text-primary, #e2e8f0); }
+.rb-export-menu button + button { border-top: 1px solid var(--border-subtle, rgba(255,255,255,0.07)); }

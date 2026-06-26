@@ -1,5 +1,5 @@
 // src/components/Dashboard/DashboardTable.js
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchDashboardOverview,
@@ -7,6 +7,122 @@ import {
   fetchDashboardStats,
 } from '../../store/slices/dashboardSlice';
 import './DashboardTable.css';
+
+// ─── Export helpers ───────────────────────────────────────────────────────────
+const buildRevenueExportRows = (revenueCards, topPlan) => {
+  const rows = revenueCards.map(c => [c.label, c.value !== undefined && c.value !== null ? String(c.value) : '-', c.sub || '']);
+  if (topPlan) rows.push(['Top Plan by Revenue', String(topPlan), '']);
+  return rows;
+};
+
+const exportRevenueToExcel = (revenueCards, topPlan) => {
+  import('xlsx').then(({ utils, writeFile }) => {
+    const wb = utils.book_new();
+    const rows = [['Metric', 'Value', 'Period'], ...buildRevenueExportRows(revenueCards, topPlan)];
+    const ws = utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 28 }, { wch: 20 }, { wch: 20 }];
+    utils.book_append_sheet(wb, ws, 'Revenue Analytics');
+    writeFile(wb, `revenue-analytics-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  });
+};
+
+const exportRevenueToPDF = async (revenueCards, topPlan) => {
+  const { jsPDF } = await import('jspdf');
+  const { default: autoTable } = await import('jspdf-autotable');
+
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+  let y = 14;
+
+  doc.setFontSize(16);
+  doc.setTextColor(30, 30, 60);
+  doc.text('Revenue Analytics Report', pageW / 2, y, { align: 'center' });
+  y += 6;
+  doc.setFontSize(9);
+  doc.setTextColor(120);
+  doc.text(`Generated: ${new Date().toLocaleString()}`, pageW / 2, y + 3, { align: 'center' });
+  y += 12;
+
+  const rows = buildRevenueExportRows(revenueCards, topPlan);
+
+  autoTable(doc, {
+    startY: y,
+    head: [['Metric', 'Value', 'Period']],
+    body: rows,
+    theme: 'striped',
+    headStyles: { fillColor: [30, 30, 60], textColor: 255, fontSize: 9 },
+    bodyStyles: { fontSize: 9, textColor: [40, 40, 80] },
+    alternateRowStyles: { fillColor: [245, 246, 250] },
+    columnStyles: { 0: { cellWidth: 80 }, 1: { cellWidth: 55 }, 2: { cellWidth: 45 } },
+    margin: { left: 14, right: 14 },
+  });
+
+  doc.save(`revenue-analytics-${new Date().toISOString().slice(0, 10)}.pdf`);
+};
+
+const exportToExcel = (statCards) => {
+  import('xlsx').then(({ utils, writeFile }) => {
+    const wb = utils.book_new();
+    statCards.forEach(card => {
+      const rows = [['Metric', 'Value']];
+      (card.rows || []).forEach(row => {
+        const val = row.value !== undefined && row.value !== null ? row.value : '-';
+        rows.push([row.label, val]);
+      });
+      const ws = utils.aoa_to_sheet(rows);
+      ws['!cols'] = [{ wch: 28 }, { wch: 18 }];
+      utils.book_append_sheet(wb, ws, card.label.slice(0, 31));
+    });
+    writeFile(wb, `live-stats-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  });
+};
+
+const exportToPDF = async (statCards) => {
+  const { jsPDF } = await import('jspdf');
+  const { default: autoTable } = await import('jspdf-autotable');
+
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+  let y = 14;
+
+  doc.setFontSize(16);
+  doc.setTextColor(30, 30, 60);
+  doc.text('Live Stats Report', pageW / 2, y, { align: 'center' });
+  y += 5;
+  doc.setFontSize(9);
+  doc.setTextColor(120);
+  doc.text(`Generated: ${new Date().toLocaleString()}`, pageW / 2, y + 4, { align: 'center' });
+  y += 14;
+
+  statCards.forEach((card, idx) => {
+    if (y > 240) { doc.addPage(); y = 14; }
+    doc.setFontSize(11);
+    doc.setTextColor(40, 40, 80);
+    doc.text(card.label, 14, y);
+    y += 4;
+
+    const rows = (card.rows || []).map(row => [
+      row.label,
+      row.value !== undefined && row.value !== null ? String(row.value) : '-',
+    ]);
+
+    autoTable(doc, {
+      startY: y,
+      head: [['Metric', 'Value']],
+      body: rows,
+      theme: 'striped',
+      headStyles: { fillColor: [30, 30, 60], textColor: 255, fontSize: 9 },
+      bodyStyles: { fontSize: 9, textColor: [40, 40, 80] },
+      alternateRowStyles: { fillColor: [245, 246, 250] },
+      columnStyles: { 0: { cellWidth: 90 }, 1: { cellWidth: 50 } },
+      margin: { left: 14, right: 14 },
+    });
+
+    y = doc.lastAutoTable.finalY + (idx < statCards.length - 1 ? 8 : 4);
+  });
+
+  doc.save(`live-stats-${new Date().toISOString().slice(0, 10)}.pdf`);
+};
 
 const LABELS = {
   active_devices: 'Active Devices',
@@ -269,13 +385,55 @@ function StatCard({ label, rows, accent }) {
   );
 }
 
-function SectionHeader({ title, subtitle, loading, error }) {
+function ExportButton({ onExportPDF, onExportExcel }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  return (
+    <div className="dash-export-wrap" ref={ref}>
+      <button className="dash-export-btn" onClick={() => setOpen(o => !o)}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Export
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+      {open && (
+        <div className="dash-export-menu">
+          <button onClick={() => { onExportPDF(); setOpen(false); }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+            </svg>
+            Export as PDF
+          </button>
+          <button onClick={() => { onExportExcel(); setOpen(false); }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
+            </svg>
+            Export as Excel
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SectionHeader({ title, subtitle, loading, error, onExportPDF, onExportExcel }) {
   return (
     <div className="dash-section-head">
       <div>
         <div className="dash-section-title">{title}</div>
         <div className="dash-section-subtitle">{loading ? 'Loading...' : error || subtitle}</div>
       </div>
+      {onExportPDF && <ExportButton onExportPDF={onExportPDF} onExportExcel={onExportExcel} />}
     </div>
   );
 }
@@ -373,7 +531,14 @@ export default function DashboardTable({ activeDashboardTab = 'liveStats' }) {
     <div className="dashboard-content">
       {activeDashboardTab === 'liveStats' && (
         <div className="dash-tab-panel">
-          <SectionHeader title="Live Stats" subtitle="Core operational counts from dashboard stats." loading={loading} error={error} />
+          <SectionHeader
+            title="Live Stats"
+            subtitle="Core operational counts from dashboard stats."
+            loading={loading}
+            error={error}
+            onExportPDF={() => exportToPDF(statCards)}
+            onExportExcel={() => exportToExcel(statCards)}
+          />
           {loading ? (
             <div className="table-loading">
               <span className="loading-spinner" style={{ width: 28, height: 28 }} />
@@ -416,7 +581,14 @@ export default function DashboardTable({ activeDashboardTab = 'liveStats' }) {
 
       {activeDashboardTab === 'revenue' && (
         <div className="dash-tab-panel">
-          <SectionHeader title="Revenue Analytics" subtitle="30-day revenue, MRR, refunds, failures, and subscription movement." loading={revenueLoading} error={revenueError} />
+          <SectionHeader
+            title="Revenue Analytics"
+            subtitle="30-day revenue, MRR, refunds, failures, and subscription movement."
+            loading={revenueLoading}
+            error={revenueError}
+            onExportPDF={() => exportRevenueToPDF(revenueCards, revenue?.top_plan_by_revenue)}
+            onExportExcel={() => exportRevenueToExcel(revenueCards, revenue?.top_plan_by_revenue)}
+          />
           {!revenueError && (
             <div className="dashboard-stats">
               {revenueCards.map(card => (

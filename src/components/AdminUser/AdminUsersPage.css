@@ -1,3 +1,11 @@
+/* Local fadeIn: 'to' must NOT have transform, or animation-fill-mode:both
+   would leave transform:translateY(0) on .au-page, breaking position:fixed
+   for any modal overlay rendered inside it. */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
 .au-page {
   padding: 24px;
   animation: fadeIn 0.35s ease both;

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
@@ -162,6 +162,134 @@ const getInitials = (name = '') =>
   || name.slice(0, 2).toUpperCase();
 const getPermCount = (role) =>
   Object.values(role.permissions || {}).reduce((s, a) => s + (Array.isArray(a) ? a.length : 0), 0);
+
+// ─── Export helpers ───────────────────────────────────────
+const ROLE_COLS = ['Role Name', 'Description', 'Type', 'Status', 'Assigned Users', 'Modules', 'Total Permissions'];
+const PERM_COLS = ['Role', 'Module', 'Read', 'Write', 'Delete', 'Execute'];
+
+const buildRoleRows = (roles) =>
+  roles.map(r => [
+    r.name,
+    r.description || '',
+    r.is_system ? 'System' : 'Custom',
+    r.is_active !== false ? 'Active' : 'Inactive',
+    r.user_count ?? 0,
+    Object.keys(r.permissions || {}).length,
+    getPermCount(r),
+  ]);
+
+const buildPermRows = (roles) => {
+  const rows = [];
+  for (const r of roles) {
+    for (const [mod, actions] of Object.entries(r.permissions || {})) {
+      rows.push([
+        r.name, mod,
+        actions.includes('read')    ? '✓' : '✗',
+        actions.includes('write')   ? '✓' : '✗',
+        actions.includes('delete')  ? '✓' : '✗',
+        actions.includes('execute') ? '✓' : '✗',
+      ]);
+    }
+  }
+  return rows;
+};
+
+const exportRbacToExcel = async (roles) => {
+  const { utils, writeFile } = await import('xlsx');
+  const wb = utils.book_new();
+  const ws1 = utils.aoa_to_sheet([ROLE_COLS, ...buildRoleRows(roles)]);
+  utils.book_append_sheet(wb, ws1, 'Roles');
+  const permRows = buildPermRows(roles);
+  if (permRows.length) {
+    const ws2 = utils.aoa_to_sheet([PERM_COLS, ...permRows]);
+    utils.book_append_sheet(wb, ws2, 'Permissions Matrix');
+  }
+  writeFile(wb, `rbac-roles-${new Date().toISOString().slice(0, 10)}.xlsx`);
+};
+
+const exportRbacToPDF = async (roles) => {
+  const { default: jsPDF }     = await import('jspdf');
+  const { default: autoTable } = await import('jspdf-autotable');
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+  const date = new Date().toLocaleString();
+
+  doc.setFontSize(13);
+  doc.text('RBAC — Roles', 40, 36);
+  doc.setFontSize(8);
+  doc.setTextColor(130, 130, 130);
+  doc.text(`Exported ${date}`, 40, 52);
+  doc.setTextColor(0, 0, 0);
+
+  autoTable(doc, {
+    startY: 64,
+    head: [ROLE_COLS],
+    body: buildRoleRows(roles),
+    styles: { fontSize: 8, cellPadding: 4 },
+    headStyles: { fillColor: [30, 35, 60], textColor: [200, 210, 230], fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [245, 247, 250] },
+    margin: { left: 40, right: 40 },
+  });
+
+  const permRows = buildPermRows(roles);
+  if (permRows.length) {
+    doc.addPage();
+    doc.setFontSize(13);
+    doc.setTextColor(0, 0, 0);
+    doc.text('RBAC — Permissions Matrix', 40, 36);
+    autoTable(doc, {
+      startY: 52,
+      head: [PERM_COLS],
+      body: permRows,
+      styles: { fontSize: 8, cellPadding: 4 },
+      headStyles: { fillColor: [30, 35, 60], textColor: [200, 210, 230], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [245, 247, 250] },
+      margin: { left: 40, right: 40 },
+    });
+  }
+
+  doc.save(`rbac-roles-${new Date().toISOString().slice(0, 10)}.pdf`);
+};
+
+function ExportButton({ onExportPDF, onExportExcel }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+  return (
+    <div className="rb-export-wrap" ref={ref}>
+      <button className="rb-export-btn" onClick={() => setOpen(o => !o)}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Export
+      </button>
+      {open && (
+        <div className="rb-export-menu">
+          <button onClick={() => { setOpen(false); onExportPDF(); }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+            </svg>
+            PDF
+          </button>
+          <button onClick={() => { setOpen(false); onExportExcel(); }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <path d="M3 9h18M9 21V9"/>
+            </svg>
+            Excel
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Permission dot ───────────────────────────────────────
 function PermDot({ action, active, available, editMode, onChange }) {
@@ -1597,12 +1725,20 @@ export default function RbacPage() {
             <p className="rb-hero-sub">Manage roles, permissions, and module access controls across the platform.</p>
           </div>
         </div>
-        <button className="rb-refresh-btn" onClick={() => {
-          dispatch(fetchRbacRoles());
-          if (pageView === 'modules' || modules.length > 0) dispatch(fetchRbacModules());
-        }}>
-          <RefreshIcon /> Refresh
-        </button>
+        <div className="rb-hero-right">
+          <button className="rb-refresh-btn" onClick={() => {
+            dispatch(fetchRbacRoles());
+            if (pageView === 'modules' || modules.length > 0) dispatch(fetchRbacModules());
+          }}>
+            <RefreshIcon /> Refresh
+          </button>
+          {roles.length > 0 && (
+            <ExportButton
+              onExportPDF={() => exportRbacToPDF(roles)}
+              onExportExcel={() => exportRbacToExcel(roles)}
+            />
+          )}
+        </div>
       </div>
 
       {/* ── Stats ── */}

@@ -1,5 +1,6 @@
 // src/components/Profile/ProfilePage.js
 import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSelector } from 'react-redux';
 import { apiChangePassword, apiGetProfile } from '../../services/api';
 import './ProfilePage.css';
@@ -126,11 +127,14 @@ function ChangePasswordModal({ accessToken, onClose, onSuccess }) {
     }
   };
 
-  return (
-    <div className="pp-modal-overlay" role="presentation">
+  return createPortal(
+    <div className="pp-modal-overlay" role="presentation" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <form className="pp-modal" onSubmit={submitPassword}>
         <div className="pp-modal-title">
           <LockIcon /> Change Password
+          <button type="button" className="pp-modal-close" onClick={onClose} aria-label="Close">
+            <XIcon />
+          </button>
         </div>
         <p className="pp-modal-subtitle">
           Update your admin password. This action can invalidate existing sessions.
@@ -183,7 +187,8 @@ function ChangePasswordModal({ accessToken, onClose, onSuccess }) {
           </button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body
   );
 }
 

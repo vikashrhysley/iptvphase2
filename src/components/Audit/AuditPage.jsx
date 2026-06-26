@@ -134,6 +134,97 @@ const actorColor = (email = '') => {
   return colors[Math.abs(h) % colors.length];
 };
 
+// ─── Export helpers ───────────────────────────────────────────────────────────
+const AUDIT_COLS = [
+  'Timestamp', 'Action', 'Entity Type', 'Entity ID',
+  'Severity', 'Actor', 'Actor Email', 'Role', 'IP Address', 'Notes',
+];
+
+const buildAuditRows = (logs) =>
+  logs.map(l => [
+    fmtDate(l.created_at),
+    l.action          || '',
+    l.entity_type     || '',
+    l.entity_id       || '',
+    l.severity        || '',
+    l.actor_full_name || '',
+    l.actor_email     || '',
+    l.actor_role      || '',
+    l.ip_address      || '',
+    l.notes           || '',
+  ]);
+
+const exportAuditToExcel = async (logs) => {
+  const { utils, writeFile } = await import('xlsx');
+  const ws = utils.aoa_to_sheet([AUDIT_COLS, ...buildAuditRows(logs)]);
+  const wb = utils.book_new();
+  utils.book_append_sheet(wb, ws, 'Audit Logs');
+  writeFile(wb, `audit-logs-${new Date().toISOString().slice(0, 10)}.xlsx`);
+};
+
+const exportAuditToPDF = async (logs) => {
+  const { default: jsPDF }     = await import('jspdf');
+  const { default: autoTable } = await import('jspdf-autotable');
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+  doc.setFontSize(13);
+  doc.text('Audit Logs', 40, 36);
+  doc.setFontSize(8);
+  doc.setTextColor(130, 130, 130);
+  doc.text(`Exported ${new Date().toLocaleString()}`, 40, 52);
+  doc.setTextColor(0, 0, 0);
+  autoTable(doc, {
+    startY: 64,
+    head: [AUDIT_COLS],
+    body: buildAuditRows(logs),
+    styles: { fontSize: 7, cellPadding: 3 },
+    headStyles: { fillColor: [30, 35, 60], textColor: [200, 210, 230], fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [245, 247, 250] },
+    margin: { left: 40, right: 40 },
+  });
+  doc.save(`audit-logs-${new Date().toISOString().slice(0, 10)}.pdf`);
+};
+
+function ExportButton({ onExportPDF, onExportExcel }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+  return (
+    <div className="al-export-wrap" ref={ref}>
+      <button className="al-export-btn" onClick={() => setOpen(o => !o)}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Export
+      </button>
+      {open && (
+        <div className="al-export-menu">
+          <button onClick={() => { setOpen(false); onExportPDF(); }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+            </svg>
+            PDF
+          </button>
+          <button onClick={() => { setOpen(false); onExportExcel(); }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <path d="M3 9h18M9 21V9"/>
+            </svg>
+            Excel
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function SeverityBadge({ severity, size = 'sm' }) {
@@ -530,6 +621,14 @@ export default function AuditPage() {
             <p className="al-hero-sub">Track every admin action across the platform with timestamps and full details.</p>
           </div>
         </div>
+        {logs.length > 0 && (
+          <div className="al-hero-right">
+            <ExportButton
+              onExportPDF={() => exportAuditToPDF(logs)}
+              onExportExcel={() => exportAuditToExcel(logs)}
+            />
+          </div>
+        )}
       </div>
 
       {/* ── Stat cards ── */}

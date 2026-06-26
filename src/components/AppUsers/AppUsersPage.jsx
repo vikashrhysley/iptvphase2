@@ -4,6 +4,107 @@ import { fetchAppUsers, fetchAppUsersStats, setFilters, clearFilters } from '../
 import AppUserDetail from './AppUserDetail';
 import './AppUsersPage.css';
 
+/* ── Export helpers ─────────────────────────────────────── */
+const EXPORT_COLS = ['Name', 'Email', 'Phone', 'Country', 'Status', 'Email Verified', 'Trial Used', 'Active Devices', 'Subscriptions', 'Last Login', 'Registered'];
+
+const buildUserRows = (users) =>
+  users.map(u => [
+    u.full_name || '—',
+    u.email || '—',
+    u.phone_number || '—',
+    u.country_code || '—',
+    u.status || '—',
+    u.email_verified ? 'Verified' : 'No',
+    u.trial_used ? 'Yes' : 'No',
+    u.active_device_count ?? '—',
+    u.active_subscriptions_count ?? '—',
+    u.last_login_at && u.last_login_at !== 'null'
+      ? new Date(u.last_login_at).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+      : '—',
+    u.created_at
+      ? new Date(u.created_at).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+      : '—',
+  ]);
+
+const exportUsersToExcel = (users) => {
+  import('xlsx').then(({ utils, writeFile }) => {
+    const wb = utils.book_new();
+    const ws = utils.aoa_to_sheet([EXPORT_COLS, ...buildUserRows(users)]);
+    ws['!cols'] = [{ wch: 22 }, { wch: 28 }, { wch: 16 }, { wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 22 }, { wch: 22 }];
+    utils.book_append_sheet(wb, ws, 'App Users');
+    writeFile(wb, `app-users-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  });
+};
+
+const exportUsersToPDF = async (users) => {
+  const { jsPDF } = await import('jspdf');
+  const { default: autoTable } = await import('jspdf-autotable');
+
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+
+  doc.setFontSize(15); doc.setTextColor(30, 30, 60);
+  doc.text('App Users Report', pageW / 2, 14, { align: 'center' });
+  doc.setFontSize(9); doc.setTextColor(120);
+  doc.text(`Generated: ${new Date().toLocaleString()} · ${users.length} users`, pageW / 2, 20, { align: 'center' });
+
+  autoTable(doc, {
+    startY: 26,
+    head: [EXPORT_COLS],
+    body: buildUserRows(users),
+    theme: 'striped',
+    headStyles: { fillColor: [30, 30, 60], textColor: 255, fontSize: 7, fontStyle: 'bold' },
+    bodyStyles: { fontSize: 7, textColor: [40, 40, 80] },
+    alternateRowStyles: { fillColor: [245, 246, 250] },
+    columnStyles: {
+      0: { cellWidth: 24 }, 1: { cellWidth: 34 }, 2: { cellWidth: 22 },
+      3: { cellWidth: 14 }, 4: { cellWidth: 18 }, 5: { cellWidth: 20 },
+      6: { cellWidth: 16 }, 7: { cellWidth: 20 }, 8: { cellWidth: 20 },
+      9: { cellWidth: 28 }, 10: { cellWidth: 28 },
+    },
+    margin: { left: 8, right: 8 },
+  });
+
+  doc.save(`app-users-${new Date().toISOString().slice(0, 10)}.pdf`);
+};
+
+function ExportButton({ onExportPDF, onExportExcel }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+  return (
+    <div className="su-export-wrap" ref={ref}>
+      <button className="su-export-btn" onClick={() => setOpen(o => !o)}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Export
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      {open && (
+        <div className="su-export-menu">
+          <button onClick={() => { onExportPDF(); setOpen(false); }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+            </svg>
+            Export as PDF
+          </button>
+          <button onClick={() => { onExportExcel(); setOpen(false); }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
+            </svg>
+            Export as Excel
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Icons ─────────────────────────────────────────────── */
 const SearchIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -204,6 +305,12 @@ export default function AppUsersPage() {
           <h1 className="su-title">App Users</h1>
           <div className="su-subtitle">End-user (subscriber) accounts — paginated list with filtering and sorting.</div>
         </div>
+        {users.length > 0 && (
+          <ExportButton
+            onExportPDF={() => exportUsersToPDF(users)}
+            onExportExcel={() => exportUsersToExcel(users)}
+          />
+        )}
       </div>
 
       {/* Stats */}
