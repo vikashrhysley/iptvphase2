@@ -1,7 +1,7 @@
 // src/services/api.js
 // Real API — https://iptvapp.studyineurope.xyz/api/v1
 
-const BASE = 'https://iptvapp.studyineurope.xyz/api/v1';
+const BASE = '/api/v1';
 
 // Generic request helper
 const request = async (url, options = {}) => {
@@ -1444,6 +1444,64 @@ export const apiTogglePlanStatus = async (accessToken, id, isActive) => {
     method: 'PATCH',
     headers: { Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify({ is_active: isActive }),
+  });
+  return res.data || res;
+};
+
+// GET /health — combined health check (PostgreSQL + Redis)
+export const apiFetchHealth = async (accessToken) => {
+  const res = await request('/health', {
+    method: 'GET',
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+  });
+  return res.data || res;
+};
+
+// GET /health/db — PostgreSQL latency probe (SELECT 1 round-trip)
+export const apiFetchHealthDb = async (accessToken) => {
+  const res = await request('/health/db', {
+    method: 'GET',
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+  });
+  return res.data || res;
+};
+
+// GET /health/redis — Redis PING latency probe
+export const apiFetchHealthRedis = async (accessToken) => {
+  const res = await request('/health/redis', {
+    method: 'GET',
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+  });
+  return res.data || res;
+};
+
+// GET /health/qdrant — Qdrant vector DB availability check
+export const apiFetchHealthQdrant = async (accessToken) => {
+  const res = await request('/health/qdrant', {
+    method: 'GET',
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+  });
+  return res.data || res;
+};
+
+// GET /metrics — Prometheus-compatible text/plain metrics
+export const apiFetchMetrics = async (accessToken) => {
+  const res = await fetch('/metrics', {
+    method: 'GET',
+    headers: {
+      'Accept': 'text/plain',
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.text();
+};
+
+// GET /version — app version and build metadata
+export const apiFetchVersion = async (accessToken) => {
+  const res = await request('/version', {
+    method: 'GET',
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
   });
   return res.data || res;
 };

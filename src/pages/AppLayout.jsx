@@ -16,6 +16,7 @@ import SubscriptionsPage from '../components/Subscriptions/SubscriptionsPage';
 import PlansPage         from '../components/Plans/PlansPage';
 import AnalyticsPage         from '../components/Analytics/AnalyticsPage';
 import SecurityEventsPage   from '../components/Security/SecurityEventsPage';
+import HealthPage            from '../components/Health/HealthPage';
 
 import './AppLayout.css';
 
@@ -80,6 +81,7 @@ export default function AppLayout() {
       case 'plans':         return <PlansPage />;
       case 'analytics':        return <AnalyticsPage activeTab={analyticsTab} />;
       case 'security_events':  return <SecurityEventsPage />;
+      case 'health':           return <HealthPage />;
       default:        return <DashboardTable />;
 
     }

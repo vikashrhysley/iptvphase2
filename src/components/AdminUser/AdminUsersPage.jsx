@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   clearCreateState,
@@ -255,8 +256,8 @@ function CreateAdminUserModal({ onClose, onCreated }) {
     }
   };
 
-  return (
-    <div className="au-modal-overlay" role="presentation">
+  return createPortal(
+    <div className="au-modal-overlay" role="presentation" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <form className="au-modal" onSubmit={submit}>
         <div className="au-modal-title">
           <PlusIcon /> Create New Admin User
@@ -342,7 +343,8 @@ function CreateAdminUserModal({ onClose, onCreated }) {
           </button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -400,7 +402,7 @@ function AdminUserDetailModal({ userId, onClose, isSuperAdmin, currentUserEmail 
       .slice(0, 2);
   };
 
-  return (
+  return createPortal(
     <div className="au-modal-overlay" role="presentation" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="au-detail-modal">
         <button className="au-detail-close" type="button" onClick={onClose}>
@@ -554,7 +556,8 @@ function AdminUserDetailModal({ userId, onClose, isSuperAdmin, currentUserEmail 
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

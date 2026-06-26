@@ -1,8 +1,143 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchRevenueAnalytics, setRevenueFilters, clearRevenueFilters, fetchUserAnalytics, setUsersFilters, clearUsersFilters, fetchDeviceAnalytics, fetchLicenseAnalytics, fetchFunnelAnalytics, setFunnelFilters, clearFunnelFilters, fetchChurnAnalytics, setChurnFilters, clearChurnFilters, fetchRiskAnalytics, setRiskFilters, clearRiskFilters, fetchSecurityAnalytics, setSecurityFilters, clearSecurityFilters, fetchGeoAnalytics, setGeoLimit, fetchSystemAnalytics } from '../../store/slices/analyticsSlice';
 import SecurityEventsPage from '../Security/SecurityEventsPage';
 import './AnalyticsPage.css';
+
+/* ── Export helpers ─────────────────────────────────────── */
+const fmtCentsRaw = (cents) =>
+  `$${((cents ?? 0) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const buildRevenueAnalyticsRows = (revenue) => {
+  const summary = [
+    ['Total Revenue',    revenue?.total_revenue_display ?? fmtCentsRaw(revenue?.total_revenue_cents)],
+    ['MRR',             revenue?.mrr_display ?? fmtCentsRaw(revenue?.mrr_cents)],
+    ['Revenue Growth',  `${revenue?.revenue_growth_pct ?? 0}%`],
+    ['Total Refunds',   fmtCentsRaw(revenue?.total_refunds_cents)],
+  ];
+  const daily = (revenue?.daily || []).map(d => [
+    d.date,
+    fmtCentsRaw(d.revenue_cents),
+    fmtCentsRaw(d.refunds_cents),
+    (d.successful_transactions ?? 0).toString(),
+    (d.failed_transactions ?? 0).toString(),
+  ]);
+  return { summary, daily };
+};
+
+const exportRevenueAnalyticsToPDF = async (revenue) => {
+  const { default: jsPDF }     = await import('jspdf');
+  const { default: autoTable } = await import('jspdf-autotable');
+  const { summary, daily } = buildRevenueAnalyticsRows(revenue);
+
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+  let y = 14;
+
+  doc.setFontSize(16); doc.setTextColor(30, 30, 60);
+  doc.text('Revenue Analytics Report', pageW / 2, y, { align: 'center' });
+  y += 6;
+  doc.setFontSize(9); doc.setTextColor(120);
+  doc.text(`Generated: ${new Date().toLocaleString()}`, pageW / 2, y + 3, { align: 'center' });
+  y += 12;
+
+  doc.setFontSize(11); doc.setTextColor(40, 40, 80);
+  doc.text('Summary', 14, y); y += 4;
+  autoTable(doc, {
+    startY: y,
+    head: [['Metric', 'Value']],
+    body: summary,
+    theme: 'striped',
+    headStyles: { fillColor: [30, 30, 60], textColor: 255, fontSize: 9 },
+    bodyStyles: { fontSize: 9, textColor: [40, 40, 80] },
+    alternateRowStyles: { fillColor: [245, 246, 250] },
+    columnStyles: { 0: { cellWidth: 80 }, 1: { cellWidth: 80 } },
+    margin: { left: 14, right: 14 },
+  });
+  y = doc.lastAutoTable.finalY + 10;
+
+  if (daily.length > 0) {
+    if (y > 220) { doc.addPage(); y = 14; }
+    doc.setFontSize(11); doc.setTextColor(40, 40, 80);
+    doc.text('Daily Revenue Breakdown', 14, y); y += 4;
+    autoTable(doc, {
+      startY: y,
+      head: [['Date', 'Revenue', 'Refunds', 'Successful', 'Failed']],
+      body: daily,
+      theme: 'striped',
+      headStyles: { fillColor: [30, 30, 60], textColor: 255, fontSize: 8 },
+      bodyStyles: { fontSize: 8, textColor: [40, 40, 80] },
+      alternateRowStyles: { fillColor: [245, 246, 250] },
+      columnStyles: { 0: { cellWidth: 30 }, 1: { cellWidth: 35 }, 2: { cellWidth: 35 }, 3: { cellWidth: 30 }, 4: { cellWidth: 28 } },
+      margin: { left: 14, right: 14 },
+    });
+  }
+
+  doc.save(`revenue-analytics-${new Date().toISOString().slice(0, 10)}.pdf`);
+};
+
+const exportRevenueAnalyticsToExcel = (revenue) => {
+  import('xlsx').then(({ utils, writeFile }) => {
+    const { summary, daily } = buildRevenueAnalyticsRows(revenue);
+    const wb = utils.book_new();
+
+    const wsSummary = utils.aoa_to_sheet([['Metric', 'Value'], ...summary]);
+    wsSummary['!cols'] = [{ wch: 26 }, { wch: 22 }];
+    utils.book_append_sheet(wb, wsSummary, 'Summary');
+
+    if (daily.length > 0) {
+      const wsDaily = utils.aoa_to_sheet([
+        ['Date', 'Revenue', 'Refunds', 'Successful Txns', 'Failed Txns'],
+        ...daily,
+      ]);
+      wsDaily['!cols'] = [{ wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 14 }];
+      utils.book_append_sheet(wb, wsDaily, 'Daily Breakdown');
+    }
+
+    writeFile(wb, `revenue-analytics-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  });
+};
+
+function AnExportButton({ onExportPDF, onExportExcel }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  return (
+    <div className="an-export-wrap" ref={ref}>
+      <button className="an-export-btn" onClick={() => setOpen(o => !o)}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Export
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+      {open && (
+        <div className="an-export-menu">
+          <button onClick={() => { onExportPDF(); setOpen(false); }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+            </svg>
+            Export as PDF
+          </button>
+          <button onClick={() => { onExportExcel(); setOpen(false); }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
+            </svg>
+            Export as Excel
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* ── Helpers ────────────────────────────────────────────── */
 const fmtCents = (cents) =>
@@ -2246,6 +2381,8 @@ const TAB_META = {
 
 export default function AnalyticsPage({ activeTab = 'revenue' }) {
   const meta = TAB_META[activeTab] || TAB_META.revenue;
+  const revenue = useSelector(s => s.analytics.revenue);
+
   return (
     <div className="an-page">
       <div className="an-header">
@@ -2253,6 +2390,12 @@ export default function AnalyticsPage({ activeTab = 'revenue' }) {
           <h1 className="an-title">{meta.title}</h1>
           <div className="an-subtitle">{meta.subtitle}</div>
         </div>
+        {activeTab === 'revenue' && revenue && (
+          <AnExportButton
+            onExportPDF={() => exportRevenueAnalyticsToPDF(revenue)}
+            onExportExcel={() => exportRevenueAnalyticsToExcel(revenue)}
+          />
+        )}
       </div>
 
       {activeTab === 'revenue' && <RevenueAnalytics />}
