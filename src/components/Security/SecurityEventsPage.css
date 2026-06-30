@@ -14,7 +14,7 @@
   justify-content: space-between;
   gap: 16px;
 }
-.se-header-left { display: flex; align-items: center; gap: 14px; }
+.se-header-left { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; }
 .se-header-icon {
   width: 44px; height: 44px;
   border-radius: 12px;
@@ -30,8 +30,9 @@
   color: var(--text-primary); margin: 0;
   font-family: var(--font-display);
   letter-spacing: -0.02em;
+  text-align: left;
 }
-.se-subtitle { font-size: 0.78rem; color: var(--text-muted); margin: 2px 0 0; }
+.se-subtitle { font-size: 0.78rem; color: var(--text-muted); margin: 2px 0 0; text-align: left; }
 
 .se-header-total {
   display: flex; flex-direction: column; align-items: flex-end;
