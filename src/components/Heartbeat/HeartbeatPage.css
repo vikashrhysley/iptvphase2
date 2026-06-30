@@ -276,7 +276,7 @@
   min-width: 1120px;
 }
 
-.hb-col-date { width: 96px; }
+.hb-col-date { width: 168px; min-width: 168px; }
 .hb-col-device { width: 118px; }
 .hb-col-user { width: 260px; }
 .hb-col-status { width: 116px; }
@@ -325,7 +325,7 @@
 
 .hb-date-text {
   display: block;
-  max-width: 80px;
+  white-space: nowrap;
   color: var(--text-secondary);
   line-height: 1.35;
 }

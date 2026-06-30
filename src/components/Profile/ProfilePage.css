@@ -605,6 +605,35 @@
   text-transform: uppercase;
 }
 
+.pp-pw-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.pp-pw-wrap input {
+  flex: 1;
+  padding-right: 44px !important;
+}
+
+.pp-eye-btn {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  transition: color 0.15s;
+}
+.pp-eye-btn:hover { color: var(--text-primary); }
+
 .pp-modal-field input {
   width: 100%;
   min-height: 48px;

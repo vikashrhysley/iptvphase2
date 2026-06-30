@@ -1,12 +1,16 @@
 // src/services/api.js
 // Real API — https://iptvapp.studyineurope.xyz/api/v1
 
-const BASE = '/api/v1';
+const ORIGIN = import.meta.env.VITE_API_ORIGIN || '';
+const BASE = `${ORIGIN}/api/v1`;
 
 // Generic request helper
 const request = async (url, options = {}) => {
   const { headers: extraHeaders = {}, ...restOptions } = options;
-  const res = await fetch(url, {
+  const fullUrl = url.startsWith('/') && !url.startsWith(ORIGIN) && ORIGIN
+    ? `${ORIGIN}${url}`
+    : url;
+  const res = await fetch(fullUrl, {
     ...restOptions,
     headers: {
       'Content-Type':  'application/json',
@@ -1486,7 +1490,7 @@ export const apiFetchHealthQdrant = async (accessToken) => {
 
 // GET /metrics — Prometheus-compatible text/plain metrics
 export const apiFetchMetrics = async (accessToken) => {
-  const res = await fetch('/metrics', {
+  const res = await fetch(`${ORIGIN}/metrics`, {
     method: 'GET',
     headers: {
       'Accept': 'text/plain',

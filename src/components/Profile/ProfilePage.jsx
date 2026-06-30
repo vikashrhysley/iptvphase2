@@ -12,6 +12,8 @@ const LockIcon = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="non
 const RefreshIcon = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>;
 const CheckIcon = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>;
 const XIcon = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+const EyeIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>;
+const EyeOffIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>;
 
 const fmtDateTime = (iso) => {
   if (!iso || iso === 'null') return '-';
@@ -90,6 +92,8 @@ function ChangePasswordModal({ accessToken, onClose, onSuccess }) {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [show, setShow] = useState({ current: false, newPw: false, confirm: false });
+  const toggleShow = (key) => setShow(prev => ({ ...prev, [key]: !prev[key] }));
 
   const updateField = (key, value) => {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -143,35 +147,50 @@ function ChangePasswordModal({ accessToken, onClose, onSuccess }) {
         <div className="pp-modal-grid">
           <label className="pp-modal-field">
             <span>Current Password</span>
-            <input
-              type="password"
-              autoComplete="current-password"
-              value={form.current_password}
-              onChange={event => updateField('current_password', event.target.value)}
-              placeholder="Enter current password"
-            />
+            <div className="pp-pw-wrap">
+              <input
+                type={show.current ? 'text' : 'password'}
+                autoComplete="current-password"
+                value={form.current_password}
+                onChange={event => updateField('current_password', event.target.value)}
+                placeholder="Enter current password"
+              />
+              <button type="button" className="pp-eye-btn" onClick={() => toggleShow('current')} tabIndex={-1} aria-label="Toggle visibility">
+                {show.current ? <EyeOffIcon /> : <EyeIcon />}
+              </button>
+            </div>
           </label>
 
           <label className="pp-modal-field">
             <span>New Password</span>
-            <input
-              type="password"
-              autoComplete="new-password"
-              value={form.new_password}
-              onChange={event => updateField('new_password', event.target.value)}
-              placeholder="Enter new password"
-            />
+            <div className="pp-pw-wrap">
+              <input
+                type={show.newPw ? 'text' : 'password'}
+                autoComplete="new-password"
+                value={form.new_password}
+                onChange={event => updateField('new_password', event.target.value)}
+                placeholder="Enter new password"
+              />
+              <button type="button" className="pp-eye-btn" onClick={() => toggleShow('newPw')} tabIndex={-1} aria-label="Toggle visibility">
+                {show.newPw ? <EyeOffIcon /> : <EyeIcon />}
+              </button>
+            </div>
           </label>
 
           <label className="pp-modal-field">
             <span>Confirm Password</span>
-            <input
-              type="password"
-              autoComplete="new-password"
-              value={form.confirm_password}
-              onChange={event => updateField('confirm_password', event.target.value)}
-              placeholder="Confirm new password"
-            />
+            <div className="pp-pw-wrap">
+              <input
+                type={show.confirm ? 'text' : 'password'}
+                autoComplete="new-password"
+                value={form.confirm_password}
+                onChange={event => updateField('confirm_password', event.target.value)}
+                placeholder="Confirm new password"
+              />
+              <button type="button" className="pp-eye-btn" onClick={() => toggleShow('confirm')} tabIndex={-1} aria-label="Toggle visibility">
+                {show.confirm ? <EyeOffIcon /> : <EyeIcon />}
+              </button>
+            </div>
           </label>
         </div>
 
