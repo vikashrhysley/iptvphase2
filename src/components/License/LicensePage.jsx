@@ -571,6 +571,7 @@ export default function LicensePage() {
             <table className="lc-table">
               <thead>
                 <tr>
+                  <th>License ID</th>
                   <th>User</th>
                   <th>Device</th>
                   <th>Plan</th>
@@ -590,6 +591,9 @@ export default function LicensePage() {
                   const days = l.days_remaining;
                   return (
                     <tr key={lid} className={l.is_expiring_soon ? 'lc-row-warn' : ''}>
+                      <td>
+                        <span className="lc-license-id" title={lid}>{lid ? lid.slice(0, 12) + '…' : '—'}</span>
+                      </td>
                       <td className="lc-clickable" onClick={() => lid && setDetailLicenseId(lid)}>
                         <div className="lc-user-email">{l.user_email || '—'}</div>
                         {l.user_full_name && <div className="lc-user-name">{l.user_full_name}</div>}
@@ -644,7 +648,7 @@ export default function LicensePage() {
                     </tr>
                   );
                 }) : (
-                  <tr><td colSpan={canEdit ? 10 : 9} className="lc-empty">No licenses found.</td></tr>
+                  <tr><td colSpan={canEdit ? 11 : 10} className="lc-empty">No licenses found.</td></tr>
                 )}
               </tbody>
             </table>

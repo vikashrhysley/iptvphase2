@@ -1,24 +1,38 @@
 // src/pages/AppLayout.js
-import React, { useState } from 'react';
+import React, { Suspense, useState } from 'react';
 import Sidebar from '../components/Layout/Sidebar';
 import Header from '../components/Layout/Header';
-import DashboardTable from '../components/Dashboard/DashboardTable';
-import DevicePage from '../components/Device/DevicePage';
-import HeartbeatPage from '../components/Heartbeat/HeartbeatPage';
-import LicensePage from '../components/License/LicensePage';
-import ProfilePage from '../components/Profile/ProfilePage';
-import TrialPage from '../components/Trial/TrialPage';
-import AdminUsersPage from '../components/AdminUser/AdminUsersPage';
-import AppUsersPage   from '../components/AppUsers/AppUsersPage';
-import AuditPage      from '../components/Audit/AuditPage';
-import RbacPage       from '../components/Rbac/RbacPage';
-import SubscriptionsPage from '../components/Subscriptions/SubscriptionsPage';
-import PlansPage         from '../components/Plans/PlansPage';
-import AnalyticsPage         from '../components/Analytics/AnalyticsPage';
-import SecurityEventsPage   from '../components/Security/SecurityEventsPage';
-import HealthPage            from '../components/Health/HealthPage';
+
+const DashboardTable     = React.lazy(() => import('../components/Dashboard/DashboardTable'));
+const DevicePage         = React.lazy(() => import('../components/Device/DevicePage'));
+const HeartbeatPage      = React.lazy(() => import('../components/Heartbeat/HeartbeatPage'));
+const LicensePage        = React.lazy(() => import('../components/License/LicensePage'));
+const ProfilePage        = React.lazy(() => import('../components/Profile/ProfilePage'));
+const TrialPage          = React.lazy(() => import('../components/Trial/TrialPage'));
+const AdminUsersPage     = React.lazy(() => import('../components/AdminUser/AdminUsersPage'));
+const AppUsersPage       = React.lazy(() => import('../components/AppUsers/AppUsersPage'));
+const AuditPage          = React.lazy(() => import('../components/Audit/AuditPage'));
+const RbacPage           = React.lazy(() => import('../components/Rbac/RbacPage'));
+const SubscriptionsPage  = React.lazy(() => import('../components/Subscriptions/SubscriptionsPage'));
+const PlansPage          = React.lazy(() => import('../components/Plans/PlansPage'));
+const AnalyticsPage      = React.lazy(() => import('../components/Analytics/AnalyticsPage'));
+const SecurityEventsPage = React.lazy(() => import('../components/Security/SecurityEventsPage'));
+const HealthPage         = React.lazy(() => import('../components/Health/HealthPage'));
 
 import './AppLayout.css';
+
+function PageLoadingFallback() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
+      <div style={{
+        width: 36, height: 36, borderRadius: '50%',
+        border: '3px solid rgba(255,255,255,0.08)',
+        borderTopColor: 'var(--accent-primary, #00d4ff)',
+        animation: 'spin 0.7s linear infinite',
+      }} />
+    </div>
+  );
+}
 
 class PageErrorBoundary extends React.Component {
   constructor(props) {
@@ -110,7 +124,9 @@ export default function AppLayout() {
       />
       <main className="app-main" style={{ marginLeft: mainLeft }}>
         <PageErrorBoundary key={activePage}>
-          {renderPage()}
+          <Suspense fallback={<PageLoadingFallback />}>
+            {renderPage()}
+          </Suspense>
         </PageErrorBoundary>
       </main>
     </div>
