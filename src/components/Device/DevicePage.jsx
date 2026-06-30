@@ -78,12 +78,13 @@ const TYPE_CONFIG = {
 };
 
 const TYPE_TABS = [
-  { key: '',           label: 'All' },
-  { key: 'phone',      label: 'Phone' },
-  { key: 'tablet',     label: 'Tablet' },
-  { key: 'android_tv', label: 'Android TV' },
-  { key: 'desktop',    label: 'Desktop' },
-  { key: 'smart_tv',   label: 'Smart TV' },
+  { key: '',                label: 'All' },
+  { key: 'phone',           label: 'Phone' },
+  { key: 'tablet',          label: 'Tablet' },
+  { key: 'android_tv',      label: 'Android TV' },
+  { key: 'desktop',         label: 'Desktop' },
+  { key: 'smart_tv',        label: 'Smart TV' },
+  { key: 'streaming_stick', label: 'Streaming' },
 ];
 
 /* ── Helpers ────────────────────────────────────────────── */
@@ -264,7 +265,7 @@ function DeviceTableRow({ device, canEdit, onToggle, onRevoke, actionLoading, on
         <div style={{ fontSize:'0.82rem', fontWeight:500 }}>{userName}</div>
         {device.user_email && <div style={{ fontSize:'0.7rem', color:'var(--text-muted)' }}>{device.user_email}</div>}
       </td>
-      <td><span style={{ fontSize:'0.75rem', background:tc.bg, color:tc.color, padding:'3px 10px', borderRadius:12, fontWeight:700, border:`1px solid ${tc.border}` }}>{tc.icon} {tc.label}</span></td>
+      <td><span style={{ fontSize:'0.75rem', background:tc.bg, color:tc.color, padding:'3px 10px', borderRadius:12, fontWeight:700, border:`1px solid ${tc.border}`, whiteSpace:'nowrap', display:'inline-flex', alignItems:'center', gap:5 }}>{tc.icon} {tc.label}</span></td>
       <td style={{ fontSize:'0.8rem', color:'var(--text-secondary)' }}>{location}</td>
       <td style={{ fontSize:'0.8rem', color:'var(--text-muted)' }}>{timeAgo(device.last_heartbeat_at || device.lastSeen)}</td>
       <td>

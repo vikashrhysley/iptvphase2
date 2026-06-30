@@ -1,7 +1,6 @@
 // src/components/Layout/Sidebar.js
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { apiGetProfile } from '../../services/api';
 import { logoutUser } from '../../store/slices/authSlice';
 import './Sidebar.css';
 
@@ -204,33 +203,10 @@ export default function Sidebar({
   onNavigate,
 }) {
   const dispatch = useDispatch();
-  const { accessToken, user, loading: logoutLoading } = useSelector(s => s.auth);
+  const { user, loading: logoutLoading } = useSelector(s => s.auth);
   const [openSubmenu, setOpenSubmenu] = useState(null);
-  const [sidebarProfile, setSidebarProfile] = useState(null);
 
-  useEffect(() => {
-    let active = true;
-    const timer = setTimeout(async () => {
-      if (!accessToken) {
-        if (active) setSidebarProfile(null);
-        return;
-      }
-
-      try {
-        const data = await apiGetProfile(accessToken);
-        if (active) setSidebarProfile(data);
-      } catch {
-        if (active) setSidebarProfile(null);
-      }
-    }, 0);
-
-    return () => {
-      active = false;
-      clearTimeout(timer);
-    };
-  }, [accessToken]);
-
-  const profileUser = sidebarProfile || user || {};
+  const profileUser = user || {};
   const displayRole = profileUser.role_display || roleLabel(profileUser.role);
   const displayName = profileUser.full_name || profileUser.fullName || profileUser.name || profileUser.username || profileUser.email || displayRole;
   const avatarUrl = profileUser.avatar_url || profileUser.avatarUrl;

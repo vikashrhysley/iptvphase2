@@ -15,7 +15,8 @@ export const fetchDashboardStats = createAsyncThunk(
     } catch (err) {
       return rejectWithValue(err.message);
     }
-  }
+  },
+  { condition: (_, { getState }) => !getState().dashboard.loading }
 );
 
 export const fetchDashboardOverview = createAsyncThunk(
@@ -27,7 +28,8 @@ export const fetchDashboardOverview = createAsyncThunk(
     } catch (err) {
       return rejectWithValue(err.message);
     }
-  }
+  },
+  { condition: (_, { getState }) => !getState().dashboard.overviewLoading }
 );
 
 export const fetchDashboardRevenue = createAsyncThunk(
@@ -39,7 +41,8 @@ export const fetchDashboardRevenue = createAsyncThunk(
     } catch (err) {
       return rejectWithValue(err.message);
     }
-  }
+  },
+  { condition: (_, { getState }) => !getState().dashboard.revenueLoading }
 );
 
 const dashboardSlice = createSlice({
