@@ -517,9 +517,14 @@ export default function DashboardTable({ activeDashboardTab = 'liveStats' }) {
 
   useEffect(() => {
     dispatch(fetchDashboardStats());
-    dispatch(fetchDashboardOverview());
     dispatch(fetchDashboardRevenue());
   }, [dispatch]);
+
+  useEffect(() => {
+    if (activeDashboardTab === 'overview') {
+      dispatch(fetchDashboardOverview());
+    }
+  }, [activeDashboardTab, dispatch]);
 
   const statCards = useMemo(() => buildLiveStats(stats, revenue), [stats, revenue]);
   const revenueCards = REVENUE_CARDS.map(card => ({

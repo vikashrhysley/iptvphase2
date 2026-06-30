@@ -1,5 +1,4 @@
 /* src/styles/global.css */
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap');
 
 :root {
   /* Core Palette - Dark industrial with electric accents */
@@ -77,6 +76,14 @@
   --shadow-card:     0 1px 8px rgba(0, 0, 0, 0.08);
   --shadow-elevated: 0 4px 24px rgba(0, 0, 0, 0.12);
   --shadow-glow:     0 0 20px rgba(2, 132, 199, 0.15);
+}
+
+/* Promote animated elements to GPU compositor layer */
+[class*="fade"], [class*="slide"], [class*="spin"],
+.dc-status-dot, .pp-mini-spin, .pp-spinner,
+.loading-spinner, .skeleton, [class*="pulse"],
+[class*="blink"], [class*="bounce"] {
+  will-change: transform, opacity;
 }
 
 /* Smooth theme transition on all elements */

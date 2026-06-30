@@ -152,6 +152,18 @@
 .lc-row-warn td { background:rgba(245,158,11,0.03); }
 
 .lc-mono  { font-family:monospace; font-size:0.78rem; color:var(--text-muted); }
+.lc-license-id {
+  font-family: monospace;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 2px 7px;
+  white-space: nowrap;
+  cursor: default;
+  letter-spacing: 0.02em;
+}
 .lc-id    { cursor:default; }
 .lc-nowrap { white-space:nowrap; }
 .lc-center { text-align:center; }
