@@ -46,7 +46,11 @@ export const fetchTrialConfig = createAsyncThunk('trial/fetch',
       const { accessToken } = getState().auth;
       return await apiGetTrialConfig(accessToken);
     } catch (err) { return rejectWithValue(err.message); }
-  }
+  },
+  { condition: (_, { getState }) => {
+    const { loading, config } = getState().trial;
+    return !loading && !config;
+  }}
 );
 
 export const updateTrialConfig = createAsyncThunk('trial/update',
@@ -64,7 +68,11 @@ export const fetchSystemConfig = createAsyncThunk('trial/fetchSystemConfig',
       const { accessToken } = getState().auth;
       return await apiGetSystemConfig(accessToken);
     } catch (err) { return rejectWithValue(err.message); }
-  }
+  },
+  { condition: (_, { getState }) => {
+    const { systemConfigLoading, systemConfig } = getState().trial;
+    return !systemConfigLoading && systemConfig.length === 0;
+  }}
 );
 
 export const updateSystemConfigKey = createAsyncThunk('trial/updateSystemConfigKey',

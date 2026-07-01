@@ -544,10 +544,16 @@ export default function DashboardTable({ activeDashboardTab = 'liveStats' }) {
             onExportPDF={() => exportToPDF(statCards)}
             onExportExcel={() => exportToExcel(statCards)}
           />
-          {loading ? (
-            <div className="table-loading">
-              <span className="loading-spinner" style={{ width: 28, height: 28 }} />
-              <span>Loading dashboard stats...</span>
+          {loading && !stats ? (
+            <div className="dashboard-stats">
+              {[1,2,3,4,5,6].map(i => (
+                <div key={i} className="stat-card dash-skel-card">
+                  <div className="dash-skel-label" />
+                  <div className="dash-skel-val" />
+                  <div className="dash-skel-row" />
+                  <div className="dash-skel-row short" />
+                </div>
+              ))}
             </div>
           ) : error ? null : (
             <div className="dashboard-stats">

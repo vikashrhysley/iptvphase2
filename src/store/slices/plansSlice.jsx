@@ -7,7 +7,11 @@ export const fetchSubscriptionPlans = createAsyncThunk('plans/fetchAll',
       const { accessToken } = getState().auth;
       return await apiFetchSubscriptionPlans(accessToken);
     } catch (err) { return rejectWithValue(err.message); }
-  }
+  },
+  { condition: (_, { getState }) => {
+    const { loading, plans } = getState().plans;
+    return !loading && plans.length === 0;
+  }}
 );
 
 export const fetchPlanDetail = createAsyncThunk('plans/fetchDetail',

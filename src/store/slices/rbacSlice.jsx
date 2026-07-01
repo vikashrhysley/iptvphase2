@@ -18,14 +18,22 @@ export const fetchRbacRoles = createAsyncThunk('rbac/fetchRoles',
   async (_, { getState, rejectWithValue }) => {
     try { return await apiGetRbacRoles(getState().auth.accessToken); }
     catch (err) { return rejectWithValue(err.message); }
-  }
+  },
+  { condition: (_, { getState }) => {
+    const { rolesLoading, roles } = getState().rbac;
+    return !rolesLoading && roles.length === 0;
+  }}
 );
 
 export const fetchRbacModules = createAsyncThunk('rbac/fetchModules',
   async (_, { getState, rejectWithValue }) => {
     try { return await apiGetRbacModules(getState().auth.accessToken); }
     catch (err) { return rejectWithValue(err.message); }
-  }
+  },
+  { condition: (_, { getState }) => {
+    const { modulesLoading, modules } = getState().rbac;
+    return !modulesLoading && modules.length === 0;
+  }}
 );
 
 export const createRbacRole = createAsyncThunk('rbac/createRole',

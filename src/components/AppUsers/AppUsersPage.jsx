@@ -589,7 +589,7 @@ export default function AppUsersPage() {
 
       {/* Table */}
       <div className="su-table-wrap">
-        {loading ? (
+        {loading && !users.length ? (
           <div className="su-loading-wrap">Loading subscribers…</div>
         ) : error ? (
           <div className="su-error-wrap">{error}</div>

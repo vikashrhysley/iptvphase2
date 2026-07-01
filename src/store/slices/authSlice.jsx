@@ -18,6 +18,12 @@ const clearTokens = () => {
   localStorage.removeItem(LS_REFRESH);
 };
 
+// Read tokens synchronously at module load — used to set optimistic initial state
+// so the app renders immediately without waiting for the token-status API call.
+const _initAccess  = localStorage.getItem(LS_ACCESS)  || null;
+const _initRefresh = localStorage.getItem(LS_REFRESH) || null;
+const _hasTokens   = Boolean(_initAccess && _initRefresh);
+
 // ── Thunks ─────────────────────────────────────────────────
 
 // Startup check — reads localStorage tokens, calls POST /auth/token-status,
@@ -26,6 +32,11 @@ export const checkTokenStatus = createAsyncThunk('auth/checkTokenStatus',
   async (_, { rejectWithValue }) => {
     const accessToken  = localStorage.getItem(LS_ACCESS)  || '';
     const refreshToken = localStorage.getItem(LS_REFRESH) || '';
+
+    // No tokens — skip API round-trip, go straight to login immediately
+    if (!accessToken && !refreshToken) {
+      return { nextStep: 'login' };
+    }
 
     try {
       const status   = await apiTokenStatus(accessToken, refreshToken);
@@ -175,10 +186,13 @@ const done = (s, a) => {
 const authSlice = createSlice({
   name: 'auth',
   initialState: {
-    step: 1,               // 1=login 2=QR-setup 3=OTP-verify 4=authenticated
+    // Optimistic auth: if tokens are in localStorage, assume authenticated immediately.
+    // checkTokenStatus validates in background and corrects if expired/invalid.
+    step:          _hasTokens ? 4 : 1,
+    tokenChecked:  true,   // always true — no boot screen blocking render
+    accessToken:   _initAccess,
+    refreshToken:  _initRefresh,
     tempToken:         null,
-    accessToken:       null,
-    refreshToken:      null,
     user:              null,
     twoFactorEnabled:  false,
     requiresTotp:      false,
@@ -188,7 +202,6 @@ const authSlice = createSlice({
     secret:            null,
     loading:           false,
     error:             null,
-    tokenChecked:      false, // true once the startup token-status check has resolved
     tokenCheckLoading: false,
   },
   reducers: {

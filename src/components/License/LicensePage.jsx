@@ -562,7 +562,7 @@ export default function LicensePage() {
 
       {/* ── Table ── */}
       <div className="lc-table-wrap">
-        {loading ? (
+        {loading && !licenses.length ? (
           <div className="lc-loading">Loading licenses…</div>
         ) : error ? (
           <div className="lc-error">{error}</div>

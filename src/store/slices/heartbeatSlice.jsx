@@ -28,7 +28,11 @@ export const fetchHeartbeatStats = createAsyncThunk(
     } catch (err) {
       return rejectWithValue(err.message);
     }
-  }
+  },
+  { condition: (_, { getState }) => {
+    const { statsLoading, stats } = getState().heartbeat;
+    return !statsLoading && !stats;
+  }}
 );
 
 export const fetchHeartbeatLogs = createAsyncThunk(

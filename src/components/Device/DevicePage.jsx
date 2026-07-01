@@ -536,7 +536,7 @@ export default function DevicePage() {
       </div>
 
       {/* ── Content ── */}
-      {loading ? (
+      {loading && !devices.length ? (
         <div className="device-loading">
           <div className="device-loading-spinner" />
           Loading devices…

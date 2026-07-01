@@ -19,7 +19,11 @@ export const fetchAdminUsersStats = createAsyncThunk(
     } catch (err) {
       return rejectWithValue(err.message);
     }
-  }
+  },
+  { condition: (_, { getState }) => {
+    const { statsLoading, stats } = getState().adminUsers;
+    return !statsLoading && !stats;
+  }}
 );
 
 export const fetchAdminUsers = createAsyncThunk(
@@ -84,7 +88,11 @@ export const fetchAssignableRoles = createAsyncThunk(
     } catch (err) {
       return rejectWithValue(err.message);
     }
-  }
+  },
+  { condition: (_, { getState }) => {
+    const { assignableRolesLoading, assignableRoles } = getState().adminUsers;
+    return !assignableRolesLoading && assignableRoles.length === 0;
+  }}
 );
 
 const adminUsersSlice = createSlice({
