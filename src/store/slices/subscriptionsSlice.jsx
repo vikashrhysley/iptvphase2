@@ -17,7 +17,11 @@ export const fetchSubscriptions = createAsyncThunk('subscriptions/fetchAll',
       const { accessToken } = getState().auth;
       return await apiFetchSubscriptions(accessToken, params);
     } catch (err) { return rejectWithValue(err.message); }
-  }
+  },
+  { condition: (_, { getState }) => {
+    const { loading, lastFetched } = getState().subscriptions;
+    return !loading && (!lastFetched || Date.now() - lastFetched > 30_000);
+  }}
 );
 
 export const fetchSubscriptionDetail = createAsyncThunk('subscriptions/fetchDetail',
@@ -99,10 +103,11 @@ const subscriptionsSlice = createSlice({
     extendedDaysRemaining: null,
 
     filters: { ...DEFAULT_FILTERS },
+    lastFetched: null,
   },
   reducers: {
-    setSubscriptionFilters(s, a) { s.filters = { ...s.filters, ...a.payload }; },
-    clearSubscriptionFilters(s)  { s.filters = { ...DEFAULT_FILTERS }; },
+    setSubscriptionFilters(s, a) { s.filters = { ...s.filters, ...a.payload }; s.lastFetched = null; },
+    clearSubscriptionFilters(s)  { s.filters = { ...DEFAULT_FILTERS }; s.lastFetched = null; },
     clearSubscriptionDetail(s)   {
       s.selectedSubscription = null;
       s.detailError = null;
@@ -142,6 +147,7 @@ const subscriptionsSlice = createSlice({
     b.addCase(fetchSubscriptions.pending, (s) => { s.loading = true; s.error = null; })
      .addCase(fetchSubscriptions.fulfilled, (s, a) => {
        s.loading       = false;
+       s.lastFetched   = Date.now();
        s.subscriptions = a.payload.subscriptions;
        s.total         = a.payload.total;
        s.page          = a.payload.page;

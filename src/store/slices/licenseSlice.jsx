@@ -26,7 +26,11 @@ export const fetchLicenses = createAsyncThunk('licenses/fetchAll',
       const { accessToken } = getState().auth;
       return await apiFetchLicenses(accessToken, params);
     } catch (err) { return rejectWithValue(err.message); }
-  }
+  },
+  { condition: (_, { getState }) => {
+    const { loading, lastFetched } = getState().licenses;
+    return !loading && (!lastFetched || Date.now() - lastFetched > 30_000);
+  }}
 );
 
 export const fetchLicenseStats = createAsyncThunk('licenses/fetchStats',
@@ -35,7 +39,11 @@ export const fetchLicenseStats = createAsyncThunk('licenses/fetchStats',
       const { accessToken } = getState().auth;
       return await apiFetchLicenseStats(accessToken);
     } catch (err) { return rejectWithValue(err.message); }
-  }
+  },
+  { condition: (_, { getState }) => {
+    const { statsLoading, stats } = getState().licenses;
+    return !statsLoading && !stats;
+  }}
 );
 
 export const fetchLicenseDetail = createAsyncThunk('licenses/fetchDetail',
@@ -99,6 +107,7 @@ const licenseSlice = createSlice({
     editModal:     null,
 
     filters: { ...DEFAULT_FILTERS },
+    lastFetched: null,
   },
   reducers: {
     clearToast(s)         { s.toast = null; },
@@ -106,8 +115,8 @@ const licenseSlice = createSlice({
     openEditModal(s, a)   { s.editModal = a.payload; },
     closeEditModal(s)     { s.editModal = null; },
     clearDetail(s)        { s.selectedDetail = null; s.detailLoading = false; s.detailError = null; },
-    setLicenseFilters(s, a) { s.filters = { ...s.filters, ...a.payload }; },
-    clearLicenseFilters(s)  { s.filters = { ...DEFAULT_FILTERS }; },
+    setLicenseFilters(s, a) { s.filters = { ...s.filters, ...a.payload }; s.lastFetched = null; },
+    clearLicenseFilters(s)  { s.filters = { ...DEFAULT_FILTERS }; s.lastFetched = null; },
   },
   extraReducers: (b) => {
     b.addCase(fetchExpiringLicenses.pending,   s => { s.loading = true;  s.error = null; })
@@ -122,7 +131,8 @@ const licenseSlice = createSlice({
 
     b.addCase(fetchLicenses.pending,   s => { s.loading = true;  s.error = null; })
      .addCase(fetchLicenses.fulfilled, (s, a) => {
-       s.loading  = false;
+       s.loading     = false;
+       s.lastFetched = Date.now();
        s.licenses = a.payload.licenses;
        s.total    = a.payload.total;
        s.page     = a.payload.page;

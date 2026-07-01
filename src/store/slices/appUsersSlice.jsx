@@ -72,7 +72,11 @@ export const fetchAppUsersStats = createAsyncThunk(
     } catch (err) {
       return rejectWithValue(err.message);
     }
-  }
+  },
+  { condition: (_, { getState }) => {
+    const { statsLoading, stats } = getState().appUsers;
+    return !statsLoading && !stats;
+  }}
 );
 
 export const fetchAppUsers = createAsyncThunk(
@@ -84,7 +88,11 @@ export const fetchAppUsers = createAsyncThunk(
     } catch (err) {
       return rejectWithValue(err.message);
     }
-  }
+  },
+  { condition: (_, { getState }) => {
+    const { loading, lastFetched } = getState().appUsers;
+    return !loading && (!lastFetched || Date.now() - lastFetched > 30_000);
+  }}
 );
 
 const appUsersSlice = createSlice({
@@ -150,10 +158,12 @@ const appUsersSlice = createSlice({
       page: 1,
       page_size: DEFAULT_PAGE_SIZE,
     },
+    lastFetched: null,
   },
   reducers: {
     setFilters(state, action) {
       state.filters = { ...state.filters, ...action.payload };
+      state.lastFetched = null;
     },
     clearSelectedUser(state) {
       state.selectedUser  = null;
@@ -317,7 +327,8 @@ const appUsersSlice = createSlice({
         const rows = Array.isArray(p?.users) ? p.users
           : Array.isArray(p?.data) ? p.data
           : Array.isArray(p) ? p : [];
-        s.loading  = false;
+        s.loading     = false;
+        s.lastFetched = Date.now();
         s.users    = rows;
         s.total    = p?.total ?? p?.count ?? p?.total_count ?? meta.total ?? rows.length;
         s.page     = p?.page  ?? p?.current_page ?? meta.page ?? s.filters.page;

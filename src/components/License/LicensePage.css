@@ -332,6 +332,7 @@
 .lc-mini-spin { width:13px; height:13px; border:2px solid rgba(0,16,24,0.25); border-top-color:#001018; border-radius:50%; animation:spin 0.7s linear infinite; }
 
 @media (max-width:600px) {
+  .lc-header      { flex-direction:column; align-items:flex-start; gap:10px; }
   .lc-cards-row-4 { grid-template-columns:1fr; }
   .lc-ov-chips.two-col { grid-template-columns:1fr; }
   .lc-toolbar    { flex-direction:column; align-items:stretch; }

@@ -18,7 +18,11 @@ export const fetchAuditLogs = createAsyncThunk('audit/fetchLogs',
       const { accessToken } = getState().auth;
       return await apiFetchAuditLogs(accessToken, params);
     } catch (err) { return rejectWithValue(err.message); }
-  }
+  },
+  { condition: (_, { getState }) => {
+    const { loading, lastFetched } = getState().audit;
+    return !loading && (!lastFetched || Date.now() - lastFetched > 30_000);
+  }}
 );
 
 export const fetchAuditLogDetail = createAsyncThunk('audit/fetchDetail',
@@ -40,6 +44,7 @@ const auditSlice = createSlice({
     loading:       false,
     error:         null,
     filters:       { ...DEFAULT_FILTERS },
+    lastFetched:   null,
     selectedLog:   null,
     detailLoading: false,
     detailError:   null,
@@ -47,9 +52,11 @@ const auditSlice = createSlice({
   reducers: {
     setAuditFilters(s, a) {
       s.filters = { ...s.filters, ...a.payload };
+      s.lastFetched = null;
     },
     clearAuditFilters(s) {
       s.filters = { ...DEFAULT_FILTERS };
+      s.lastFetched = null;
     },
     clearAuditDetail(s) {
       s.selectedLog  = null;
@@ -59,8 +66,9 @@ const auditSlice = createSlice({
   extraReducers: b => {
     b.addCase(fetchAuditLogs.pending,   s => { s.loading = true; s.error = null; })
      .addCase(fetchAuditLogs.fulfilled, (s, a) => {
-       const p    = a.payload ?? {};
-       s.loading  = false;
+       const p      = a.payload ?? {};
+       s.loading    = false;
+       s.lastFetched = Date.now();
        s.logs     = Array.isArray(p.logs) ? p.logs : [];
        s.total    = p.total    ?? s.total;
        s.page     = p.page     ?? s.page;

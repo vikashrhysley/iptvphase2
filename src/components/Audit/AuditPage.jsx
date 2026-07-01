@@ -728,7 +728,7 @@ export default function AuditPage() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {loading && !logs.length ? (
                 <SkeletonRows />
               ) : error ? (
                 <tr>

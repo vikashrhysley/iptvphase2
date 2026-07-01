@@ -8,46 +8,54 @@ import {
   apiFetchVersion,
 } from '../../services/api';
 
+const stale = (ts) => !ts || Date.now() - new Date(ts).getTime() > 60_000;
+
 export const fetchHealth = createAsyncThunk('health/fetch',
   async (_, { getState, rejectWithValue }) => {
     try { return await apiFetchHealth(getState().auth.accessToken); }
     catch (err) { return rejectWithValue(err.message); }
-  }
+  },
+  { condition: (_, { getState }) => { const s = getState().health; return !s.loading && stale(s.lastChecked); }}
 );
 
 export const fetchHealthDb = createAsyncThunk('health/fetchDb',
   async (_, { getState, rejectWithValue }) => {
     try { return await apiFetchHealthDb(getState().auth.accessToken); }
     catch (err) { return rejectWithValue(err.message); }
-  }
+  },
+  { condition: (_, { getState }) => { const s = getState().health; return !s.dbLoading && stale(s.dbLastChecked); }}
 );
 
 export const fetchHealthRedis = createAsyncThunk('health/fetchRedis',
   async (_, { getState, rejectWithValue }) => {
     try { return await apiFetchHealthRedis(getState().auth.accessToken); }
     catch (err) { return rejectWithValue(err.message); }
-  }
+  },
+  { condition: (_, { getState }) => { const s = getState().health; return !s.redisLoading && stale(s.redisLastChecked); }}
 );
 
 export const fetchHealthQdrant = createAsyncThunk('health/fetchQdrant',
   async (_, { getState, rejectWithValue }) => {
     try { return await apiFetchHealthQdrant(getState().auth.accessToken); }
     catch (err) { return rejectWithValue(err.message); }
-  }
+  },
+  { condition: (_, { getState }) => { const s = getState().health; return !s.qdrantLoading && stale(s.qdrantLastChecked); }}
 );
 
 export const fetchMetrics = createAsyncThunk('health/fetchMetrics',
   async (_, { getState, rejectWithValue }) => {
     try { return await apiFetchMetrics(getState().auth.accessToken); }
     catch (err) { return rejectWithValue(err.message); }
-  }
+  },
+  { condition: (_, { getState }) => { const s = getState().health; return !s.metricsLoading && stale(s.metricsLastChecked); }}
 );
 
 export const fetchVersion = createAsyncThunk('health/fetchVersion',
   async (_, { getState, rejectWithValue }) => {
     try { return await apiFetchVersion(getState().auth.accessToken); }
     catch (err) { return rejectWithValue(err.message); }
-  }
+  },
+  { condition: (_, { getState }) => { const s = getState().health; return !s.versionLoading && stale(s.versionLastChecked); }}
 );
 
 const mk = (prefix) => ({

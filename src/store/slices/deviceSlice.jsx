@@ -48,7 +48,11 @@ export const fetchDeviceStats = createAsyncThunk(
       const { accessToken } = getState().auth;
       return await apiFetchDeviceStats(accessToken);
     } catch (err) { return rejectWithValue(err.message); }
-  }
+  },
+  { condition: (_, { getState }) => {
+    const { statsLoading, stats } = getState().devices;
+    return !statsLoading && !stats;
+  }}
 );
 
 export const fetchDevices = createAsyncThunk(
@@ -58,7 +62,11 @@ export const fetchDevices = createAsyncThunk(
       const { accessToken } = getState().auth;
       return await apiFetchAdminDevices(accessToken, params);
     } catch (err) { return rejectWithValue(err.message); }
-  }
+  },
+  { condition: (_, { getState }) => {
+    const { loading, lastFetched } = getState().devices;
+    return !loading && (!lastFetched || Date.now() - lastFetched > 30_000);
+  }}
 );
 
 export const updateDeviceStatus = createAsyncThunk(
@@ -124,6 +132,7 @@ const deviceSlice = createSlice({
     loginHistoryFilters: { status: 'all', page: 1, page_size: 20 },
 
     filters: { ...DEFAULT_FILTERS },
+    lastFetched: null,
   },
   reducers: {
     clearToast(state)       { state.toast = null; },
@@ -155,9 +164,11 @@ const deviceSlice = createSlice({
     },
     setDeviceFilters(state, a) {
       state.filters = { ...state.filters, ...a.payload };
+      state.lastFetched = null;
     },
     clearDeviceFilters(state) {
       state.filters = { ...DEFAULT_FILTERS };
+      state.lastFetched = null;
     },
   },
   extraReducers: (b) => {
@@ -179,7 +190,8 @@ const deviceSlice = createSlice({
 
     b.addCase(fetchDevices.pending,   s => { s.loading = true; s.error = null; })
      .addCase(fetchDevices.fulfilled, (s, a) => {
-       s.loading  = false;
+       s.loading     = false;
+       s.lastFetched = Date.now();
        const p    = a.payload;
        const meta = p?.meta || p?.pagination || {};
        s.devices  = Array.isArray(p?.devices) ? p.devices : Array.isArray(p?.data) ? p.data : Array.isArray(p) ? p : [];

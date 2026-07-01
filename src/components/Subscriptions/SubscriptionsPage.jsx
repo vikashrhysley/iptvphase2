@@ -247,7 +247,7 @@ export default function SubscriptionsPage() {
 
       {/* ── Table ── */}
       <div className="sb-table-wrap">
-        {loading ? (
+        {loading && !subscriptions.length ? (
           <div className="sb-loading">Loading subscriptions…</div>
         ) : error ? (
           <div className="sb-error">{error}</div>
