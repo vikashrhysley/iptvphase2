@@ -14,6 +14,7 @@ import subscriptionsReducer from './slices/subscriptionsSlice';
 import plansReducer      from './slices/plansSlice';
 import analyticsReducer  from './slices/analyticsSlice';
 import healthReducer     from './slices/healthSlice';
+import riskReducer       from './slices/riskSlice';
 
 export const store = configureStore({
   reducer: {
@@ -31,6 +32,7 @@ export const store = configureStore({
     plans:      plansReducer,
     analytics:  analyticsReducer,
     health:     healthReducer,
+    risk:       riskReducer,
   },
 });
 

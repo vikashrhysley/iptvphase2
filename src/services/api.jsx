@@ -1509,3 +1509,88 @@ export const apiFetchVersion = async (accessToken) => {
   });
   return res.data || res;
 };
+
+// ── Risk Engine APIs ──────────────────────────────────────
+
+// GET /admin/risk/dashboard
+export const apiFetchRiskDashboard = async (accessToken, params = {}) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const query = new URLSearchParams();
+  if (params.days) query.set('days', String(params.days));
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  const res = await request(`${BASE}/admin/risk/dashboard${qs}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+// GET /admin/risk/devices
+export const apiFetchRiskDevices = async (accessToken, params = {}) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const query = new URLSearchParams();
+  if (params.risk_level) query.set('risk_level', params.risk_level);
+  if (params.threshold != null) query.set('threshold', String(params.threshold));
+  if (params.status)     query.set('status',     params.status);
+  if (params.sort_by)    query.set('sort_by',    params.sort_by);
+  if (params.page)       query.set('page',       String(params.page));
+  if (params.page_size)  query.set('page_size',  String(params.page_size));
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  const res = await request(`${BASE}/admin/risk/devices${qs}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const raw = res;
+  const items = Array.isArray(raw.data) ? raw.data : [];
+  const meta  = raw.meta || {};
+  return {
+    devices:    items,
+    counts:     raw.counts || { safe: 0, monitor: 0, high: 0, critical: 0 },
+    total:      meta.total      ?? items.length,
+    page:       meta.page       ?? params.page ?? 1,
+    pageSize:   meta.page_size  ?? params.page_size ?? 20,
+    totalPages: meta.total_pages ?? 1,
+  };
+};
+
+// GET /admin/devices/{device_id}/risk
+export const apiFetchDeviceRisk = async (accessToken, deviceId) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/devices/${deviceId}/risk`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+// GET /admin/devices/{device_id}/risk/history
+export const apiFetchDeviceRiskHistory = async (accessToken, deviceId, params = {}) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const query = new URLSearchParams();
+  if (params.page)      query.set('page',      String(params.page));
+  if (params.page_size) query.set('page_size', String(params.page_size));
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  const res = await request(`${BASE}/admin/devices/${deviceId}/risk/history${qs}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const meta = res.meta || {};
+  return {
+    events:     Array.isArray(res.data) ? res.data : [],
+    total:      meta.total       ?? 0,
+    page:       meta.page        ?? 1,
+    pageSize:   meta.page_size   ?? 20,
+    totalPages: meta.total_pages ?? 1,
+  };
+};
+
+// POST /admin/devices/{device_id}/risk/override
+export const apiPostRiskOverride = async (accessToken, deviceId, body) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/devices/${deviceId}/risk/override`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(body),
+  });
+  return res;
+};
