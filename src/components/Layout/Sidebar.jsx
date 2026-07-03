@@ -87,6 +87,14 @@ const SecurityEventsIcon = () => (
   </svg>
 );
 
+const RiskEngineIcon = () => (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+    <line x1="12" y1="9" x2="12" y2="13"/>
+    <line x1="12" y1="17" x2="12.01" y2="17"/>
+  </svg>
+);
+
 const HealthIcon = () => (
   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M22 12h-4l-3 8-6-16-3 8H2" />
@@ -169,6 +177,7 @@ const NAV_ITEMS = [
   { id: 'license', label: 'License', icon: <LicenseIcon />, page: 'license' },
   { id: 'trial', label: 'System Configuration', icon: <TrialIcon />, page: 'trial' },
   { id: 'security_events', label: 'Security Events', icon: <SecurityEventsIcon />, page: 'security_events' },
+  { id: 'risk', label: 'Risk Engine', icon: <RiskEngineIcon />, page: 'risk' },
   { id: 'health', label: 'Health', icon: <HealthIcon />, page: 'health' },
   { id: 'audit', label: 'Audit Logs',         icon: <AuditIcon />, page: 'audit', superadminOnly: true },
   { id: 'rbac',  label: 'RBAC', icon: <RbacIcon />,  page: 'rbac',  superadminOnly: true },
