@@ -1488,6 +1488,15 @@ export const apiFetchHealthQdrant = async (accessToken) => {
   return res.data || res;
 };
 
+// GET /admin/infra/status — live infra health snapshot (DB, replica, Redis, PgBouncer, Celery, Qdrant). No caching.
+export const apiFetchInfraStatus = async (accessToken) => {
+  const res = await request(`${BASE}/admin/infra/status`, {
+    method: 'GET',
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+  });
+  return res.data || res;
+};
+
 // GET /metrics — Prometheus-compatible text/plain metrics
 export const apiFetchMetrics = async (accessToken) => {
   const res = await fetch(`${ORIGIN}/metrics`, {
