@@ -101,6 +101,15 @@ const HealthIcon = () => (
   </svg>
 );
 
+const InfraIcon = () => (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <rect x="2" y="2" width="20" height="8" rx="2" />
+    <rect x="2" y="14" width="20" height="8" rx="2" />
+    <line x1="6" y1="6" x2="6.01" y2="6" />
+    <line x1="6" y1="18" x2="6.01" y2="18" />
+  </svg>
+);
+
 const SubscriptionsIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
@@ -179,6 +188,7 @@ const NAV_ITEMS = [
   { id: 'security_events', label: 'Security Events', icon: <SecurityEventsIcon />, page: 'security_events' },
   { id: 'risk', label: 'Risk Engine', icon: <RiskEngineIcon />, page: 'risk' },
   { id: 'health', label: 'Health', icon: <HealthIcon />, page: 'health' },
+  { id: 'infra', label: 'Infra', icon: <InfraIcon />, page: 'infra' },
   { id: 'audit', label: 'Audit Logs',         icon: <AuditIcon />, page: 'audit', superadminOnly: true },
   { id: 'rbac',  label: 'RBAC', icon: <RbacIcon />,  page: 'rbac',  superadminOnly: true },
 ];

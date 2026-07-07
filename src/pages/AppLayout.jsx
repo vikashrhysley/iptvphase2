@@ -19,6 +19,7 @@ const AnalyticsPage      = React.lazy(() => import('../components/Analytics/Anal
 const SecurityEventsPage = React.lazy(() => import('../components/Security/SecurityEventsPage'));
 const HealthPage         = React.lazy(() => import('../components/Health/HealthPage'));
 const RiskPage           = React.lazy(() => import('../components/Risk/RiskPage'));
+const InfraPage          = React.lazy(() => import('../components/Infra/InfraPage'));
 
 import './AppLayout.css';
 
@@ -98,6 +99,7 @@ export default function AppLayout() {
       case 'security_events':  return <SecurityEventsPage />;
       case 'health':           return <HealthPage />;
       case 'risk':             return <RiskPage />;
+      case 'infra':            return <InfraPage />;
       default:        return <DashboardTable />;
 
     }

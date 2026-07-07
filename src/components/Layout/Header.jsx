@@ -19,6 +19,7 @@ const PAGE_TITLES = {
   trial:      'System Configuration',
   audit:      'Audit Logs',
   rbac:       'RBAC',
+  infra:      'Infrastructure',
 };
 
 const RefreshIcon = () => (
