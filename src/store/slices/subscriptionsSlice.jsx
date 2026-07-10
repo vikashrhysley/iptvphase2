@@ -8,7 +8,7 @@ const DEFAULT_FILTERS = {
   date_from: '',
   date_to:   '',
   page:      1,
-  page_size: 20,
+  page_size: 10,
 };
 
 export const fetchSubscriptions = createAsyncThunk('subscriptions/fetchAll',

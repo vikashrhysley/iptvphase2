@@ -173,6 +173,44 @@ const relativeTime = (iso) => {
   return `${val} ${unit}${val !== 1 ? 's' : ''} ago`;
 };
 
+function FixedTooltip({ label, children }) {
+  const [pos, setPos] = useState(null);
+  if (!label) return <>{children}</>;
+  return (
+    <span
+      style={{ position: 'relative', display: 'inline-block' }}
+      onMouseEnter={(e) => {
+        const r = e.currentTarget.getBoundingClientRect();
+        setPos({ x: r.left + r.width / 2, y: r.top });
+      }}
+      onMouseLeave={() => setPos(null)}
+    >
+      {children}
+      {pos && (
+        <span style={{
+          position: 'fixed',
+          left: pos.x,
+          top: pos.y - 8,
+          transform: 'translate(-50%, -100%)',
+          background: 'var(--bg-raised, #1e293b)',
+          color: 'var(--text-primary, #e2e8f0)',
+          border: '1px solid var(--border-subtle, rgba(255,255,255,0.1))',
+          borderRadius: 6,
+          padding: '5px 10px',
+          fontSize: '0.75rem',
+          fontWeight: 500,
+          whiteSpace: 'nowrap',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.35)',
+          zIndex: 9999,
+          pointerEvents: 'none',
+        }}>
+          {label}
+        </span>
+      )}
+    </span>
+  );
+}
+
 const statusClass = (s) => {
   if (s === 'active')    return 'active';
   if (s === 'blocked')   return 'blocked';
@@ -259,7 +297,7 @@ export default function AppUsersPage() {
   useEffect(() => {
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      dispatch(setFilters({ search: searchInput.trim() || '', page: 1 }));
+      dispatch(setFilters({ search: searchInput.trim(), page: 1 }));
     }, 350);
     return () => clearTimeout(debounceRef.current);
   }, [searchInput, dispatch]);
@@ -267,17 +305,16 @@ export default function AppUsersPage() {
   /* Fetch on filter change */
   useEffect(() => {
     const p = {};
-    if (filters.search)                      p.search        = filters.search;
+    if (filters.search) p.search = filters.search;
     if (filters.status !== 'all')            p.status        = filters.status;
-    if (filters.device_status !== 'all')     p.device_status = filters.device_status;
     if (filters.trial_used !== 'all')        p.trial_used    = filters.trial_used === 'yes';
     if (filters.sort_by)                     p.sort_by       = filters.sort_by;
     if (filters.sort_order)                  p.sort_order    = filters.sort_order;
     p.page      = filters.page;
     p.page_size = filters.page_size;
     dispatch(fetchAppUsers(p));
-  }, [dispatch, filters.search, filters.status, filters.device_status, filters.trial_used,
-      filters.sort_by, filters.sort_order, filters.page, filters.page_size]);
+  }, [dispatch, filters.search, filters.status,
+      filters.trial_used, filters.sort_by, filters.sort_order, filters.page, filters.page_size]);
 
   /* All hooks above — conditional render AFTER */
   if (detailUserId) {
@@ -525,7 +562,7 @@ export default function AppUsersPage() {
             <input
               className="su-search-input"
               type="text"
-              placeholder="Name, email or phone…"
+              placeholder="Search by email…"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
             />
@@ -542,16 +579,6 @@ export default function AppUsersPage() {
               <option value="inactive">Inactive</option>
               <option value="blocked">Blocked</option>
               <option value="suspended">Suspended</option>
-            </select>
-          </div>
-
-          <div className="su-filter">
-            <label>Device</label>
-            <select className="su-select" value={filters.device_status}
-              onChange={(e) => dispatch(setFilters({ device_status: e.target.value, page: 1 }))}>
-              <option value="all">All</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
             </select>
           </div>
 
@@ -639,10 +666,17 @@ export default function AppUsersPage() {
                         </span>
                       </td>
                       <td><BoolPill value={u.email_verified} yesLabel="Verified" noLabel="No" /></td>
-                      <td><BoolPill value={u.trial_used} yesLabel="Used" noLabel="No" /></td>
+                      <td><BoolPill value={u.trial_used} yesLabel="Yes" noLabel="No" /></td>
                       <td className="su-num">{u.active_device_count ?? '—'}</td>
                       <td className="su-num">{u.active_subscriptions_count ?? '—'}</td>
-                      <td title={fmtDate(u.last_login_at)}>{relativeTime(u.last_login_at)}</td>
+                      <td>
+                        <div>{relativeTime(u.last_login_at)}</div>
+                        {u.last_login_at && u.last_login_at !== 'null' && (
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                            {fmtDate(u.last_login_at)}
+                          </div>
+                        )}
+                      </td>
                       <td title={fmtDate(u.created_at)}>{fmtDate(u.created_at)}</td>
                     </tr>
                   ))

@@ -223,7 +223,11 @@ export default function Sidebar({
 }) {
   const dispatch = useDispatch();
   const { user, loading: logoutLoading } = useSelector(s => s.auth);
-  const [openSubmenu, setOpenSubmenu] = useState(null);
+  // Restore open submenu on page refresh based on which page is active
+  const [openSubmenu, setOpenSubmenu] = useState(() => {
+    const pagesWithSubmenu = new Set(['home', 'analytics']);
+    return pagesWithSubmenu.has(activePage) ? activePage : null;
+  });
 
   const profileUser = user || {};
   const displayRole = profileUser.role_display || roleLabel(profileUser.role);
@@ -272,8 +276,6 @@ export default function Sidebar({
                 if (item.subItems) {
                   if (activePage !== item.page) {
                     onNavigate(item.page);
-                    if (item.id === 'home') onDashboardTabChange('liveStats');
-                    if (item.id === 'analytics') onAnalyticsTabChange('revenue');
                   }
                   setOpenSubmenu(open => (open === item.id ? null : item.id));
                   return;

@@ -152,13 +152,14 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   color: var(--text-muted);
-  width: 180px;
+  width: 280px;
   transition: border-color var(--transition-fast);
 }
 .device-search-wrap:focus-within { border-color: var(--accent-primary); }
 
 .device-search {
   flex: 1;
+  min-width: 0;
   background: none;
   border: none;
   outline: none;

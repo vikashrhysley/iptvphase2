@@ -8,7 +8,7 @@ const DEFAULT_FILTERS = {
   sort_by: 'expires_at',
   sort_order: 'asc',
   page: 1,
-  page_size: 20,
+  page_size: 10,
 };
 
 export const fetchExpiringLicenses = createAsyncThunk('licenses/fetchExpiring',

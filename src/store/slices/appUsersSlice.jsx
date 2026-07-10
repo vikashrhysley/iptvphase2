@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { apiFetchUserLoginHistory, apiFetchUserActivity, apiUpdateAppUser, apiFlagUserForReview, apiFetchAppUserDetail, apiFetchAppUsers, apiFetchAppUsersStats } from '../../services/api';
 
-const DEFAULT_PAGE_SIZE = 20;
+const DEFAULT_PAGE_SIZE = 10;
 
 export const fetchUserLoginHistory = createAsyncThunk(
   'appUsers/fetchLoginHistory',
@@ -150,6 +150,7 @@ const appUsersSlice = createSlice({
 
     filters: {
       search: '',
+      search_type: 'email',
       status: 'all',
       device_status: 'all',
       trial_used: 'all',
@@ -211,6 +212,7 @@ const appUsersSlice = createSlice({
     clearFilters(state) {
       state.filters = {
         search: '',
+        search_type: 'email',
         status: 'all',
         device_status: 'all',
         trial_used: 'all',
