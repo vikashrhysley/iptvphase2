@@ -246,7 +246,7 @@ function DeviceTableRow({ device, canEdit, onToggle, onRevoke, actionLoading, on
   const busy = actionLoading === id;
   const name = device.device_brand ? `${device.device_brand} ${device.device_model || ''}`.trim() : (device.device_name || device.name || '—');
   const os   = device.os_version || device.os || '—';
-  const userName = device.user_full_name || device.userName || '—';
+  const userDisplayName = device.user_full_name || device.userName || null;
   const location = device.last_seen_city
     ? `${device.last_seen_city}${device.last_seen_country ? ', '+device.last_seen_country : ''}`
     : (device.location || '—');
@@ -262,8 +262,12 @@ function DeviceTableRow({ device, canEdit, onToggle, onRevoke, actionLoading, on
         </div>
       </td>
       <td>
-        <div style={{ fontSize:'0.82rem', fontWeight:500 }}>{userName}</div>
-        {device.user_email && <div style={{ fontSize:'0.7rem', color:'var(--text-muted)' }}>{device.user_email}</div>}
+        <div style={{ fontSize:'0.82rem', fontWeight:500 }}>
+          {userDisplayName || device.user_email || '—'}
+        </div>
+        {userDisplayName && device.user_email && (
+          <div style={{ fontSize:'0.7rem', color:'var(--text-muted)' }}>{device.user_email}</div>
+        )}
       </td>
       <td><span style={{ fontSize:'0.75rem', background:tc.bg, color:tc.color, padding:'3px 10px', borderRadius:12, fontWeight:700, border:`1px solid ${tc.border}`, whiteSpace:'nowrap', display:'inline-flex', alignItems:'center', gap:5 }}>{tc.icon} {tc.label}</span></td>
       <td style={{ fontSize:'0.8rem', color:'var(--text-secondary)' }}>{location}</td>

@@ -12,7 +12,7 @@ const DEFAULT_FILTERS = {
   sort_by: 'last_heartbeat_at',
   sort_order: 'desc',
   page: 1,
-  page_size: 20,
+  page_size: 10,
 };
 
 export const fetchDeviceActivity = createAsyncThunk(

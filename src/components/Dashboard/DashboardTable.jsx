@@ -438,7 +438,7 @@ function SectionHeader({ title, subtitle, loading, error, onExportPDF, onExportE
   );
 }
 
-function BreakdownCard({ title, items }) {
+function BreakdownCard({ title, items, labelSuffix = '' }) {
   const total = sumValues(Object.fromEntries(items.map(item => [item.label, item.value])));
 
   return (
@@ -450,7 +450,7 @@ function BreakdownCard({ title, items }) {
           return (
             <div className="dash-break-row" key={item.label}>
               <div className="dash-break-top">
-                <span>{formatLabel(item.label)}</span>
+                <span>{formatLabel(item.label)}{labelSuffix}</span>
                 <strong>{formatValue(item.value)}</strong>
               </div>
               <div className="dash-bar">
@@ -576,7 +576,7 @@ export default function DashboardTable({ activeDashboardTab = 'liveStats' }) {
           {!overviewError && (
             <>
               <div className="dash-grid">
-                <BreakdownCard title="Platform Breakdown" items={entriesFromObject(overview?.platform_breakdown)} />
+                <BreakdownCard title="Platform Breakdown" items={entriesFromObject(overview?.platform_breakdown)} labelSuffix=" Device" />
                 <BreakdownCard title="Device Types" items={entriesFromObject(overview?.device_type_breakdown)} />
                 <BreakdownCard title="Plan Distribution" items={entriesFromObject(overview?.plan_distribution)} />
               </div>

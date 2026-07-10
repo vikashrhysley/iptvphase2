@@ -6,7 +6,7 @@ const DEFAULT_DEVICE_FILTERS = {
   status:     '',
   sort_by:    'risk_score',
   page:       1,
-  page_size:  20,
+  page_size:  10,
 };
 
 export const fetchRiskDashboard = createAsyncThunk(

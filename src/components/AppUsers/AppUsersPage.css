@@ -214,8 +214,9 @@
   gap: 6px;
   flex: 1;
   min-width: 220px;
-  max-width: 360px;
+  max-width: 400px;
 }
+
 
 .su-search-wrap label,
 .su-filter label {
@@ -564,3 +565,4 @@
   .su-cards-row-3 .su-cty-count { width: 40px; font-size: 0.7rem; }
   .su-cards-row-3 .su-cty-pct   { width: 28px; font-size: 0.66rem; }
 }
+

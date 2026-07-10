@@ -10,16 +10,23 @@ import { useTheme } from '../../context/ThemeContext';
 import './Header.css';
 
 const PAGE_TITLES = {
-  home:       'Dashboard',
-  analytics:  'Analytics',
-  device:     'Device Management',
-  heartbeat:  'Heartbeat Monitoring',
-  license:    'License Center',
-  profile:    'My Profile',
-  trial:      'System Configuration',
-  audit:      'Audit Logs',
-  rbac:       'RBAC',
-  infra:      'Infrastructure',
+  home:            'Dashboard',
+  analytics:       'Analytics',
+  admin_users:     'Admin Users',
+  app_users:       'Subscriber',
+  subscriptions:   'Subscriptions',
+  plans:           'Plans',
+  device:          'Device Management',
+  heartbeat:       'Heartbeat Monitoring',
+  license:         'License Center',
+  trial:           'System Configuration',
+  security_events: 'Security Events',
+  risk:            'Risk Engine',
+  health:          'Health',
+  infra:           'Infrastructure',
+  profile:         'My Profile',
+  audit:           'Audit Logs',
+  rbac:            'RBAC',
 };
 
 const RefreshIcon = () => (
@@ -67,7 +74,7 @@ export default function Header({ activePage, dashboardTab, analyticsTab, sidebar
     ? `/${dashboardTab === 'revenue' ? ' Revenue' : dashboardTab === 'overview' ? ' Overview' : ' Live Stats'}`
     : activePage === 'analytics'
     ? `/${analyticsTab === 'revenue' ? ' Revenue' : analyticsTab === 'users' ? ' Users' : analyticsTab === 'devices' ? ' Devices' : analyticsTab === 'licenses' ? ' Licenses' : analyticsTab === 'funnel' ? ' Funnel' : analyticsTab === 'churn' ? ' Churn' : ' Overview'}`
-    : '/ Overview';
+    : '';
 
   const handleRefresh = () => {
     if (activePage === 'heartbeat') {

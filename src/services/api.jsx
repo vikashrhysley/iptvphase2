@@ -1036,7 +1036,9 @@ export const apiFetchAppUsers = async (accessToken, params = {}) => {
   if (!accessToken) throw new Error('Unauthorized');
 
   const query = new URLSearchParams();
-  if (params.search)       query.set('search', params.search);
+  if (params.search) {
+    query.set('search', params.search);
+  }
   if (params.status)       query.set('status', params.status);
   if (params.device_status) query.set('device_status', params.device_status);
   if (params.country_code) query.set('country_code', params.country_code);

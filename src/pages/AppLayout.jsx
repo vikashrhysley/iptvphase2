@@ -70,15 +70,32 @@ class PageErrorBoundary extends React.Component {
 export default function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [activePage, setActivePage] = useState('home');
-  const [dashboardTab, setDashboardTab] = useState('liveStats');
-  const [analyticsTab, setAnalyticsTab] = useState('revenue');
+  const [activePage, setActivePage] = useState(
+    () => sessionStorage.getItem('activePage') || 'home'
+  );
+  const [dashboardTab, setDashboardTab] = useState(
+    () => sessionStorage.getItem('dashboardTab') || 'liveStats'
+  );
+  const [analyticsTab, setAnalyticsTab] = useState(
+    () => sessionStorage.getItem('analyticsTab') || 'revenue'
+  );
 
   const mainLeft = collapsed ? 'var(--sidebar-collapsed)' : 'var(--sidebar-width)';
 
   const handleNavigate = (page) => {
     setActivePage(page);
+    sessionStorage.setItem('activePage', page);
     setMobileNavOpen(false);
+  };
+
+  const handleDashboardTabChange = (tab) => {
+    setDashboardTab(tab);
+    sessionStorage.setItem('dashboardTab', tab);
+  };
+
+  const handleAnalyticsTabChange = (tab) => {
+    setAnalyticsTab(tab);
+    sessionStorage.setItem('analyticsTab', tab);
   };
 
   const renderPage = () => {
@@ -114,9 +131,9 @@ export default function AppLayout() {
         onMobileClose={() => setMobileNavOpen(false)}
         activePage={activePage}
         dashboardTab={dashboardTab}
-        onDashboardTabChange={setDashboardTab}
+        onDashboardTabChange={handleDashboardTabChange}
         analyticsTab={analyticsTab}
-        onAnalyticsTabChange={setAnalyticsTab}
+        onAnalyticsTabChange={handleAnalyticsTabChange}
         onNavigate={handleNavigate}
       />
       <Header
