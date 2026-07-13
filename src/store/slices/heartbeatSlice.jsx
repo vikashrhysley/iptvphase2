@@ -8,7 +8,7 @@ import {
 } from '../../services/api';
 
 const DEFAULT_LOG_FILTERS = {
-  device_id: '',
+  user_email: '',
   status: '',
   page: 1,
   page_size: 8,

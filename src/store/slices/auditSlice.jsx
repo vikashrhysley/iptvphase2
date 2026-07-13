@@ -2,14 +2,15 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { apiFetchAuditLogs, apiFetchAuditLogDetail } from '../../services/api';
 
 const DEFAULT_FILTERS = {
-  action:      '',
+  actor_email: '',
+  actor_role:  '',
   entity_type: '',
   severity:    '',
   date_from:   '',
   date_to:     '',
   ip_address:  '',
   page:        1,
-  page_size:   20,
+  page_size:   10,
 };
 
 export const fetchAuditLogs = createAsyncThunk('audit/fetchLogs',
@@ -19,7 +20,8 @@ export const fetchAuditLogs = createAsyncThunk('audit/fetchLogs',
       return await apiFetchAuditLogs(accessToken, params);
     } catch (err) { return rejectWithValue(err.message); }
   },
-  { condition: (_, { getState }) => {
+  { condition: (params, { getState }) => {
+    if (params?.force) return true;
     const { loading, lastFetched } = getState().audit;
     return !loading && (!lastFetched || Date.now() - lastFetched > 30_000);
   }}
@@ -33,6 +35,10 @@ export const fetchAuditLogDetail = createAsyncThunk('audit/fetchDetail',
     } catch (err) { return rejectWithValue(err.message); }
   }
 );
+
+const isUnfiltered = (params = {}) =>
+  !params.actor_email && !params.actor_role && !params.entity_type && !params.severity &&
+  !params.date_from && !params.date_to && !params.ip_address;
 
 const auditSlice = createSlice({
   name: 'audit',
@@ -48,6 +54,8 @@ const auditSlice = createSlice({
     selectedLog:   null,
     detailLoading: false,
     detailError:   null,
+    // Frozen on first unfiltered fetch so stat cards are never affected by filters
+    globalTotal:   null,
   },
   reducers: {
     setAuditFilters(s, a) {
@@ -57,6 +65,7 @@ const auditSlice = createSlice({
     clearAuditFilters(s) {
       s.filters = { ...DEFAULT_FILTERS };
       s.lastFetched = null;
+      s.globalTotal = null;
     },
     clearAuditDetail(s) {
       s.selectedLog  = null;
@@ -73,6 +82,10 @@ const auditSlice = createSlice({
        s.total    = p.total    ?? s.total;
        s.page     = p.page     ?? s.page;
        s.pageSize = p.pageSize ?? s.pageSize;
+       // Freeze global total from first unfiltered fetch
+       if (s.globalTotal === null && isUnfiltered(a.meta.arg)) {
+         s.globalTotal = s.total;
+       }
      })
      .addCase(fetchAuditLogs.rejected,  (s, a) => { s.loading = false; s.error = a.payload ?? 'Failed to load audit logs'; });
 
