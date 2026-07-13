@@ -12,13 +12,12 @@ import {
 import './HeartbeatPage.css';
 
 /* ── Export helpers ─────────────────────────────────────── */
-const LOG_COLS   = ['Date', 'Device ID', 'User', 'Status', 'IP Address', 'Location', 'Streaming', 'Screen', 'App Ver', 'Response (ms)'];
+const LOG_COLS   = ['Date', 'User', 'Status', 'IP Address', 'Location', 'Streaming', 'Screen', 'App Ver', 'Response (ms)'];
 const RISKY_COLS = ['Device', 'User', 'Risk Score', 'Risk Flags', 'Misses', 'Last Heartbeat', 'Last IP', 'Country', 'Status', 'Action'];
 
 const buildLogRows = (logs) =>
   logs.map(l => [
     fmtDateTime(l.created_at),
-    l.device_id  || '—',
     l.user_email || '—',
     l.status     || '—',
     l.ip_address || '—',
@@ -291,7 +290,7 @@ export default function HeartbeatPage() {
     riskyFilters,
   } = useSelector(s => s.heartbeat);
   const didMountLogSearch = useRef(false);
-  const { device_id: logSearch, status: logStatus } = logFilters;
+  const { user_email: logSearch, status: logStatus } = logFilters;
 
   useEffect(() => {
     dispatch(fetchHeartbeatStats());
@@ -307,7 +306,7 @@ export default function HeartbeatPage() {
 
     const timer = setTimeout(() => {
       dispatch(fetchHeartbeatLogs({
-        device_id: logSearch,
+        user_email: logSearch,
         status: logStatus,
         page: 1,
         page_size: 8,
@@ -418,9 +417,9 @@ export default function HeartbeatPage() {
             <SearchIcon />
             <input
               className="hb-search"
-              value={logFilters.device_id}
-              placeholder="Search device, user, location..."
-              onChange={e => dispatch(setLogFilters({ device_id: e.target.value, page: 1 }))}
+              value={logFilters.user_email}
+              placeholder="Search by user email..."
+              onChange={e => dispatch(setLogFilters({ user_email: e.target.value, page: 1 }))}
             />
           </div>
           <select
@@ -441,7 +440,6 @@ export default function HeartbeatPage() {
             <table className="hb-table hb-log-table">
               <colgroup>
                 <col className="hb-col-date" />
-                <col className="hb-col-device" />
                 <col className="hb-col-user" />
                 <col className="hb-col-status" />
                 <col className="hb-col-ip" />
@@ -454,7 +452,6 @@ export default function HeartbeatPage() {
               <thead>
                 <tr>
                   <th>Date</th>
-                  <th>Device</th>
                   <th>User</th>
                   <th>Status</th>
                   <th>IP Address</th>
@@ -467,11 +464,10 @@ export default function HeartbeatPage() {
               </thead>
               <tbody>
                 {logsLoading ? (
-                  <tr><td colSpan="10" className="hb-table-state">Loading heartbeat logs...</td></tr>
+                  <tr><td colSpan="9" className="hb-table-state">Loading heartbeat logs...</td></tr>
                 ) : logs.length ? logs.map(log => (
-                  <tr key={log.id || `${log.device_id}-${log.created_at}`}>
+                  <tr key={log.id || `${log.user_email}-${log.created_at}`}>
                     <td><span className="hb-date-text">{fmtDateTime(log.created_at)}</span></td>
-                    <td><code className="hb-id-text" title={log.device_id || ''}>{log.device_id || '—'}</code></td>
                     <td><span className="hb-ellipsis" title={log.user_email || ''}>{log.user_email || '—'}</span></td>
                     <td><span className={statusClass(log.status)}>{log.status || 'unknown'}</span></td>
                     <td><span className="hb-nowrap">{log.ip_address || '—'}</span></td>
@@ -482,7 +478,7 @@ export default function HeartbeatPage() {
                     <td><span className="hb-response">{fmtNum(log.response_ms, 'ms')}</span></td>
                   </tr>
                 )) : (
-                  <tr><td colSpan="10" className="hb-table-state">No heartbeat logs found.</td></tr>
+                  <tr><td colSpan="9" className="hb-table-state">No heartbeat logs found.</td></tr>
                 )}
               </tbody>
             </table>

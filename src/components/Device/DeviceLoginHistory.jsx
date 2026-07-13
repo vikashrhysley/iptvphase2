@@ -37,13 +37,15 @@ export default function DeviceLoginHistory({ deviceId, deviceName, onBack }) {
   const totalPages = Math.max(1, Math.ceil(loginHistoryTotal / (loginHistoryPageSize||1)));
 
   useEffect(() => {
-    const p = {};
-    if (loginHistoryFilters.status !== 'all') p.status = loginHistoryFilters.status;
-    p.page = loginHistoryFilters.page; p.page_size = loginHistoryFilters.page_size;
+    const p = { page: loginHistoryFilters.page, page_size: loginHistoryFilters.page_size };
     dispatch(fetchDeviceLoginHistory({ deviceId, params: p }));
-  }, [dispatch, deviceId, loginHistoryFilters.status, loginHistoryFilters.page, loginHistoryFilters.page_size]);
+  }, [dispatch, deviceId, loginHistoryFilters.page, loginHistoryFilters.page_size]);
 
   useEffect(() => () => dispatch(clearLoginHistoryState()), [dispatch]);
+
+  const visibleItems = loginHistoryFilters.status !== 'all'
+    ? loginHistoryItems.filter(r => (r.status || '').toLowerCase() === loginHistoryFilters.status)
+    : loginHistoryItems;
 
   return (
     <div className="lh-page">
@@ -72,7 +74,7 @@ export default function DeviceLoginHistory({ deviceId, deviceName, onBack }) {
             <table className="lh-table">
               <thead><tr><th>Date</th><th>Event</th><th>Status</th><th>IP Address</th><th>Country</th><th>Device Agent</th><th>Failure Reason</th></tr></thead>
               <tbody>
-                {loginHistoryItems.length ? loginHistoryItems.map(row=>(
+                {visibleItems.length ? visibleItems.map(row=>(
                   <tr key={row.id}>
                     <td className="lh-date">{fmtDateTime(row.created_at)}</td>
                     <td><span className={`lh-event-pill ${eventCls(row.event_type)}`}>{fmtEvent(row.event_type)}</span></td>

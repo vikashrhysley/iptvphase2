@@ -1120,7 +1120,7 @@ export const apiCreateAdminUser = async (accessToken, data) => {
 export const apiFetchAuditLogs = async (accessToken, params = {}) => {
   if (!accessToken) throw new Error('Unauthorized');
   const query = new URLSearchParams();
-  if (params.action)      query.set('action',      params.action);
+  if (params.search)      query.set('search',      params.search);
   if (params.entity_type) query.set('entity_type', params.entity_type);
   if (params.entity_id)   query.set('entity_id',   params.entity_id);
   if (params.severity)    query.set('severity',     params.severity);

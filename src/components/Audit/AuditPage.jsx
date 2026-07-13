@@ -4,6 +4,7 @@ import {
   fetchAuditLogs, fetchAuditLogDetail,
   setAuditFilters, clearAuditFilters, clearAuditDetail,
 } from '../../store/slices/auditSlice';
+import { apiFetchAuditLogs } from '../../services/api';
 import './AuditPage.css';
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -184,7 +185,7 @@ const exportAuditToPDF = async (logs) => {
   doc.save(`audit-logs-${new Date().toISOString().slice(0, 10)}.pdf`);
 };
 
-function ExportButton({ onExportPDF, onExportExcel }) {
+function ExportButton({ onExportPDF, onExportExcel, loading }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -195,15 +196,22 @@ function ExportButton({ onExportPDF, onExportExcel }) {
   }, [open]);
   return (
     <div className="al-export-wrap" ref={ref}>
-      <button className="al-export-btn" onClick={() => setOpen(o => !o)}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-          <polyline points="7 10 12 15 17 10"/>
-          <line x1="12" y1="15" x2="12" y2="3"/>
-        </svg>
-        Export
+      <button className="al-export-btn" onClick={() => !loading && setOpen(o => !o)} disabled={loading}>
+        {loading ? (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" style={{ animation: 'spin 0.7s linear infinite' }}>
+            <polyline points="1 4 1 10 7 10"/>
+            <path d="M3.51 15a9 9 0 1 0 .49-4.95"/>
+          </svg>
+        ) : (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+        )}
+        {loading ? 'Exporting…' : 'Export'}
       </button>
-      {open && (
+      {open && !loading && (
         <div className="al-export-menu">
           <button onClick={() => { setOpen(false); onExportPDF(); }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2">
@@ -548,25 +556,38 @@ function DetailDrawer({ onClose }) {
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function AuditPage() {
   const dispatch = useDispatch();
-  const { logs, total, page, pageSize, loading, error, filters, selectedLog } = useSelector(s => s.audit);
+  const { logs, total, globalTotal, page, pageSize, loading, error, filters, selectedLog } = useSelector(s => s.audit);
   const { accessToken, user: me } = useSelector(s => s.auth);
   const isSuperAdmin = me?.role === 'superadmin';
 
-  const [showDrawer,  setShowDrawer]  = useState(false);
-  const [actionInput, setActionInput] = useState(filters.action || '');
-  const [ipInput,     setIpInput]     = useState(filters.ip_address || '');
+  const [showDrawer,    setShowDrawer]    = useState(false);
+  const [emailInput,    setEmailInput]    = useState(filters.actor_email || '');
+  const [ipInput,       setIpInput]       = useState(filters.ip_address || '');
+  const [exportLoading, setExportLoading] = useState(false);
   const debounceRef = useRef(null);
   const totalPages  = Math.max(1, Math.ceil(total / (pageSize || 20)));
 
+  // Client-side filter by actor email or role (backend doesn't support these params yet)
+  const visibleLogs = emailInput.trim()
+    ? logs.filter(l => {
+        const q = emailInput.trim().toLowerCase();
+        if (q.includes('@')) {
+          return (l.actor_email || '').toLowerCase().includes(q);
+        }
+        return (l.actor_role || '').toLowerCase().includes(q);
+      })
+    : logs;
+
   // Derived severity counts from current page
-  const criticalCount = logs.filter(l => l.severity === 'critical').length;
-  const warningCount  = logs.filter(l => l.severity === 'warning').length;
-  const infoCount     = logs.filter(l => l.severity === 'info').length;
+  const criticalCount = visibleLogs.filter(l => l.severity === 'critical').length;
+  const warningCount  = visibleLogs.filter(l => l.severity === 'warning').length;
+  const infoCount     = visibleLogs.filter(l => l.severity === 'info').length;
 
   useEffect(() => {
     if (!isSuperAdmin) return;
-    const p = {};
-    if (filters.action)      p.action      = filters.action;
+    const p = { force: true };
+    if (filters.actor_email) p.actor_email = filters.actor_email;
+    if (filters.actor_role)  p.actor_role  = filters.actor_role;
     if (filters.entity_type) p.entity_type = filters.entity_type;
     if (filters.severity)    p.severity    = filters.severity;
     if (filters.date_from)   p.date_from   = filters.date_from;
@@ -576,7 +597,7 @@ export default function AuditPage() {
     p.page_size = filters.page_size;
     dispatch(fetchAuditLogs(p));
   }, [dispatch, isSuperAdmin,
-      filters.action, filters.entity_type, filters.severity,
+      filters.actor_email, filters.actor_role, filters.entity_type, filters.severity,
       filters.date_from, filters.date_to, filters.ip_address,
       filters.page, filters.page_size]);
 
@@ -587,13 +608,38 @@ export default function AuditPage() {
     }, 380);
   };
 
+  const handleExport = async (format) => {
+    if (exportLoading) return;
+    setExportLoading(true);
+    try {
+      const p = {};
+      if (filters.actor_email) p.actor_email = filters.actor_email;
+      if (filters.actor_role)  p.actor_role  = filters.actor_role;
+      if (filters.entity_type) p.entity_type = filters.entity_type;
+      if (filters.severity)    p.severity    = filters.severity;
+      if (filters.date_from)   p.date_from   = filters.date_from;
+      if (filters.date_to)     p.date_to     = filters.date_to;
+      if (filters.ip_address)  p.ip_address  = filters.ip_address;
+      p.page      = 1;
+      p.page_size = total || 10000;
+      const result = await apiFetchAuditLogs(accessToken, p);
+      const allLogs = Array.isArray(result?.logs) ? result.logs : logs;
+      if (format === 'pdf') await exportAuditToPDF(allLogs);
+      else                  await exportAuditToExcel(allLogs);
+    } catch (e) {
+      console.error('Export failed', e);
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
   const handleRowClick = (id) => {
     dispatch(fetchAuditLogDetail(id));
     setShowDrawer(true);
   };
 
-  const hasFilters = filters.action || filters.entity_type || filters.severity ||
-                     filters.date_from || filters.date_to || filters.ip_address;
+  const hasFilters = filters.actor_email || filters.actor_role || filters.entity_type ||
+                     filters.severity || filters.date_from || filters.date_to || filters.ip_address;
 
   // ── Access denied ──────────────────────────────────────────────────────────
   if (!isSuperAdmin) {
@@ -624,8 +670,9 @@ export default function AuditPage() {
         {logs.length > 0 && (
           <div className="al-hero-right">
             <ExportButton
-              onExportPDF={() => exportAuditToPDF(logs)}
-              onExportExcel={() => exportAuditToExcel(logs)}
+              onExportPDF={() => handleExport('pdf')}
+              onExportExcel={() => handleExport('excel')}
+              loading={exportLoading}
             />
           </div>
         )}
@@ -633,10 +680,10 @@ export default function AuditPage() {
 
       {/* ── Stat cards ── */}
       <div className="al-stats">
-        <StatCard icon={<ActivityIcon />} label="Total Logs"      value={total}         color="#60a5fa" glow="rgba(96,165,250,0.15)" />
-        <StatCard icon={<AlertTriIcon />} label="Critical Events" value={criticalCount} color="#f87171" glow="rgba(248,113,113,0.15)" />
-        <StatCard icon={<AlertTriIcon />} label="Warnings"        value={warningCount}  color="#fbbf24" glow="rgba(251,191,36,0.15)"  />
-        <StatCard icon={<InfoIcon />}     label="Info Events"     value={infoCount}     color="#38bdf8" glow="rgba(56,189,248,0.15)"  />
+        <StatCard icon={<ActivityIcon />} label="Total Logs"      value={globalTotal ?? total} color="#60a5fa" glow="rgba(96,165,250,0.15)" />
+        <StatCard icon={<AlertTriIcon />} label="Critical Events" value={criticalCount}        color="#f87171" glow="rgba(248,113,113,0.15)" />
+        <StatCard icon={<AlertTriIcon />} label="Warnings"        value={warningCount}         color="#fbbf24" glow="rgba(251,191,36,0.15)"  />
+        <StatCard icon={<InfoIcon />}     label="Info Events"     value={infoCount}            color="#38bdf8" glow="rgba(56,189,248,0.15)"  />
       </div>
 
       {/* ── Filters ── */}
@@ -645,9 +692,9 @@ export default function AuditPage() {
           <span className="al-filter-ico"><SearchIcon /></span>
           <input
             className="al-filter-input"
-            placeholder="Search action (e.g. device.block)"
-            value={actionInput}
-            onChange={e => { setActionInput(e.target.value); debounce('action', e.target.value); }}
+            placeholder="Search by actor email or role…"
+            value={emailInput}
+            onChange={e => setEmailInput(e.target.value)}
           />
         </div>
 
@@ -679,7 +726,9 @@ export default function AuditPage() {
           <option value="critical">Critical</option>
         </select>
 
-        <div className="al-filter-date-wrap">
+        <div className="al-filter-date-section">
+          <span className="al-filter-date-title">Date Range</span>
+          <div className="al-filter-date-wrap">
           <div className="al-filter-date-field">
             <span className="al-filter-date-lbl">From</span>
             <input
@@ -690,7 +739,7 @@ export default function AuditPage() {
             />
           </div>
           <span className="al-date-sep">→</span>
-          <div className="al-filter-date-field">
+          <div className="al-filter-date-field al-filter-date-field--to">
             <span className="al-filter-date-lbl">To</span>
             <input
               className="al-filter-date-input"
@@ -699,11 +748,13 @@ export default function AuditPage() {
               onChange={e => dispatch(setAuditFilters({ date_to: e.target.value, page: 1 }))}
             />
           </div>
+          </div>
         </div>
 
         {hasFilters && (
           <button className="al-clear-btn" onClick={() => {
-            setActionInput(''); setIpInput('');
+            setEmailInput(''); setIpInput('');
+            clearTimeout(debounceRef.current);
             dispatch(clearAuditFilters());
           }}>
             ✕ Clear Filters
@@ -739,20 +790,20 @@ export default function AuditPage() {
                     </div>
                   </td>
                 </tr>
-              ) : logs.length === 0 ? (
+              ) : visibleLogs.length === 0 ? (
                 <tr>
                   <td colSpan={8}>
                     <div className="al-empty-state">
                       <div className="al-empty-icon"><LogIcon /></div>
                       <div className="al-empty-title">No audit logs found</div>
                       <div className="al-empty-sub">
-                        {hasFilters ? 'Try adjusting your filters.' : 'No admin actions have been recorded yet.'}
+                        {hasFilters || emailInput.trim() ? 'Try adjusting your filters.' : 'No admin actions have been recorded yet.'}
                       </div>
                     </div>
                   </td>
                 </tr>
               ) : (
-                logs.map(log => {
+                visibleLogs.map(log => {
                   const s = SEV[log.severity] || SEV.info;
                   const isActive = showDrawer && selectedLog?.id === log.id;
                   return (

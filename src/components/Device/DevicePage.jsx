@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchDevices, fetchDeviceStats,
   updateDeviceStatus, revokeDevice,
-  clearToast, setDeviceFilters, clearDeviceFilters,
+  clearToast, setDeviceFilters, clearDeviceFilters, clearDeviceDetail,
 } from '../../store/slices/deviceSlice';
 import DeviceDetail from './DeviceDetail';
 import './DevicePage.css';
@@ -296,12 +296,14 @@ function DeviceTableRow({ device, canEdit, onToggle, onRevoke, actionLoading, on
 /* ── Main Page ──────────────────────────────────────────── */
 export default function DevicePage() {
   const dispatch = useDispatch();
-  const { devices, total, page, pageSize, loading, error, actionLoading, stats, statsLoading, filters } = useSelector(s => s.devices);
+  const { devices, total, page, pageSize, loading, error, actionLoading, stats, statsLoading, filters, detailError } = useSelector(s => s.devices);
   const { user: me } = useSelector(s => s.auth);
   const canEdit = me?.role === 'superadmin' || me?.role === 'admin';
 
   const [view,         setView]        = useState('grid');
-  const [detailId,     setDetailId]    = useState(null);
+  const [detailId,     setDetailId]    = useState(
+    () => sessionStorage.getItem('deviceDetailId') || null
+  );
   const [revokeTarget, setRevokeTarget] = useState(null);
   const [exportOpen,   setExportOpen]  = useState(false);
   const exportRef = useRef(null);
@@ -341,6 +343,15 @@ export default function DevicePage() {
       filters.plan_type, filters.has_risk_flag, filters.heartbeat_stale,
       filters.sort_by, filters.sort_order, filters.page, filters.page_size]);
 
+  // If detail fetch fails (e.g. stale sessionStorage ID after refresh), silently fall back to list
+  useEffect(() => {
+    if (detailId && detailError) {
+      sessionStorage.removeItem('deviceDetailId');
+      dispatch(clearDeviceDetail());
+      setDetailId(null);
+    }
+  }, [detailId, detailError, dispatch]);
+
   // Close export menu on outside click
   useEffect(() => {
     if (!exportOpen) return;
@@ -349,8 +360,17 @@ export default function DevicePage() {
     return () => document.removeEventListener('mousedown', handler);
   }, [exportOpen]);
 
+  const openDetail = (id) => {
+    sessionStorage.setItem('deviceDetailId', id);
+    setDetailId(id);
+  };
+  const closeDetail = () => {
+    sessionStorage.removeItem('deviceDetailId');
+    setDetailId(null);
+  };
+
   if (detailId) {
-    return <DeviceDetail deviceId={detailId} onBack={() => setDetailId(null)} />;
+    return <DeviceDetail deviceId={detailId} onBack={closeDetail} />;
   }
 
   const handleExport = (format) => {
@@ -563,7 +583,7 @@ export default function DevicePage() {
                 onToggle={handleToggle}
                 onRevoke={() => handleRevoke(d)}
                 actionLoading={actionLoading}
-                onCardClick={() => setDetailId(d.device_id || d.id)}
+                onCardClick={() => openDetail(d.device_id || d.id)}
               />
             ))}
           </div>
@@ -589,7 +609,7 @@ export default function DevicePage() {
                 {devices.map(d => (
                   <DeviceTableRow key={d.device_id || d.id} device={d} canEdit={canEdit}
                     onToggle={handleToggle} onRevoke={() => handleRevoke(d)} actionLoading={actionLoading}
-                    onRowClick={() => setDetailId(d.device_id || d.id)} />
+                    onRowClick={() => openDetail(d.device_id || d.id)} />
                 ))}
               </tbody>
             </table>
