@@ -254,7 +254,7 @@
   transition: all var(--transition-fast);
 }
 
-.su-search-input::placeholder { color: var(--text-muted); }
+.su-search-input::placeholder { color: var(--text-secondary); opacity: 1; }
 .su-search-input:focus {
   border-color: var(--accent-primary);
   box-shadow: 0 0 0 3px rgba(0,212,255,0.08);

@@ -10,14 +10,21 @@ const request = async (url, options = {}) => {
   const fullUrl = url.startsWith('/') && !url.startsWith(ORIGIN) && ORIGIN
     ? `${ORIGIN}${url}`
     : url;
-  const res = await fetch(fullUrl, {
-    ...restOptions,
-    headers: {
-      'Content-Type':  'application/json',
-      'Accept':        'application/json',
-      ...extraHeaders,
-    },
-  });
+
+  let res;
+  try {
+    res = await fetch(fullUrl, {
+      ...restOptions,
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept':       'application/json',
+        ...extraHeaders,
+      },
+    });
+  } catch (networkErr) {
+    // Network-level failure: server unreachable, DNS failure, CORS preflight blocked, etc.
+    throw new Error('Unable to reach the server. Please check your internet connection.');
+  }
 
   let data;
   const text = await res.text();
@@ -403,9 +410,10 @@ export const apiFetchAdminDevices = async (accessToken, params = {}) => {
   if (params.plan_type)       query.set('plan_type',        params.plan_type);
   if (params.risk_min != null) query.set('risk_min',        String(params.risk_min));
   if (params.risk_max != null) query.set('risk_max',        String(params.risk_max));
-  if (params.has_risk_flag)    query.set('has_risk_flag',   'true');
-  if (params.heartbeat_stale)  query.set('heartbeat_stale', 'true');
-  if (params.sort_by)          query.set('sort_by',         params.sort_by);
+  if (params.has_risk_flag)    query.set('has_risk_flag',    'true');
+  if (params.heartbeat_stale)  query.set('heartbeat_stale',  'true');
+  if (params.current_session)  query.set('current_sessions', 'true');
+  if (params.sort_by)          query.set('sort_by',          params.sort_by);
   if (params.sort_order)       query.set('sort_order',      params.sort_order);
   if (params.page)             query.set('page',            String(params.page));
   if (params.page_size)        query.set('page_size',       String(params.page_size));
@@ -1490,6 +1498,77 @@ export const apiFetchHealthQdrant = async (accessToken) => {
   return res.data || res;
 };
 
+// GET /admin/alerts — paginated infra alerts with status/severity/date filters. No caching.
+export const apiFetchAdminAlerts = async (accessToken, params = {}) => {
+  const q = new URLSearchParams();
+  if (params.status)     q.set('status',     params.status);
+  if (params.severity)   q.set('severity',   params.severity);
+  if (params.start_date) q.set('start_date', params.start_date);
+  if (params.end_date)   q.set('end_date',   params.end_date);
+  if (params.page)       q.set('page',       params.page);
+  if (params.page_size)  q.set('page_size',  params.page_size);
+  const qs = q.toString();
+  const res = await request(`${BASE}/admin/alerts${qs ? `?${qs}` : ''}`, {
+    method: 'GET',
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+  });
+  return { data: Array.isArray(res.data) ? res.data : [], meta: res.meta || {} };
+};
+
+// GET /admin/errors — 24h error counts by severity + 20 most recent errors. Counts from Redis rollup, recent_errors live.
+export const apiFetchAdminErrors = async (accessToken) => {
+  const res = await request(`${BASE}/admin/errors`, {
+    method: 'GET',
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+  });
+  return res.data || res;
+};
+
+// GET /admin/metrics — CPU/memory/disk (psutil), total Celery queue depth, DB pool stats. Redis 60s TTL.
+export const apiFetchAdminMetrics = async (accessToken) => {
+  const res = await request(`${BASE}/admin/metrics`, {
+    method: 'GET',
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+  });
+  return res.data || res;
+};
+
+// POST /admin/alerts/{id}/acknowledge — open → acknowledged
+export const apiAcknowledgeAlert = async (accessToken, id) => {
+  const res = await request(`${BASE}/admin/alerts/${id}/acknowledge`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+// POST /admin/alerts/{id}/resolve — open|acknowledged → resolved
+export const apiResolveAlert = async (accessToken, id) => {
+  const res = await request(`${BASE}/admin/alerts/${id}/resolve`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+// POST /admin/alerts/{id}/archive — resolved → archived
+export const apiArchiveAlert = async (accessToken, id) => {
+  const res = await request(`${BASE}/admin/alerts/${id}/archive`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+// GET /admin/health/system — lightweight live probe: database/redis/celery/api status + process uptime. No caching.
+export const apiFetchHealthSystem = async (accessToken) => {
+  const res = await request(`${BASE}/admin/health/system`, {
+    method: 'GET',
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+  });
+  return res.data || res;
+};
+
 // GET /admin/infra/status — live infra health snapshot (DB, replica, Redis, PgBouncer, Celery, Qdrant). No caching.
 export const apiFetchInfraStatus = async (accessToken) => {
   const res = await request(`${BASE}/admin/infra/status`, {
@@ -1497,6 +1576,45 @@ export const apiFetchInfraStatus = async (accessToken) => {
     headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
   });
   return res.data || res;
+};
+
+// GET /admin/infra/database/performance — primary/replica/pool stats + 1-hour latency trend.
+export const apiFetchInfraDbPerf = async (accessToken) => {
+  const res = await request(`${BASE}/admin/infra/database/performance`, {
+    method: 'GET',
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+  });
+  return res.data || res;
+};
+
+// GET /admin/infra/performance — per-operation benchmarks vs. fixed targets. Redis-cached 60s.
+export const apiFetchInfraPerformance = async (accessToken) => {
+  const res = await request(`${BASE}/admin/infra/performance`, {
+    method: 'GET',
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+  });
+  const raw = res.data || res;
+  return {
+    measured_at:         raw.measured_at         ?? null,
+    benchmarks:          Array.isArray(raw.benchmarks) ? raw.benchmarks : [],
+    redis_hit_ratio_pct: raw.redis_hit_ratio_pct ?? null,
+    db_availability_pct: raw.db_availability_pct ?? null,
+    api_availability_pct:raw.api_availability_pct ?? null,
+  };
+};
+
+// GET /admin/infra/queues — per-queue depth/worker snapshot for all 7 Celery queues.
+export const apiFetchInfraQueues = async (accessToken) => {
+  const res = await request(`${BASE}/admin/infra/queues`, {
+    method: 'GET',
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+  });
+  // Unwrap { success, data: { measured_at, queues } } → { measured_at, queues }
+  const raw = res.data || res;
+  // Handle if the API returns the array directly as data
+  const queues = Array.isArray(raw) ? raw : Array.isArray(raw.queues) ? raw.queues : [];
+  const measured_at = raw.measured_at || res.data?.measured_at || null;
+  return { measured_at, queues };
 };
 
 // GET /metrics — Prometheus-compatible text/plain metrics

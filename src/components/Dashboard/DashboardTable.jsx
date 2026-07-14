@@ -125,34 +125,67 @@ const exportToPDF = async (statCards) => {
 };
 
 const LABELS = {
-  active_devices: 'Active Devices',
+  // device stats
+  total: 'Total',
+  active: 'Active',
+  inactive: 'Inactive',
+  blocked: 'Blocked',
+  // auxiliary stats
+  current_sessions: 'Current Sessions',
+  high_risk: 'High Risk',
+  expiring_licenses_7d: 'Expiring Licenses (7d)',
+  push_enabled: 'Push Enabled',
+  // platform breakdown
+  roku: 'Roku',
+  android: 'Android',
+  tizen: 'Tizen',
+  ios: 'iOS',
+  windows: 'Windows',
+  web: 'Web',
+  // licenses
   active_licenses: 'Active Licenses',
-  admin_users: 'Admin Users',
-  blocked_devices: 'Blocked Devices',
   expired_licenses: 'Expired Licenses',
   expiring_soon: 'Expiring Soon',
-  inactive_devices: 'Inactive Devices',
   revoked_licenses: 'Revoked Licenses',
-  superadmin_users: 'Super Admins',
-  total_devices: 'Total Devices',
   total_licenses: 'Total Licenses',
-  total_users: 'Total Users',
   trial_licenses: 'Trial Licenses',
+  // users
+  admin_users: 'Admin Users',
+  superadmin_users: 'Super Admins',
+  total_users: 'Total Users',
 };
 
 const LIVE_STATS = [
   {
-    key: 'devices',
-    label: 'Devices',
+    key: 'device_stats',
+    label: 'Device Stats',
     accent: 'var(--accent-primary)',
+    noDynamic: true,
     rows: [
-      { label: 'Total', fields: ['total_devices', 'devices_total', 'device_count', 'devices'] },
-      { label: 'Active', fields: ['active_devices', 'devices.active', 'device_status.active'] },
-      { label: 'Inactive', fields: ['inactive_devices', 'devices.inactive', 'device_status.inactive'] },
-      { label: 'Blocked', fields: ['blocked_devices', 'devices.blocked', 'device_status.blocked'] },
+      { label: 'Total',    fields: ['stats.total'] },
+      { label: 'Active',   fields: ['stats.active'] },
+      { label: 'Inactive', fields: ['stats.inactive'] },
+      { label: 'Blocked',  fields: ['stats.blocked'] },
     ],
-    includes: ['device'],
-    excludes: ['heartbeat', 'miss', 'risk', 'playback'],
+  },
+  {
+    key: 'auxiliary_stats',
+    label: 'Auxiliary Stats',
+    accent: '#f59e0b',
+    noDynamic: true,
+    rows: [
+      { label: 'Current Sessions',      fields: ['extra_stats.current_sessions'] },
+      { label: 'High Risk',             fields: ['extra_stats.high_risk'] },
+      { label: 'Expiring Licenses (7d)', fields: ['extra_stats.expiring_licenses_7d'] },
+      { label: 'Push Enabled',          fields: ['extra_stats.push_enabled'] },
+    ],
+  },
+  {
+    key: 'platform_breakdown',
+    label: 'Platform Breakdown',
+    accent: '#06b6d4',
+    sourceKey: 'platform_breakdown',
+    rows: [],
   },
   {
     key: 'licenses',
@@ -313,8 +346,25 @@ const sumMatchingStats = (stats, includes = []) => {
   return total > 0 ? total : undefined;
 };
 
-const buildLiveStats = (stats, revenue) => (
+const buildLiveStats = (stats, revenue, overview) => (
   LIVE_STATS.map(card => {
+    // Platform-style cards: read an entire sub-object as rows
+    if (card.sourceKey) {
+      const source = getNestedValue(stats, card.sourceKey)
+                  || getNestedValue(overview, card.sourceKey)
+                  || {};
+      const entries = Object.entries(source);
+      const total = entries.reduce((sum, [, v]) => sum + Number(v || 0), 0);
+      const rows = [
+        { label: 'Total', value: total || undefined },
+        ...entries.map(([key, value]) => ({
+          label: formatLabel(key),
+          value: numericValue(value) ?? value,
+        })),
+      ];
+      return { ...card, rows };
+    }
+
     const usedKeys = new Set();
     const rows = card.rows.map((row, index) => {
       const statsMatches = row.fields.map(field => ({
@@ -337,6 +387,8 @@ const buildLiveStats = (stats, revenue) => (
         value: numeric !== null && !String(value).includes('$') ? numeric : value,
       };
     });
+
+    if (card.noDynamic) return { ...card, rows };
 
     const dynamicRows = [
       ...flattenStats(stats),
@@ -518,6 +570,7 @@ export default function DashboardTable({ activeDashboardTab = 'liveStats' }) {
   useEffect(() => {
     dispatch(fetchDashboardStats());
     dispatch(fetchDashboardRevenue());
+    dispatch(fetchDashboardOverview());
   }, [dispatch]);
 
   useEffect(() => {
@@ -526,7 +579,7 @@ export default function DashboardTable({ activeDashboardTab = 'liveStats' }) {
     }
   }, [activeDashboardTab, dispatch]);
 
-  const statCards = useMemo(() => buildLiveStats(stats, revenue), [stats, revenue]);
+  const statCards = useMemo(() => buildLiveStats(stats, revenue, overview), [stats, revenue, overview]);
   const revenueCards = REVENUE_CARDS.map(card => ({
     ...card,
     value: revenue?.[card.value],
@@ -546,7 +599,7 @@ export default function DashboardTable({ activeDashboardTab = 'liveStats' }) {
           />
           {loading && !stats ? (
             <div className="dashboard-stats">
-              {[1,2,3,4,5,6].map(i => (
+              {[1,2,3,4,5,6,7,8].map(i => (
                 <div key={i} className="stat-card dash-skel-card">
                   <div className="dash-skel-label" />
                   <div className="dash-skel-val" />
@@ -555,7 +608,7 @@ export default function DashboardTable({ activeDashboardTab = 'liveStats' }) {
                 </div>
               ))}
             </div>
-          ) : error ? null : (
+          ) : (
             <div className="dashboard-stats">
               {statCards.map(card => (
                 <StatCard

@@ -522,7 +522,7 @@
   width: 240px;
 }
 
-.table-search input::placeholder { color: var(--text-muted); }
+.table-search input::placeholder { color: var(--text-secondary); opacity: 1; }
 
 .table-search-icon {
   position: absolute;

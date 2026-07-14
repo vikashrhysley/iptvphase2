@@ -189,8 +189,8 @@
 }
 
 .nav-subitem {
-  height: 32px;
-  padding: 0 10px;
+  min-height: 32px;
+  padding: 6px 10px;
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
@@ -199,6 +199,9 @@
   font-size: 0.82rem;
   font-weight: 600;
   text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   cursor: pointer;
   transition: all var(--transition-fast);
 }

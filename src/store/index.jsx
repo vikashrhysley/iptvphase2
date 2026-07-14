@@ -16,6 +16,7 @@ import analyticsReducer  from './slices/analyticsSlice';
 import healthReducer     from './slices/healthSlice';
 import riskReducer       from './slices/riskSlice';
 import infraReducer      from './slices/infraSlice';
+import monitoringReducer from './slices/monitoringSlice';
 
 export const store = configureStore({
   reducer: {
@@ -35,6 +36,7 @@ export const store = configureStore({
     health:     healthReducer,
     risk:       riskReducer,
     infra:      infraReducer,
+    monitoring: monitoringReducer,
   },
 });
 

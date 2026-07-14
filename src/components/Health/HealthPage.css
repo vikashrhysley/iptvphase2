@@ -688,6 +688,91 @@
   animation: hpShimmer 1.4s infinite linear;
 }
 
+/* ── Monitoring & Observability section ─────────────── */
+.hp-section-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.hp-sys-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+}
+
+.hp-sys-card {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 18px 16px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--h-border, var(--border-subtle));
+  border-radius: var(--radius-md);
+  transition: all var(--transition-base);
+}
+
+.hp-sys-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--h-color, var(--accent-primary));
+}
+
+.hp-sys-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  background: var(--h-bg, rgba(255,255,255,0.04));
+  border: 1px solid var(--h-border, var(--border-subtle));
+  color: var(--h-color, var(--text-secondary));
+  margin-bottom: 4px;
+}
+
+.hp-sys-body {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hp-sys-name {
+  font-family: var(--font-display);
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.hp-sys-status {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--h-color, #94a3b8);
+}
+
+.hp-sys-latency {
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--h-color, var(--text-primary));
+}
+
+.hp-sys-extra {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
 /* ── Responsive ──────────────────────────────────────── */
 @media (max-width: 860px) {
   .hp-info-row {

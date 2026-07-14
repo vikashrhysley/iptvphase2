@@ -9,6 +9,7 @@ const DEFAULT_FILTERS = {
   plan_type: '',
   has_risk_flag: false,
   heartbeat_stale: false,
+  current_session: false,
   sort_by: 'last_heartbeat_at',
   sort_order: 'desc',
   page: 1,
@@ -49,10 +50,7 @@ export const fetchDeviceStats = createAsyncThunk(
       return await apiFetchDeviceStats(accessToken);
     } catch (err) { return rejectWithValue(err.message); }
   },
-  { condition: (_, { getState }) => {
-    const { statsLoading, stats } = getState().devices;
-    return !statsLoading && !stats;
-  }}
+  { condition: (_, { getState }) => !getState().devices.statsLoading }
 );
 
 export const fetchDevices = createAsyncThunk(

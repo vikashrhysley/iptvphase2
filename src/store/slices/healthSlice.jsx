@@ -4,6 +4,7 @@ import {
   apiFetchHealthDb,
   apiFetchHealthRedis,
   apiFetchHealthQdrant,
+  apiFetchHealthSystem,
   apiFetchMetrics,
   apiFetchVersion,
 } from '../../services/api';
@@ -58,6 +59,14 @@ export const fetchVersion = createAsyncThunk('health/fetchVersion',
   { condition: (_, { getState }) => { const s = getState().health; return !s.versionLoading && stale(s.versionLastChecked); }}
 );
 
+export const fetchHealthSystem = createAsyncThunk('health/fetchSystem',
+  async (_, { getState, rejectWithValue }) => {
+    try { return await apiFetchHealthSystem(getState().auth.accessToken); }
+    catch (err) { return rejectWithValue(err.message); }
+  },
+  { condition: (_, { getState }) => { const s = getState().health; return !s.systemLoading; }}
+);
+
 const mk = (prefix) => ({
   pending:   (s) => { s[`${prefix}Loading`] = true;  s[`${prefix}Error`] = null; },
   fulfilled: (s, a) => {
@@ -77,6 +86,7 @@ const healthSlice = createSlice({
     qdrant:      null,  qdrantLoading:   false,  qdrantError:   null,  qdrantLastChecked:   null,
     metrics:     null,  metricsLoading:  false,  metricsError:  null,  metricsLastChecked:  null,
     version:     null,  versionLoading:  false,  versionError:  null,  versionLastChecked:  null,
+    system:      null,  systemLoading:   false,  systemError:   null,  systemLastChecked:   null,
   },
   reducers: {},
   extraReducers: (b) => {
@@ -90,6 +100,7 @@ const healthSlice = createSlice({
       [fetchHealthQdrant, 'qdrant'],
       [fetchMetrics,      'metrics'],
       [fetchVersion,      'version'],
+      [fetchHealthSystem, 'system'],
     ]) {
       const c = mk(prefix);
       b.addCase(thunk.pending,   c.pending)

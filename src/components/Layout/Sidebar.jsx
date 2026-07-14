@@ -110,6 +110,13 @@ const InfraIcon = () => (
   </svg>
 );
 
+const MonitoringIcon = () => (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M22 12h-4l-3 8-6-16-3 8H2" />
+    <circle cx="12" cy="12" r="10" strokeDasharray="3 3" opacity="0.4" />
+  </svg>
+);
+
 const SubscriptionsIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
@@ -174,6 +181,19 @@ const ANALYTICS_SUB_ITEMS = [
   { id: 'system', label: 'System' },
 ];
 
+const INFRA_SUB_ITEMS = [
+  { id: 'db_performance',        label: 'Database Performance' },
+  { id: 'queue_health',          label: 'Queue Health' },
+  { id: 'performance_benchmarks',label: 'Performance Benchmarks' },
+];
+
+const MONITORING_SUB_ITEMS = [
+  { id: 'system_health',  label: 'System Health' },
+  { id: 'infra_metrics',  label: 'Infra Metrics' },
+  { id: 'error_tracking', label: 'Error Tracking' },
+  { id: 'alerts',         label: 'Alerts' },
+];
+
 const NAV_ITEMS = [
   { id: 'home', label: 'Dashboard', icon: <HomeIcon />, page: 'home', subItems: DASHBOARD_SUB_ITEMS },
   { id: 'analytics', label: 'Analytics', icon: <AnalyticsIcon />, page: 'analytics', subItems: ANALYTICS_SUB_ITEMS },
@@ -188,7 +208,8 @@ const NAV_ITEMS = [
   { id: 'security_events', label: 'Security Events', icon: <SecurityEventsIcon />, page: 'security_events' },
   { id: 'risk', label: 'Risk Engine', icon: <RiskEngineIcon />, page: 'risk' },
   { id: 'health', label: 'Health', icon: <HealthIcon />, page: 'health' },
-  { id: 'infra', label: 'Infra', icon: <InfraIcon />, page: 'infra' },
+  { id: 'monitoring', label: 'Monitoring', icon: <MonitoringIcon />, page: 'monitoring', subItems: MONITORING_SUB_ITEMS },
+  { id: 'infra', label: 'Infra', icon: <InfraIcon />, page: 'infra', subItems: INFRA_SUB_ITEMS },
   { id: 'audit', label: 'Audit Logs',         icon: <AuditIcon />, page: 'audit', superadminOnly: true },
   { id: 'rbac',  label: 'RBAC', icon: <RbacIcon />,  page: 'rbac',  superadminOnly: true },
 ];
@@ -219,13 +240,17 @@ export default function Sidebar({
   onDashboardTabChange,
   analyticsTab,
   onAnalyticsTabChange,
+  infraSection,
+  onInfraSectionChange,
+  monitoringSection,
+  onMonitoringSectionChange,
   onNavigate,
 }) {
   const dispatch = useDispatch();
   const { user, loading: logoutLoading } = useSelector(s => s.auth);
   // Restore open submenu on page refresh based on which page is active
   const [openSubmenu, setOpenSubmenu] = useState(() => {
-    const pagesWithSubmenu = new Set(['home', 'analytics']);
+    const pagesWithSubmenu = new Set(['home', 'analytics', 'infra', 'monitoring']);
     return pagesWithSubmenu.has(activePage) ? activePage : null;
   });
 
@@ -277,6 +302,8 @@ export default function Sidebar({
                   if (activePage !== item.page) {
                     onNavigate(item.page);
                   }
+                  if (item.id === 'infra') { onInfraSectionChange(null); }
+                  if (item.id === 'monitoring') { onMonitoringSectionChange(null); }
                   setOpenSubmenu(open => (open === item.id ? null : item.id));
                   return;
                 }
@@ -296,15 +323,16 @@ export default function Sidebar({
             {item.subItems && openSubmenu === item.id && !effectiveCollapsed && (
               <div className="nav-submenu">
                 {item.subItems.map(subItem => {
-                  const activeSub = item.id === 'home' ? dashboardTab : analyticsTab;
+                  const activeSub = item.id === 'home' ? dashboardTab : item.id === 'analytics' ? analyticsTab : item.id === 'infra' ? infraSection : item.id === 'monitoring' ? monitoringSection : null;
                   return (
                     <button
                       key={subItem.id}
                       className={`nav-subitem${activeSub === subItem.id ? ' active' : ''}`}
                       onClick={() => {
-                        onNavigate(item.page);
-                        if (item.id === 'home') onDashboardTabChange(subItem.id);
-                        else onAnalyticsTabChange(subItem.id);
+                        if (item.id === 'home') { onNavigate(item.page); onDashboardTabChange(subItem.id); }
+                        else if (item.id === 'analytics') { onNavigate(item.page); onAnalyticsTabChange(subItem.id); }
+                        else if (item.id === 'infra') { onInfraSectionChange(subItem.id); }
+                        else if (item.id === 'monitoring') { onMonitoringSectionChange(subItem.id); }
                       }}
                     >
                       {subItem.label}
