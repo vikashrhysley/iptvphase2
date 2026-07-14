@@ -306,7 +306,7 @@
   min-width: 0;
 }
 
-.al-filter-input::placeholder { color: var(--text-muted, #475569); }
+.al-filter-input::placeholder { color: var(--text-secondary); opacity: 1; }
 
 .al-filter-select {
   flex: 0 0 auto;

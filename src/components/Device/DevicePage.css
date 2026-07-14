@@ -22,7 +22,7 @@
 
 .device-stats {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 22px;
 }
@@ -121,9 +121,9 @@
   letter-spacing: 0.06em;
   color: var(--text-muted);
   margin-top: 3px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.3;
 }
 
 /* ── Toolbar ────────────────────────────────────────────── */
@@ -167,7 +167,7 @@
   font-size: 0.84rem;
   font-family: var(--font-body);
 }
-.device-search::placeholder { color: var(--text-muted); }
+.device-search::placeholder { color: var(--text-secondary); opacity: 1; }
 
 /* Type filter tabs */
 .filter-tabs {
@@ -247,6 +247,10 @@
   transition: border-color var(--transition-fast);
 }
 .status-filter:focus { border-color: var(--accent-primary); }
+.status-filter option {
+  background: var(--bg-surface, #0f1923);
+  color: var(--text-primary, #e2e8f0);
+}
 
 .view-toggle {
   display: flex;
@@ -733,6 +737,17 @@
 }
 .dv-export-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
+.dv-export-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255,255,255,0.15);
+  border-top-color: var(--accent-primary);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
 .dv-export-dropdown {
   position: absolute;
   top: calc(100% + 6px);
@@ -769,6 +784,15 @@
 }
 .dv-export-option:disabled { opacity: 0.5; cursor: not-allowed; }
 .dv-export-option + .dv-export-option { border-top: 1px solid var(--border-subtle); }
+
+.dv-export-err {
+  font-size: 0.74rem;
+  color: #f87171;
+  white-space: nowrap;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .dv-export-error-hidden {
   font-size: 0.75rem;
@@ -892,7 +916,7 @@
 
 /* ── Responsive ─────────────────────────────────────────── */
 @media (max-width: 1100px) {
-  .device-stats { grid-template-columns: 1fr; }
+  .device-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 1024px) {
   .device-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

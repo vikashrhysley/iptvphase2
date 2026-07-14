@@ -20,6 +20,7 @@ const SecurityEventsPage = React.lazy(() => import('../components/Security/Secur
 const HealthPage         = React.lazy(() => import('../components/Health/HealthPage'));
 const RiskPage           = React.lazy(() => import('../components/Risk/RiskPage'));
 const InfraPage          = React.lazy(() => import('../components/Infra/InfraPage'));
+const MonitoringPage     = React.lazy(() => import('../components/Monitoring/MonitoringPage'));
 
 import './AppLayout.css';
 
@@ -79,6 +80,8 @@ export default function AppLayout() {
   const [analyticsTab, setAnalyticsTab] = useState(
     () => sessionStorage.getItem('analyticsTab') || 'revenue'
   );
+  const [infraSection, setInfraSection] = useState(null);
+  const [monitoringSection, setMonitoringSection] = useState(null);
 
   const mainLeft = collapsed ? 'var(--sidebar-collapsed)' : 'var(--sidebar-width)';
 
@@ -116,7 +119,8 @@ export default function AppLayout() {
       case 'security_events':  return <SecurityEventsPage />;
       case 'health':           return <HealthPage />;
       case 'risk':             return <RiskPage />;
-      case 'infra':            return <InfraPage />;
+      case 'monitoring':       return <MonitoringPage view={monitoringSection} />;
+      case 'infra':            return <InfraPage view={infraSection} />;
       default:        return <DashboardTable />;
 
     }
@@ -134,6 +138,10 @@ export default function AppLayout() {
         onDashboardTabChange={handleDashboardTabChange}
         analyticsTab={analyticsTab}
         onAnalyticsTabChange={handleAnalyticsTabChange}
+        infraSection={infraSection}
+        onInfraSectionChange={(sec) => { if (sec !== null) handleNavigate('infra'); setInfraSection(sec); }}
+        monitoringSection={monitoringSection}
+        onMonitoringSectionChange={(sec) => { if (sec !== null) handleNavigate('monitoring'); setMonitoringSection(sec); }}
         onNavigate={handleNavigate}
       />
       <Header

@@ -276,7 +276,8 @@
 }
 
 .au-search-input::placeholder {
-  color: var(--text-muted);
+  color: var(--text-secondary);
+  opacity: 1;
 }
 
 .au-search-input:focus {

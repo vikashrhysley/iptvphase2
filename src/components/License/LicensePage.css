@@ -107,7 +107,7 @@
 }
 .lc-search-wrap:focus-within { border-color:var(--accent-primary); }
 .lc-search { flex:1; background:none; border:none; outline:none; color:var(--text-primary); font-size:0.82rem; font-family:var(--font-body); }
-.lc-search::placeholder { color:var(--text-muted); }
+.lc-search::placeholder { color: var(--text-secondary); opacity: 1; }
 
 .lc-filter { display:flex; flex-direction:column; gap:5px; }
 .lc-filter label { font-size:0.7rem; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-muted); }

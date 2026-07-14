@@ -12,21 +12,37 @@ export default defineConfig({
         target: 'https://iptvapp.studyineurope.xyz',
         changeOrigin: true,
         secure: false,
+        onError(err, _req, res) {
+          res.writeHead(502, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ message: 'Unable to reach the server. Please check your internet connection.' }));
+        },
       },
       '/health': {
         target: 'https://iptvapp.studyineurope.xyz',
         changeOrigin: true,
         secure: false,
+        onError(err, _req, res) {
+          res.writeHead(502, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ message: 'Unable to reach the server.' }));
+        },
       },
       '/metrics': {
         target: 'https://iptvapp.studyineurope.xyz',
         changeOrigin: true,
         secure: false,
+        onError(err, _req, res) {
+          res.writeHead(502, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ message: 'Unable to reach the server.' }));
+        },
       },
       '/version': {
         target: 'https://iptvapp.studyineurope.xyz',
         changeOrigin: true,
         secure: false,
+        onError(err, _req, res) {
+          res.writeHead(502, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ message: 'Unable to reach the server.' }));
+        },
       },
     },
   },

@@ -5,6 +5,7 @@ import {
   updateDeviceStatus, revokeDevice,
   clearToast, setDeviceFilters, clearDeviceFilters, clearDeviceDetail,
 } from '../../store/slices/deviceSlice';
+import { apiFetchAdminDevices } from '../../services/api';
 import DeviceDetail from './DeviceDetail';
 import './DevicePage.css';
 
@@ -85,6 +86,14 @@ const TYPE_TABS = [
   { key: 'desktop',         label: 'Desktop' },
   { key: 'smart_tv',        label: 'Smart TV' },
   { key: 'streaming_stick', label: 'Streaming' },
+];
+
+const STATUS_FILTERS = [
+  { key: 'all',             label: 'All',             status: '',         current_session: false },
+  { key: 'active',          label: 'Active',          status: 'active',   current_session: false, color: '#10b981' },
+  { key: 'inactive',        label: 'Inactive',        status: 'inactive', current_session: false, color: '#94a3b8' },
+  { key: 'blocked',         label: 'Blocked',         status: 'blocked',  current_session: false, color: '#ef4444' },
+  { key: 'current_session', label: 'Current Session', status: '',         current_session: true,  color: '#00d4ff' },
 ];
 
 /* ── Helpers ────────────────────────────────────────────── */
@@ -297,15 +306,17 @@ function DeviceTableRow({ device, canEdit, onToggle, onRevoke, actionLoading, on
 export default function DevicePage() {
   const dispatch = useDispatch();
   const { devices, total, page, pageSize, loading, error, actionLoading, stats, statsLoading, filters, detailError } = useSelector(s => s.devices);
-  const { user: me } = useSelector(s => s.auth);
+  const { user: me, accessToken } = useSelector(s => s.auth);
   const canEdit = me?.role === 'superadmin' || me?.role === 'admin';
 
-  const [view,         setView]        = useState('grid');
-  const [detailId,     setDetailId]    = useState(
+  const [view,          setView]         = useState('grid');
+  const [detailId,      setDetailId]     = useState(
     () => sessionStorage.getItem('deviceDetailId') || null
   );
-  const [revokeTarget, setRevokeTarget] = useState(null);
-  const [exportOpen,   setExportOpen]  = useState(false);
+  const [revokeTarget,  setRevokeTarget] = useState(null);
+  const [exportOpen,    setExportOpen]   = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
+  const [exportError,   setExportError]   = useState(null);
   const exportRef = useRef(null);
 
   // All hooks before any conditional return
@@ -332,15 +343,16 @@ export default function DevicePage() {
     if (filters.device_type)     p.device_type   = filters.device_type;
     if (filters.platform)        p.platform      = filters.platform;
     if (filters.plan_type)       p.plan_type     = filters.plan_type;
-    if (filters.has_risk_flag)   p.has_risk_flag  = true;
-    if (filters.heartbeat_stale) p.heartbeat_stale = true;
+    if (filters.has_risk_flag)   p.has_risk_flag   = true;
+    if (filters.heartbeat_stale) p.heartbeat_stale  = true;
+    if (filters.current_session) p.current_session  = true;
     p.sort_by    = filters.sort_by;
     p.sort_order = filters.sort_order;
     p.page       = filters.page;
     p.page_size  = filters.page_size;
     dispatch(fetchDevices(p));
   }, [dispatch, filters.search, filters.status, filters.device_type, filters.platform,
-      filters.plan_type, filters.has_risk_flag, filters.heartbeat_stale,
+      filters.plan_type, filters.has_risk_flag, filters.heartbeat_stale, filters.current_session,
       filters.sort_by, filters.sort_order, filters.page, filters.page_size]);
 
   // If detail fetch fails (e.g. stale sessionStorage ID after refresh), silently fall back to list
@@ -373,38 +385,7 @@ export default function DevicePage() {
     return <DeviceDetail deviceId={detailId} onBack={closeDetail} />;
   }
 
-  const handleExport = (format) => {
-    setExportOpen(false);
-    const rows = devices.map(d => ({
-      device_id:    d.device_id   || d.id            || '',
-      device_name:  d.device_brand
-                      ? `${d.device_brand} ${d.device_model || ''}`.trim()
-                      : (d.device_name || d.name     || ''),
-      device_type:  d.device_type || d.type          || '',
-      os_version:   d.os_version  || d.os            || '',
-      app_version:  d.app_version || d.appVersion    || '',
-      status:       d.status                         || '',
-      user_name:    d.user_full_name || d.userName   || '',
-      user_email:   d.user_email                     || '',
-      location:     d.last_seen_city
-                      ? `${d.last_seen_city}${d.last_seen_country ? ', '+d.last_seen_country : ''}`
-                      : (d.location                  || ''),
-      last_seen:    d.last_heartbeat_at || d.lastSeen || '',
-    }));
-
-    if (format === 'json') {
-      const blob = new Blob([JSON.stringify(rows, null, 2)], { type: 'application/json' });
-      triggerDownload(blob, `devices_${datestamp()}.json`);
-    } else {
-      const headers = Object.keys(rows[0] || {});
-      const csv = [
-        headers.join(','),
-        ...rows.map(r => headers.map(h => `"${String(r[h]).replace(/"/g, '""')}"`).join(',')),
-      ].join('\n');
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      triggerDownload(blob, `devices_${datestamp()}.csv`);
-    }
-  };
+  const datestamp = () => new Date().toISOString().slice(0, 10);
 
   const triggerDownload = (blob, filename) => {
     const url = URL.createObjectURL(blob);
@@ -416,7 +397,126 @@ export default function DevicePage() {
     URL.revokeObjectURL(url);
   };
 
-  const datestamp = () => new Date().toISOString().slice(0, 10);
+  const buildExportRows = (list) => list.map(d => ({
+    'Device ID':    d.device_id   || d.id                                    || '',
+    'Device Name':  d.device_brand
+                      ? `${d.device_brand} ${d.device_model || ''}`.trim()
+                      : (d.device_name || d.name                             || ''),
+    'Type':         d.device_type || d.type                                  || '',
+    'OS Version':   d.os_version  || d.os                                    || '',
+    'App Version':  d.app_version || d.appVersion                            || '',
+    'Status':       d.status                                                  || '',
+    'User Name':    d.user_full_name || d.userName                           || '',
+    'User Email':   d.user_email                                              || '',
+    'Location':     d.last_seen_city
+                      ? `${d.last_seen_city}${d.last_seen_country ? ', '+d.last_seen_country : ''}`
+                      : (d.location                                           || ''),
+    'Last Seen':    d.last_heartbeat_at || d.lastSeen                        || '',
+  }));
+
+  const handleExport = async (format) => {
+    setExportOpen(false);
+    setExportError(null);
+    setExportLoading(true);
+
+    let allData = [];
+
+    try {
+      /* Build base filter params (no page/page_size yet) */
+      const baseParams = { sort_by: filters.sort_by, sort_order: filters.sort_order };
+      if (filters.search)          baseParams.search          = filters.search;
+      if (filters.status)          baseParams.status          = filters.status;
+      if (filters.device_type)     baseParams.device_type     = filters.device_type;
+      if (filters.platform)        baseParams.platform        = filters.platform;
+      if (filters.plan_type)       baseParams.plan_type       = filters.plan_type;
+      if (filters.has_risk_flag)   baseParams.has_risk_flag   = true;
+      if (filters.heartbeat_stale) baseParams.heartbeat_stale = true;
+      if (filters.current_session) baseParams.current_session = true;
+
+      /* Page through ALL results — backend may cap page_size */
+      const PAGE_SIZE = 100;
+      let currentPage = 1;
+      let fetchedTotal = 0;
+
+      while (true) {
+        const result = await apiFetchAdminDevices(accessToken, {
+          ...baseParams,
+          page: currentPage,
+          page_size: PAGE_SIZE,
+        });
+        const items      = Array.isArray(result.devices) ? result.devices : [];
+        const serverTotal = result.total ?? 0;
+
+        allData.push(...items);
+        fetchedTotal = allData.length;
+
+        /* Stop when we've collected all records or received an empty page */
+        if (items.length === 0 || fetchedTotal >= serverTotal) break;
+        currentPage++;
+      }
+    } catch (fetchErr) {
+      console.warn('[Export] fetch failed, falling back to current page:', fetchErr);
+      allData = devices; // fallback: whatever is currently in Redux
+    }
+
+    if (allData.length === 0) {
+      setExportError('No device data available to export.');
+      setExportLoading(false);
+      return;
+    }
+
+    try {
+      const rows    = buildExportRows(allData);
+      const stamp   = datestamp();
+      const headers = Object.keys(rows[0]);
+
+      if (format === 'excel') {
+        const { utils, writeFile } = await import('xlsx');
+        const wb = utils.book_new();
+        const ws = utils.aoa_to_sheet([
+          headers,
+          ...rows.map(r => headers.map(h => r[h])),
+        ]);
+        ws['!cols'] = headers.map(h => ({ wch: Math.max(h.length + 2, 18) }));
+        utils.book_append_sheet(wb, ws, 'Devices');
+        writeFile(wb, `devices_${stamp}.xlsx`);
+      } else {
+        const { jsPDF }              = await import('jspdf');
+        const { default: autoTable } = await import('jspdf-autotable');
+        const doc   = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+        const pageW = doc.internal.pageSize.getWidth();
+
+        doc.setFontSize(15);
+        doc.setTextColor(30, 30, 60);
+        doc.text('Device Management Export', pageW / 2, 14, { align: 'center' });
+        doc.setFontSize(8);
+        doc.setTextColor(120);
+        doc.text(
+          `Generated: ${new Date().toLocaleString()}  ·  ${allData.length} device${allData.length !== 1 ? 's' : ''}`,
+          pageW / 2, 20, { align: 'center' }
+        );
+
+        autoTable(doc, {
+          startY: 26,
+          head: [headers],
+          body: rows.map(r => headers.map(h => String(r[h] ?? ''))),
+          theme: 'striped',
+          headStyles: { fillColor: [15, 25, 35], textColor: 255, fontSize: 7, fontStyle: 'bold' },
+          bodyStyles: { fontSize: 7, textColor: [40, 40, 80] },
+          alternateRowStyles: { fillColor: [245, 246, 250] },
+          margin: { left: 10, right: 10 },
+          styles: { overflow: 'linebreak', cellPadding: 2 },
+        });
+
+        doc.save(`devices_${stamp}.pdf`);
+      }
+    } catch (genErr) {
+      console.error('[Export] file generation failed:', genErr);
+      setExportError(`Export failed: ${genErr.message}`);
+    } finally {
+      setExportLoading(false);
+    }
+  };
 
   const handleToggle = (deviceId, status) => dispatch(updateDeviceStatus({ deviceId, status }));
   const handleRevoke = (device) => setRevokeTarget(device);
@@ -427,26 +527,37 @@ export default function DevicePage() {
   };
 
   /* Stats cards */
-  const S  = stats?.stats ?? {};
+  const S  = stats?.stats             ?? {};
+  const ES = stats?.extra_stats       ?? {};
   const PB = stats?.platform_breakdown ?? {};
 
   const deviceStatItems = [
-    { label: 'Total',        value: S.total                ?? 0, color: '#00d4ff', icon: '📱' },
-    { label: 'Active',       value: S.active               ?? 0, color: '#10b981', icon: '✅' },
-    { label: 'Inactive',     value: S.inactive             ?? 0, color: '#94a3b8', icon: '💤' },
-    { label: 'Blocked',      value: S.blocked              ?? 0, color: '#ef4444', icon: '🚫' },
-    { label: 'High Risk',    value: S.high_risk            ?? 0, color: '#f87171', icon: '⚠️' },
-    { label: 'Expiring 7d',  value: S.expiring_licenses_7d ?? 0, color: '#fbbf24', icon: '⏳' },
-    { label: 'Push Enabled', value: S.push_enabled         ?? 0, color: '#8b5cf6', icon: '🔔' },
+    { label: 'Total',    value: S.total    ?? 0, color: '#00d4ff', icon: '📱' },
+    { label: 'Active',   value: S.active   ?? 0, color: '#10b981', icon: '✅' },
+    { label: 'Inactive', value: S.inactive ?? 0, color: '#94a3b8', icon: '💤' },
+    { label: 'Blocked',  value: S.blocked  ?? 0, color: '#ef4444', icon: '🚫' },
   ];
 
-  const platformStatItems = [
-    { label: 'Android', value: PB.android ?? 0, color: '#3ddc84', icon: '🤖' },
-    { label: 'Fire TV', value: PB.firetv  ?? 0, color: '#ff9900', icon: '🔥' },
-    { label: 'iOS',     value: PB.ios     ?? 0, color: '#e5e7eb', icon: '🍎' },
-    { label: 'Roku',    value: PB.roku    ?? 0, color: '#a78bfa', icon: '📺' },
-    { label: 'Other',   value: PB.other   ?? 0, color: '#64748b', icon: '🧩' },
+  const auxiliaryStatItems = [
+    { label: 'Current Sessions', value: ES.current_sessions     ?? 0, color: '#00d4ff', icon: '🟢' },
+    { label: 'High Risk',        value: ES.high_risk            ?? 0, color: '#f87171', icon: '⚠️' },
+    { label: 'Expiring 7d',      value: ES.expiring_licenses_7d ?? 0, color: '#fbbf24', icon: '⏳' },
+    { label: 'Push Enabled',     value: ES.push_enabled         ?? 0, color: '#8b5cf6', icon: '🔔' },
   ];
+
+  const PLATFORM_META = {
+    android: { color: '#3ddc84', icon: '🤖' },
+    ios:     { color: '#e5e7eb', icon: '🍎' },
+    roku:    { color: '#a78bfa', icon: '📺' },
+    tizen:   { color: '#00b4d8', icon: '📺' },
+    firetv:  { color: '#ff9900', icon: '🔥' },
+    windows: { color: '#0078d4', icon: '🖥️' },
+    web:     { color: '#06b6d4', icon: '🌐' },
+  };
+  const platformStatItems = Object.entries(PB).map(([key, value]) => {
+    const meta = PLATFORM_META[key] || { color: '#64748b', icon: '🧩' };
+    return { label: key.charAt(0).toUpperCase() + key.slice(1), value: value ?? 0, ...meta };
+  });
 
   return (
     <div className="device-page">
@@ -460,6 +571,20 @@ export default function DevicePage() {
             <div className="dsp-title"><span className="dsp-title-icon">📊</span> Device Stats</div>
             <div className="dsp-grid">
               {deviceStatItems.map(({ label, value, color, icon }) => (
+                <div className="dsp-item" key={label} style={{ '--dsc': color }}>
+                  <div className="dsp-icon">{icon}</div>
+                  <div className="dsp-info">
+                    <div className="dsp-value">{value.toLocaleString()}</div>
+                    <div className="dsp-label">{label}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="device-stats-panel">
+            <div className="dsp-title"><span className="dsp-title-icon">📈</span> Auxiliary Stats</div>
+            <div className="dsp-grid">
+              {auxiliaryStatItems.map(({ label, value, color, icon }) => (
                 <div className="dsp-item" key={label} style={{ '--dsc': color }}>
                   <div className="dsp-icon">{icon}</div>
                   <div className="dsp-info">
@@ -507,7 +632,7 @@ export default function DevicePage() {
           })}
         </div>
 
-        {/* Right: search + status + view + refresh */}
+        {/* Right: search + status + view + export */}
         <div className="toolbar-right">
           <div className="device-search-wrap">
             <SearchIcon />
@@ -519,38 +644,49 @@ export default function DevicePage() {
             />
           </div>
 
-          <select className="status-filter" value={filters.status}
-            onChange={e => dispatch(setDeviceFilters({ status: e.target.value, page: 1 }))}>
-            <option value="">All Status</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-            <option value="blocked">Blocked</option>
-            <option value="suspended">Suspended</option>
-            <option value="revoked">Revoked</option>
+          <select
+            className="status-filter"
+            value={filters.current_session ? 'current_session' : (filters.status || '')}
+            onChange={e => {
+              const val = e.target.value;
+              const f = STATUS_FILTERS.find(x => x.key === val) || STATUS_FILTERS[0];
+              dispatch(setDeviceFilters({ status: f.status, current_session: f.current_session, page: 1 }));
+            }}
+          >
+            {STATUS_FILTERS.map(f => (
+              <option key={f.key} value={f.key}>{f.label}</option>
+            ))}
           </select>
 
           {/* Export */}
           <div className="dv-export-wrap" ref={exportRef}>
             <button
               className={`dv-export-btn${exportOpen ? ' open' : ''}`}
-              onClick={() => setExportOpen(o => !o)}
-              disabled={devices.length === 0}
-              title={devices.length === 0 ? 'No data to export' : 'Export table data'}
+              onClick={() => !exportLoading && setExportOpen(o => !o)}
+              disabled={exportLoading || total === 0}
+              title={total === 0 ? 'No data to export' : `Export all ${total.toLocaleString()} devices`}
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Export <span className="dv-export-caret" style={{ fontSize:'0.68rem', opacity:0.6, transition:'transform 0.18s', display:'inline-block', transform: exportOpen ? 'rotate(180deg)' : 'none' }}>▾</span>
+              {exportLoading
+                ? <><span className="dv-export-spinner" /> Exporting…</>
+                : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  Export <span className="dv-export-caret" style={{ fontSize:'0.68rem', opacity:0.6, transition:'transform 0.18s', display:'inline-block', transform: exportOpen ? 'rotate(180deg)' : 'none' }}>▾</span></>
+              }
             </button>
             {exportOpen && (
               <div className="dv-export-dropdown">
-                <button className="dv-export-option" onClick={() => handleExport('csv')}>
-                  📄 <span><strong>CSV</strong> <span style={{fontSize:'0.7rem',opacity:0.6}}>Spreadsheet</span></span>
+                <button className="dv-export-option" onClick={() => handleExport('excel')}>
+                  📊 <span><strong>Excel</strong> <span style={{fontSize:'0.7rem',opacity:0.6}}>.xlsx spreadsheet</span></span>
                 </button>
-                <button className="dv-export-option" onClick={() => handleExport('json')}>
-                  {'{ }'} <span><strong>JSON</strong> <span style={{fontSize:'0.7rem',opacity:0.6}}>Raw data</span></span>
+                <button className="dv-export-option" onClick={() => handleExport('pdf')}>
+                  📄 <span><strong>PDF</strong> <span style={{fontSize:'0.7rem',opacity:0.6}}>Printable report</span></span>
                 </button>
               </div>
             )}
           </div>
+
+          {exportError && (
+            <span className="dv-export-err">{exportError}</span>
+          )}
 
           <div className="view-toggle">
             <button className={`view-btn${view === 'grid' ? ' active' : ''}`} onClick={() => setView('grid')} title="Grid view"><GridIcon /></button>

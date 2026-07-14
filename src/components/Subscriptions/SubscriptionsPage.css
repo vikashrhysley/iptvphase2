@@ -18,7 +18,7 @@
 }
 .sb-search-wrap:focus-within { border-color:var(--accent-primary); }
 .sb-search { flex:1; background:none; border:none; outline:none; color:var(--text-primary); font-size:0.82rem; font-family:var(--font-body); }
-.sb-search::placeholder { color:var(--text-muted); }
+.sb-search::placeholder { color: var(--text-secondary); opacity: 1; }
 
 .sb-filter { display:flex; flex-direction:column; gap:5px; }
 .sb-filter label { font-size:0.7rem; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-muted); }

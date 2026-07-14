@@ -182,7 +182,6 @@ const STATUS_COLORS = {
   active:    { color: '#10b981', glow: 'rgba(16,185,129,0.5)' },
   inactive:  { color: '#64748b', glow: 'rgba(100,116,139,0.5)' },
   blocked:   { color: '#ef4444', glow: 'rgba(239,68,68,0.5)' },
-  suspended: { color: '#f59e0b', glow: 'rgba(245,158,11,0.5)' },
   revoked:   { color: '#a78bfa', glow: 'rgba(167,139,250,0.5)' },
 };
 
@@ -846,11 +845,6 @@ function DeviceAnalytics() {
       </div>
 
       <div className="an-stats-row">
-        <div className="an-stat-card" style={{ '--asc': '#f59e0b' }}>
-          <div className="an-stat-accent" />
-          <div className="an-stat-label">Suspended</div>
-          <div className="an-stat-value">{(devices.suspended_devices ?? 0).toLocaleString()}</div>
-        </div>
         <div className="an-stat-card" style={{ '--asc': '#ef4444' }}>
           <div className="an-stat-accent" />
           <div className="an-stat-label">High Risk</div>
