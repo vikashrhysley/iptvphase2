@@ -10,7 +10,7 @@
 
 .audit-page {
   padding: 24px 28px;
-  max-width: 1300px;
+  /* max-width: 1300px; */
   width: 100%;
   animation: al-fade-up 0.35s ease both;
 }
