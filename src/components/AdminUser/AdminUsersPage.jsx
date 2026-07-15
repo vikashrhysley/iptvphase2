@@ -15,6 +15,7 @@ import {
 } from '../../store/slices/adminUsersSlice';
 import './AdminUsersPage.css';
 
+
 const CheckIcon = () => (
   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
     <polyline points="20 6 9 17 4 12" />
@@ -578,8 +579,8 @@ export default function AdminUsersPage() {
   const totalPages = Math.max(1, Math.ceil(total / (pageSize || 1)));
 
   const statsCards = useMemo(() => {
-    const root     = stats || {};
-    const counts   = root.stats    || {};   // { total, superadmin, admin, viewer }
+    const root = stats || {};
+    const counts = root.stats || {};   // { total, superadmin, admin, viewer }
     const byStatus = root.by_status || {};  // { active, disabled, totp_enabled, totp_not_set, locked_accounts }
     const newUsers = root.new_users || {};  // { new_24h, new_7d, last_login_24h }
 
@@ -589,12 +590,12 @@ export default function AdminUsersPage() {
         accent: 'cyan',
         icon: '📊',
         items: [
-          { label: 'Total Users',  value: counts.total      ?? 0 },
+          { label: 'Total Users', value: counts.total ?? 0 },
           { label: 'Super Admins', value: counts.superadmin ?? 0 },
-          { label: 'Admins',       value: counts.admin      ?? 0 },
-          { label: 'Viewers',      value: counts.viewer     ?? 0 },
-          { label: '2FA Enabled',  value: byStatus.totp_enabled    ?? 0 },
-          { label: 'Locked',       value: byStatus.locked_accounts ?? 0, tone: 'red' },
+          { label: 'Admins', value: counts.admin ?? 0 },
+          { label: 'Viewers', value: counts.viewer ?? 0 },
+          { label: '2FA Enabled', value: byStatus.totp_enabled ?? 0 },
+          { label: 'Locked', value: byStatus.locked_accounts ?? 0, tone: 'red' },
         ],
       },
       {
@@ -602,7 +603,7 @@ export default function AdminUsersPage() {
         accent: 'green',
         icon: '✅',
         items: [
-          { label: 'Active',   value: byStatus.active   ?? 0, tone: 'green' },
+          { label: 'Active', value: byStatus.active ?? 0, tone: 'green' },
           { label: 'Disabled', value: byStatus.disabled ?? 0, tone: 'red' },
         ],
       },
@@ -611,9 +612,9 @@ export default function AdminUsersPage() {
         accent: 'blue',
         icon: '🆕',
         items: [
-          { label: 'Last 24h',       value: newUsers.new_24h        ?? 0 },
-          { label: 'Last 7 Days',    value: newUsers.new_7d         ?? 0 },
-          { label: 'Logins (24h)',   value: newUsers.last_login_24h ?? 0 },
+          { label: 'Last 24h', value: newUsers.new_24h ?? 0 },
+          { label: 'Last 7 Days', value: newUsers.new_7d ?? 0 },
+          { label: 'Logins (24h)', value: newUsers.last_login_24h ?? 0 },
         ],
       },
     ];
@@ -776,62 +777,64 @@ export default function AdminUsersPage() {
           <div className="au-error-wrap">{error}</div>
         ) : (
           <div className="au-table-scroll">
-          <table className="au-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Status</th>
-                <th>2FA</th>
-                <th>Last Login</th>
-                <th className="au-col-locked">Locked</th>
-                <th>Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredUsers.length ? (
-                filteredUsers.map((u) => (
-                  <tr key={u.id} className="au-row-clickable" onClick={() => setDetailUserId(u.id)}>
-                    <td className="au-name">{u.full_name || '—'}</td>
-                    <td className="au-email">{u.email || '—'}</td>
-                    <td>
-                      <span className={`au-role-pill role-${(u.role || 'viewer').toLowerCase()}`}>
-                        {roleBadgeText(u.role)}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`au-status-pill ${statusBadgeClass(u.status)}`}>
-                        {u.status || '—'}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`au-2fa-pill ${u.totp_enabled ? 'yes' : 'no'}`}>
-                        {u.totp_enabled ? <CheckIcon /> : <XIcon />}
-                      </span>
-                    </td>
-                    <td title={fmtDateTime(u.last_login_at)}>{relativeTime(u.last_login_at)}</td>
-                    <td className="au-col-locked">
-                      {u.is_locked ? (
-                        <span className="au-locked-pill">
-                          <LockIcon />
-                        </span>
-                      ) : (
-                        <span className="au-locked-empty">—</span>
-                      )}
-                    </td>
-                    <td title={fmtDateTime(u.created_at)}>{fmtDateTime(u.created_at)}</td>
-                  </tr>
-                ))
-              ) : (
+            <table className="au-table">
+              <thead>
                 <tr>
-                  <td colSpan={8} className="au-empty">
-                    No admin users returned.
-                  </td>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th>2FA</th>
+                  <th>Last Login</th>
+                  <th className="au-col-locked">Locked</th>
+                  <th>Created</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filteredUsers.length ? (
+                  filteredUsers.map((u) => (
+                    <tr key={u.id} className="au-row-clickable" onClick={() => setDetailUserId(u.id)}>
+                      <td className="au-name">{u.full_name || '—'}</td>
+                      <td className="au-email">
+                        {u.email || '—'}
+                      </td>
+                      <td>
+                        <span className={`au-role-pill role-${(u.role || 'viewer').toLowerCase()}`}>
+                          {roleBadgeText(u.role)}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`au-status-pill ${statusBadgeClass(u.status)}`}>
+                          {u.status || '—'}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`au-2fa-pill ${u.totp_enabled ? 'yes' : 'no'}`}>
+                          {u.totp_enabled ? <CheckIcon /> : <XIcon />}
+                        </span>
+                      </td>
+                      <td title={fmtDateTime(u.last_login_at)}>{relativeTime(u.last_login_at)}</td>
+                      <td className="au-col-locked">
+                        {u.is_locked ? (
+                          <span className="au-locked-pill">
+                            <LockIcon />
+                          </span>
+                        ) : (
+                          <span className="au-locked-empty">—</span>
+                        )}
+                      </td>
+                      <td title={fmtDateTime(u.created_at)}>{fmtDateTime(u.created_at)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={8} className="au-empty">
+                      No admin users returned.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         )}
 
