@@ -114,6 +114,17 @@
 .dd-hero-body   { flex: 1; min-width: 0; }
 .dd-hero-name   { font-size: 1.1rem; font-weight: 700; color: var(--text-primary); }
 .dd-hero-sub    { font-size: 0.82rem; color: var(--text-muted); margin-top: 3px; }
+.dd-hero-id     { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.dd-hero-id-label {
+  font-size: 0.6rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+.dd-hero-id-val {
+  font-family: monospace; font-size: 0.76rem; color: var(--text-secondary);
+  background: var(--bg-raised); border: 1px solid var(--border-subtle);
+  border-radius: 5px; padding: 2px 8px; letter-spacing: 0.02em;
+  word-break: break-all; user-select: all;
+}
 .dd-hero-badges { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
 
 .dd-status-pill {

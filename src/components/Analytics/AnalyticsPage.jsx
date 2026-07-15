@@ -2123,7 +2123,7 @@ function LatencyHistoryChart({ historical }) {
   );
 }
 
-
+/* ── System Analytics tab ────────────────────────────────── */
 function SystemAnalytics() {
   const dispatch = useDispatch();
   const { system, systemLoading, systemError } = useSelector(s => s.analytics);

@@ -615,6 +615,7 @@ export const apiFetchLicenses = async (accessToken, params = {}) => {
   if (params.license_filter)      query.set('license_filter', params.license_filter);
   if (params.status)              query.set('status',         params.status);
   if (params.plan_type)           query.set('plan_type',      params.plan_type);
+  if (params.plan_filter)         query.set('plan_filter',    params.plan_filter);
   if (params.search)              query.set('search',         params.search);
   if (params.device_id)           query.set('device_id',      params.device_id);
   if (params.user_id)             query.set('user_id',        params.user_id);
