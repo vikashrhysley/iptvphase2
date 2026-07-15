@@ -132,7 +132,7 @@ function UpdateSubscriptionModal({ sub, onClose }) {
   );
 }
 
-/* ── Cancel Subscription Modal ───────────────────────────── */
+
 function CancelSubscriptionModal({ sub, onClose }) {
   const dispatch = useDispatch();
   const { cancelLoading, cancelError, cancelSuccess } = useSelector((s) => s.subscriptions);
