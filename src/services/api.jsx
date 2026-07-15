@@ -303,13 +303,16 @@ export const apiFetchDeviceAnalytics = async (accessToken) => {
 };
 
 // GET /admin/analytics/licenses
+// Response shape: { data: { total_licenses, active_licenses, ... }, by_plan_type: {...} }
+// by_plan_type is a sibling of data, so merge it into the returned object.
 export const apiFetchLicenseAnalytics = async (accessToken) => {
   if (!accessToken) throw new Error('Unauthorized');
   const res = await request(`${BASE}/admin/analytics/licenses`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  return res.data || res;
+  const data = res.data || res;
+  return { ...data, by_plan_type: res.by_plan_type ?? data.by_plan_type ?? {} };
 };
 
 // GET /admin/analytics/conversion-funnel

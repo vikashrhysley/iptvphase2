@@ -1,11 +1,13 @@
-import { useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { fetchDeviceActivity, setActivityFilters, clearActivityState } from '../../store/slices/deviceSlice';
+import { useEffect, useMemo, useState } from 'react';
+import { useSelector } from 'react-redux';
+import { apiFetchDeviceActivity } from '../../services/api';
 import '../AppUsers/UserActivityPage.css'; // reuse same styles
 
 const BackIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>;
 const ChevLeft  = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>;
 const ChevRight = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>;
+
+const PAGE_SIZE = 20;
 
 const fmtDateTime = (iso) => {
   if (!iso) return '—';
@@ -22,7 +24,7 @@ const eventClass = (t) => {
   return 'other';
 };
 const fmtEvent  = (t) => (t||'—').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
-const typeClass  = (t) => ({ live:'live', vod:'vod', series:'series' }[t]||'other');
+const typeClass  = (t) => ({ live:'live', vod:'vod', series:'series' }[(t||'').toLowerCase()]||'other');
 const stateClass = (s) => {
   if (!s) return 'other';
   const v = s.toLowerCase();
@@ -49,20 +51,75 @@ function Pagination({ current, totalPages, totalItems, pageSize, onPage }) {
 }
 
 export default function DeviceActivity({ deviceId, deviceName, onBack }) {
-  const dispatch = useDispatch();
-  const { activityItems, activityTotal, activityPage, activityPageSize, activityLoading, activityError, activityFilters } = useSelector(s => s.devices);
-  const totalPages = Math.max(1, Math.ceil(activityTotal / (activityPageSize||1)));
+  const accessToken = useSelector(s => s.auth.accessToken);
 
+  // Full activity set for this device (fetched once, all pages) — filtering is
+  // done client-side because the server-side content_type filter on this
+  // endpoint returns no rows.
+  const [allRows, setAllRows] = useState([]);
+  const [activityLoading, setActivityLoading] = useState(true);
+  const [activityError, setActivityError] = useState(null);
+
+  // Local filter + pagination state.
+  const [contentType, setContentType] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [page, setPage] = useState(1);
+
+  // Fetch every page of this device's activity so client-side filtering sees all rows.
   useEffect(() => {
-    const p = {};
-    if (activityFilters.content_type !== 'all') p.content_type = activityFilters.content_type;
-    if (activityFilters.date_from) p.date_from = activityFilters.date_from;
-    if (activityFilters.date_to)   p.date_to   = activityFilters.date_to;
-    p.page = activityFilters.page; p.page_size = activityFilters.page_size;
-    dispatch(fetchDeviceActivity({ deviceId, params: p }));
-  }, [dispatch, deviceId, activityFilters.content_type, activityFilters.date_from, activityFilters.date_to, activityFilters.page, activityFilters.page_size]);
+    let cancelled = false;
+    const FETCH_SIZE = 100;
+    (async () => {
+      setActivityLoading(true);
+      setActivityError(null);
+      try {
+        const collected = [];
+        let current = 1;
+        // Safety cap so a runaway total never loops forever.
+        while (current <= 200) {
+          const res = await apiFetchDeviceActivity(accessToken, deviceId, { page: current, page_size: FETCH_SIZE });
+          const items = Array.isArray(res.items) ? res.items : [];
+          collected.push(...items);
+          const serverTotal = res.total ?? 0;
+          if (items.length === 0 || items.length < FETCH_SIZE || collected.length >= serverTotal) break;
+          current += 1;
+        }
+        if (!cancelled) setAllRows(collected);
+      } catch (err) {
+        if (!cancelled) setActivityError(err.message || 'Failed to load activity.');
+      } finally {
+        if (!cancelled) setActivityLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [accessToken, deviceId]);
 
-  useEffect(() => () => dispatch(clearActivityState()), [dispatch]);
+  // Reset to first page whenever a filter changes.
+  useEffect(() => { setPage(1); }, [contentType, dateFrom, dateTo]);
+
+  const filtered = useMemo(() => {
+    const fromTs = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : null;
+    const toTs   = dateTo   ? new Date(`${dateTo}T23:59:59.999`).getTime() : null; // inclusive end of day
+    return (allRows || []).filter(row => {
+      if (contentType !== 'all' && (row.content_type || '').toLowerCase() !== contentType) return false;
+      if (fromTs || toTs) {
+        const ts = row.created_at ? new Date(row.created_at).getTime() : null;
+        if (ts == null || Number.isNaN(ts)) return false;
+        if (fromTs && ts < fromTs) return false;
+        if (toTs && ts > toTs) return false;
+      }
+      return true;
+    });
+  }, [allRows, contentType, dateFrom, dateTo]);
+
+  const total      = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const current    = Math.min(page, totalPages);
+  const pageRows   = filtered.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
+
+  const hasFilter = contentType !== 'all' || dateFrom || dateTo;
+  const clearFilters = () => { setContentType('all'); setDateFrom(''); setDateTo(''); setPage(1); };
 
   return (
     <div className="ua-page">
@@ -77,14 +134,14 @@ export default function DeviceActivity({ deviceId, deviceName, onBack }) {
       <div className="ua-toolbar">
         <div className="ua-filter">
           <label>Content Type</label>
-          <select className="ua-select" value={activityFilters.content_type} onChange={e=>dispatch(setActivityFilters({content_type:e.target.value,page:1}))}>
+          <select className="ua-select" value={contentType} onChange={e=>setContentType(e.target.value)}>
             <option value="all">All</option><option value="live">Live</option><option value="vod">VOD</option><option value="series">Series</option>
           </select>
         </div>
-        <div className="ua-filter"><label>From</label><input type="date" className="ua-date-input" value={activityFilters.date_from} onChange={e=>dispatch(setActivityFilters({date_from:e.target.value,page:1}))}/></div>
-        <div className="ua-filter"><label>To</label><input type="date" className="ua-date-input" value={activityFilters.date_to} onChange={e=>dispatch(setActivityFilters({date_to:e.target.value,page:1}))}/></div>
-        {(activityFilters.content_type!=='all'||activityFilters.date_from||activityFilters.date_to) && (
-          <button className="ua-clear-btn" onClick={()=>dispatch(clearActivityState())}>Clear</button>
+        <div className="ua-filter"><label>From</label><input type="date" className="ua-date-input" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></div>
+        <div className="ua-filter"><label>To</label><input type="date" className="ua-date-input" value={dateTo} onChange={e=>setDateTo(e.target.value)}/></div>
+        {hasFilter && (
+          <button className="ua-clear-btn" onClick={clearFilters}>Clear</button>
         )}
       </div>
       <div className="ua-table-wrap">
@@ -95,7 +152,7 @@ export default function DeviceActivity({ deviceId, deviceName, onBack }) {
             <table className="ua-table">
               <thead><tr><th>Date</th><th>Event</th><th>Content</th><th>Type</th><th>Playback State</th><th>App Version</th><th>IP Address</th><th>Location</th></tr></thead>
               <tbody>
-                {activityItems.length ? activityItems.map(row=>(
+                {pageRows.length ? pageRows.map(row=>(
                   <tr key={row.id}>
                     <td className="ua-date">{fmtDateTime(row.created_at)}</td>
                     <td><span className={`ua-event-pill ${eventClass(row.event_type)}`}>{fmtEvent(row.event_type)}</span></td>
@@ -119,7 +176,7 @@ export default function DeviceActivity({ deviceId, deviceName, onBack }) {
             </table>
           </div>
         )}
-        {!activityLoading&&!activityError&&<Pagination current={activityPage} totalPages={totalPages} totalItems={activityTotal} pageSize={activityPageSize} onPage={p=>dispatch(setActivityFilters({page:p}))}/>}
+        {!activityLoading&&!activityError&&<Pagination current={current} totalPages={totalPages} totalItems={total} pageSize={PAGE_SIZE} onPage={setPage}/>}
       </div>
     </div>
   );
