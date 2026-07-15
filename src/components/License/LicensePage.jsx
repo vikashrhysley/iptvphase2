@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
-  fetchLicenses, fetchLicenseStats, fetchExpiringLicenses,
+  fetchLicenses, fetchLicenseStats,
   editLicense,
   clearToast, openEditModal, closeEditModal,
   setLicenseFilters, clearLicenseFilters,
@@ -36,16 +36,6 @@ const fmtDate = (iso) => {
 const PLATFORM_ICONS = { android:'🤖', ios:'🍎', firetv:'🔥', roku:'📺', samsung:'📺' };
 const statusClass = (s) => ({ active:'lc-active', expired:'lc-expired', revoked:'lc-revoked', suspended:'lc-suspended', grace:'lc-grace' }[s] || 'lc-unknown');
 const planClass   = (p) => ({ paid:'lc-paid', trial:'lc-trial', grace:'lc-grace-plan' }[p] || 'lc-unknown');
-
-const FILTER_LABELS = {
-  '':               'All Licenses',
-  'active':         'Active',
-  'trial':          'Trial',
-  'expiring_soon':  'Expiring Soon',
-  'expired':        'Expired',
-  'revoked':        'Revoked',
-  'expired_revoked':'Expired / Revoked',
-};
 
 const STATUS_META = {
   active:    { label: 'Active',    color: '#34d399' },
@@ -342,26 +332,18 @@ export default function LicensePage() {
     return () => clearTimeout(debounceRef.current);
   }, [searchInput, dispatch]);
 
-  /* Fetch on filter change — route expiring_soon to dedicated endpoint */
+  /* Fetch on filter change */
   useEffect(() => {
-    if (filters.license_filter === 'expiring_soon') {
-      dispatch(fetchExpiringLicenses({
-        days:      7,
-        page:      filters.page,
-        page_size: filters.page_size,
-      }));
-    } else {
-      const p = {};
-      if (filters.license_filter) p.license_filter = filters.license_filter;
-      if (filters.plan_type)      p.plan_type      = filters.plan_type;
-      if (filters.search)         p.search         = filters.search;
-      p.sort_by    = filters.sort_by;
-      p.sort_order = filters.sort_order;
-      p.page       = filters.page;
-      p.page_size  = filters.page_size;
-      dispatch(fetchLicenses(p));
-    }
-  }, [dispatch, filters.license_filter, filters.plan_type, filters.search, filters.sort_by, filters.sort_order, filters.page, filters.page_size]);
+    const p = {};
+    if (filters.status)      p.status      = filters.status;
+    if (filters.plan_filter) p.plan_filter = filters.plan_filter;
+    if (filters.search)      p.search      = filters.search;
+    p.sort_by    = filters.sort_by;
+    p.sort_order = filters.sort_order;
+    p.page       = filters.page;
+    p.page_size  = filters.page_size;
+    dispatch(fetchLicenses(p));
+  }, [dispatch, filters.status, filters.plan_filter, filters.search, filters.sort_by, filters.sort_order, filters.page, filters.page_size]);
 
   const handleSort = (field) => {
     dispatch(setLicenseFilters({
@@ -378,9 +360,7 @@ export default function LicensePage() {
   const S  = stats || {};
   const ST = S.stats    || {};
   const EX = S.expiring || {};
-  const BS = S.by_status || {};
   const BP = S.by_plan   || {};
-  const fc = S.ui_filter_counts || {};
   const ovTotal = ST.total_licenses || 1;
   const ovPct   = (n) => Math.min(100, Math.round(((n ?? 0) / ovTotal) * 100));
 
@@ -402,7 +382,7 @@ export default function LicensePage() {
       {statsLoading && <div className="lc-stats-shimmer" />}
       {!statsLoading && stats && (
         <>
-          <div className="lc-cards-row-4">
+          <div className="lc-cards-row-3">
             {/* Card 1 · License Overview */}
             <div className="lc-ov-card">
               <div className="lc-ov-top">
@@ -432,30 +412,7 @@ export default function LicensePage() {
               </div>
             </div>
 
-            {/* Card 2 · Status Breakdown */}
-            <div className="lc-ov-card">
-              <div className="lc-ov-top">
-                <span className="lc-ov-label">Status Breakdown</span>
-                <span className="lc-ov-icon violet"><LayersIcon /></span>
-              </div>
-              <div className="lc-seg-bar">
-                {Object.entries(BS).map(([k, v]) => (
-                  <div key={k} className="lc-seg" style={{ flex: v || 0, background: STATUS_META[k]?.color || '#475569' }} />
-                ))}
-              </div>
-              <div className="lc-ov-chips two-col">
-                {Object.entries(BS).map(([k, v]) => (
-                  <div className="lc-ov-chip" key={k} style={{ '--cc': STATUS_META[k]?.color || '#475569' }}>
-                    <span className="lc-ov-dot" />
-                    <span className="lc-ov-chip-label">{STATUS_META[k]?.label || k}</span>
-                    <strong className="lc-ov-chip-val">{(v ?? 0).toLocaleString()}</strong>
-                    <span className="lc-ov-chip-pct">{ovPct(v)}%</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Card 3 · Plan Breakdown */}
+            {/* Card 2 · Plan Breakdown */}
             <div className="lc-ov-card">
               <div className="lc-ov-top">
                 <span className="lc-ov-label">Plan Breakdown</span>
@@ -467,22 +424,26 @@ export default function LicensePage() {
                 ))}
               </div>
               <div className="lc-ov-chips">
-                {Object.entries(BP).map(([k, v]) => (
-                  <div
-                    className={`lc-ov-chip clickable${filters.plan_type === k ? ' selected' : ''}`}
-                    key={k}
-                    style={{ '--cc': PLAN_META[k]?.color || '#475569' }}
-                    onClick={() => dispatch(setLicenseFilters({ plan_type: k === filters.plan_type ? '' : k, page: 1 }))}
-                  >
-                    <span className="lc-ov-dot" />
-                    <span className="lc-ov-chip-label">{PLAN_META[k]?.label || k}</span>
-                    <strong className="lc-ov-chip-val">{(v ?? 0).toLocaleString()}</strong>
-                    <span className="lc-ov-chip-pct">{ovPct(v)}%</span>
-                  </div>
-                ))}
+                {Object.entries(BP).map(([k, v]) => {
+                  // Map plan key → backend plan_filter: trial = free, monthly/annual = paid
+                  const pf = k === 'trial' ? 'free' : 'paid';
+                  return (
+                    <div
+                      className={`lc-ov-chip clickable${filters.plan_filter === pf ? ' selected' : ''}`}
+                      key={k}
+                      style={{ '--cc': PLAN_META[k]?.color || '#475569' }}
+                      onClick={() => dispatch(setLicenseFilters({ plan_filter: pf === filters.plan_filter ? '' : pf, page: 1 }))}
+                    >
+                      <span className="lc-ov-dot" />
+                      <span className="lc-ov-chip-label">{PLAN_META[k]?.label || k}</span>
+                      <strong className="lc-ov-chip-val">{(v ?? 0).toLocaleString()}</strong>
+                      <span className="lc-ov-chip-pct">{ovPct(v)}%</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-            {/* Card 4 · Expiring & Renewals */}
+            {/* Card 3 · Expiring & Renewals */}
             <div className="lc-ov-card">
               <div className="lc-ov-top">
                 <span className="lc-ov-label">Expiring & Renewals</span>
@@ -511,35 +472,33 @@ export default function LicensePage() {
 
       {/* ── Toolbar ── */}
       <div className="lc-toolbar">
-        {/* Search */}
+        {/* Search — by user email or device ID */}
         <div className="lc-search-wrap">
           <SearchIcon />
-          <input className="lc-search" placeholder="Search license ID, email, device…"
+          <input className="lc-search" placeholder="Search by user email or device ID…"
             value={searchInput} onChange={e => setSearchInput(e.target.value)} />
         </div>
 
-        {/* Compound filter dropdown with badge counts */}
+        {/* Status filter */}
         <div className="lc-filter">
-          <label>Filter</label>
-          <select className="lc-select" value={filters.license_filter}
-            onChange={e => dispatch(setLicenseFilters({ license_filter: e.target.value, page: 1 }))}>
-            {Object.entries(FILTER_LABELS).map(([v, l]) => (
-              <option key={v} value={v}>
-                {l}{fc[v] != null ? ` (${fc[v]})` : ''}
-              </option>
-            ))}
+          <label>Status</label>
+          <select className="lc-select" value={filters.status}
+            onChange={e => dispatch(setLicenseFilters({ status: e.target.value, page: 1 }))}>
+            <option value="">All Status</option>
+            <option value="active">Active</option>
+            <option value="expired">Expired</option>
+            <option value="revoked">Revoked</option>
           </select>
         </div>
 
-        {/* Plan filter */}
+        {/* Plan Type filter (free = trial · paid = monthly + annual) */}
         <div className="lc-filter">
-          <label>Plan</label>
-          <select className="lc-select" value={filters.plan_type}
-            onChange={e => dispatch(setLicenseFilters({ plan_type: e.target.value, page: 1 }))}>
+          <label>Plan Type</label>
+          <select className="lc-select" value={filters.plan_filter}
+            onChange={e => dispatch(setLicenseFilters({ plan_filter: e.target.value, page: 1 }))}>
             <option value="">All Plans</option>
-            <option value="paid">Paid</option>
-            <option value="trial">Trial</option>
-            <option value="grace">Grace</option>
+            <option value="free">Free (Trial)</option>
+            <option value="paid">Paid (Monthly + Annual)</option>
           </select>
         </div>
 
@@ -553,7 +512,7 @@ export default function LicensePage() {
           </select>
         </div>
 
-        {(filters.license_filter || filters.plan_type || filters.search) && (
+        {(filters.status || filters.plan_filter || filters.search) && (
           <button className="lc-clear-btn" onClick={() => { setSearchInput(''); dispatch(clearLicenseFilters()); }}>
             Clear
           </button>
@@ -592,7 +551,7 @@ export default function LicensePage() {
                   return (
                     <tr key={lid} className={l.is_expiring_soon ? 'lc-row-warn' : ''}>
                       <td>
-                        <span className="lc-license-id" title={lid}>{lid ? lid.slice(0, 12) + '…' : '—'}</span>
+                        <span className="lc-license-id" title={lid}>{lid || '—'}</span>
                       </td>
                       <td className="lc-clickable" onClick={() => lid && setDetailLicenseId(lid)}>
                         <div className="lc-user-email">{l.user_email || '—'}</div>

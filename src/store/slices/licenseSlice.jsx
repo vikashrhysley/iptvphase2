@@ -2,8 +2,8 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { apiFetchExpiringLicenses, apiFetchLicenses, apiFetchLicenseStats, apiFetchLicenseDetail, apiRenewLicense, apiRevokeLicense, apiEditLicense } from '../../services/api';
 
 const DEFAULT_FILTERS = {
-  license_filter: '',
-  plan_type: '',
+  status: '',        // '' | active | expired | revoked
+  plan_filter: '',   // '' | free (trial) | paid (monthly + annual)
   search: '',
   sort_by: 'expires_at',
   sort_order: 'asc',

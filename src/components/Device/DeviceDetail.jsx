@@ -246,6 +246,12 @@ export default function DeviceDetail({ deviceId, onBack }) {
             <div className="dd-hero-body">
               <div className="dd-hero-name">{name || d.device_name || '—'}</div>
               <div className="dd-hero-sub">{d.platform_display || d.platform} · {d.os_version}</div>
+              {(d.device_id || d.id) && (
+                <div className="dd-hero-id">
+                  <span className="dd-hero-id-label">Device ID</span>
+                  <span className="dd-hero-id-val" title={d.device_id || d.id}>{d.device_id || d.id}</span>
+                </div>
+              )}
               <div className="dd-hero-badges">
                 <span className={`dd-status-pill ${statusCls(d.status)}`}>{d.status}</span>
                 {d.is_online && <span className="dd-badge online">● Online</span>}
