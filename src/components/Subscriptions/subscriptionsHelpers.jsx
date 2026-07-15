@@ -41,6 +41,18 @@ export const STATUS_OPTIONS = [
   { value: 'expired',   label: 'Expired' },
 ];
 
+// Canonical plan types (match the Plans create form). Extra values found in the
+// loaded data are merged in at render time so the list stays accurate.
+export const PLAN_TYPE_OPTIONS = [
+  { value: '',        label: 'All Plans' },
+  { value: 'trial',   label: 'Trial' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'annual',  label: 'Annual' },
+];
+
+export const titleCasePlan = (v) =>
+  (v || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
 export const PT_STATUS_CLASS = {
   succeeded:  'sdp-pt-success',
   success:    'sdp-pt-success',

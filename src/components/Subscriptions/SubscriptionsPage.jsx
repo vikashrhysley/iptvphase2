@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchSubscriptions, setSubscriptionFilters, clearSubscriptionFilters } from '../../store/slices/subscriptionsSlice';
-import { fmtDate, shortId, statusClass, planClass, STATUS_OPTIONS } from './subscriptionsHelpers';
+import { fmtDate, shortId, statusClass, planClass, STATUS_OPTIONS, PLAN_TYPE_OPTIONS, titleCasePlan } from './subscriptionsHelpers';
 import SubscriptionDetailPage from './SubscriptionDetailPage';
 import './SubscriptionsPage.css';
 
@@ -146,23 +146,29 @@ export default function SubscriptionsPage() {
   const { subscriptions, total, page, pageSize, loading, error, filters } = useSelector((s) => s.subscriptions);
 
   const [userIdInput, setUserIdInput] = useState(filters.user_id || '');
-  const [planTypeInput, setPlanTypeInput] = useState(filters.plan_type || '');
   const [detailSubscriptionId, setDetailSubscriptionId] = useState(null);
   const debounceRef = useRef(null);
   const totalPages  = Math.max(1, Math.ceil(total / (pageSize || 20)));
 
-  /* Debounce user_id / plan_type free-text filters */
+  /* Plan-type dropdown options: canonical list + any extra types in loaded data */
+  const planTypeOptions = (() => {
+    const seen = new Set(PLAN_TYPE_OPTIONS.map(o => o.value));
+    const extras = [];
+    subscriptions.forEach(s => {
+      const v = (s.plan_type || '').toLowerCase();
+      if (v && !seen.has(v)) { seen.add(v); extras.push({ value: v, label: titleCasePlan(v) }); }
+    });
+    return [...PLAN_TYPE_OPTIONS, ...extras];
+  })();
+
+  /* Debounce user_id free-text filter */
   useEffect(() => {
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      dispatch(setSubscriptionFilters({
-        user_id:   userIdInput.trim(),
-        plan_type: planTypeInput.trim(),
-        page: 1,
-      }));
+      dispatch(setSubscriptionFilters({ user_id: userIdInput.trim(), page: 1 }));
     }, 350);
     return () => clearTimeout(debounceRef.current);
-  }, [userIdInput, planTypeInput, dispatch]);
+  }, [userIdInput, dispatch]);
 
   /* Fetch on filter change */
   useEffect(() => {
@@ -186,7 +192,6 @@ export default function SubscriptionsPage() {
 
   const handleClear = () => {
     setUserIdInput('');
-    setPlanTypeInput('');
     dispatch(clearSubscriptionFilters());
   };
 
@@ -224,8 +229,10 @@ export default function SubscriptionsPage() {
 
         <div className="sb-filter">
           <label>Plan Type</label>
-          <input className="sb-text-input" placeholder="e.g. premium"
-            value={planTypeInput} onChange={e => setPlanTypeInput(e.target.value)} />
+          <select className="sb-select" value={filters.plan_type || ''}
+            onChange={e => dispatch(setSubscriptionFilters({ plan_type: e.target.value, page: 1 }))}>
+            {planTypeOptions.map(o => <option key={o.value || 'all'} value={o.value}>{o.label}</option>)}
+          </select>
         </div>
 
         <div className="sb-filter">

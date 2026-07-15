@@ -885,64 +885,43 @@ function LicenseAnalytics() {
   if (!licenses)       return <div className="an-empty">No data available.</div>;
 
   const total = licenses.total_licenses ?? 0;
-  const conversionRate = licenses.trial_to_paid_rate_pct ?? 0;
-  const conversionColor = conversionRate >= 70 ? '#10b981' : conversionRate >= 40 ? '#fbbf24' : '#ef4444';
-
   const planSegments = toSegments(licenses.by_plan_type, PLAN_COLORS);
+
+  const licenseMetrics = [
+    { label: 'Total',   value: total,                          color: '#00d4ff' },
+    { label: 'Active',  value: licenses.active_licenses  ?? 0, color: '#10b981' },
+    { label: 'Expired', value: licenses.expired_licenses ?? 0, color: '#ef4444' },
+    { label: 'Revoked', value: licenses.revoked_licenses ?? 0, color: '#f59e0b' },
+  ];
 
   return (
     <div className="an-section">
-      <div className="an-stats-row">
-        <div className="an-stat-card" style={{ '--asc': '#00d4ff' }}>
+      <div className="an-license-row">
+        <div className="an-stat-card an-license-card" style={{ '--asc': '#00d4ff' }}>
           <div className="an-stat-accent" />
-          <div className="an-stat-label">Total Licenses</div>
-          <div className="an-stat-value">{total.toLocaleString()}</div>
+          <div className="an-stat-label">Licenses</div>
+          <div className="an-license-grid">
+            {licenseMetrics.map(m => (
+              <div className="an-license-item" key={m.label} style={{ '--lic': m.color }}>
+                <span className="an-license-value">{m.value.toLocaleString()}</span>
+                <span className="an-license-label">{m.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="an-stat-card" style={{ '--asc': '#10b981' }}>
-          <div className="an-stat-accent" />
-          <div className="an-stat-label">Active</div>
-          <div className="an-stat-value pos">{(licenses.active_licenses ?? 0).toLocaleString()}</div>
-        </div>
-        <div className="an-stat-card" style={{ '--asc': '#ef4444' }}>
-          <div className="an-stat-accent" />
-          <div className="an-stat-label">Expired</div>
-          <div className="an-stat-value neg">{(licenses.expired_licenses ?? 0).toLocaleString()}</div>
-        </div>
-        <div className="an-stat-card" style={{ '--asc': conversionColor }}>
-          <div className="an-stat-accent" />
-          <div className="an-stat-label">Trial → Paid Rate</div>
-          <div className="an-stat-value">{conversionRate}%</div>
-        </div>
-      </div>
 
-      <div className="an-stats-row">
-        <div className="an-stat-card" style={{ '--asc': '#00d4ff' }}>
-          <div className="an-stat-accent" />
-          <div className="an-stat-label">Trial Licenses</div>
-          <div className="an-stat-value">{(licenses.trial_licenses ?? 0).toLocaleString()}</div>
-        </div>
-        <div className="an-stat-card" style={{ '--asc': '#f59e0b' }}>
-          <div className="an-stat-accent" />
-          <div className="an-stat-label">Grace Period</div>
-          <div className="an-stat-value">{(licenses.grace_licenses ?? 0).toLocaleString()}</div>
-        </div>
-        <div className="an-stat-card" style={{ '--asc': '#10b981' }}>
-          <div className="an-stat-accent" />
-          <div className="an-stat-label">Converted to Paid</div>
-          <div className="an-stat-value pos">{(licenses.converted_paid ?? 0).toLocaleString()}</div>
-        </div>
         <div className="an-stat-card" style={{ '--asc': '#fbbf24' }}>
           <div className="an-stat-accent" />
-          <div className="an-stat-label">Expiring Soon</div>
+          <div className="an-stat-label">Expiry Overview</div>
           <div className="an-stat-split">
             <div className="an-stat-split-item">
               <span className="an-stat-split-value">{(licenses.expiring_7d ?? 0).toLocaleString()}</span>
-              <span className="an-stat-split-label">Next 7 days</span>
+              <span className="an-stat-split-label">Expiring 7 days</span>
             </div>
             <div className="an-stat-split-divider" />
             <div className="an-stat-split-item">
               <span className="an-stat-split-value">{(licenses.expiring_30d ?? 0).toLocaleString()}</span>
-              <span className="an-stat-split-label">Next 30 days</span>
+              <span className="an-stat-split-label">Expiring 30 days</span>
             </div>
           </div>
         </div>
@@ -2144,7 +2123,7 @@ function LatencyHistoryChart({ historical }) {
   );
 }
 
-/* ── System Analytics tab ────────────────────────────────── */
+
 function SystemAnalytics() {
   const dispatch = useDispatch();
   const { system, systemLoading, systemError } = useSelector(s => s.analytics);
