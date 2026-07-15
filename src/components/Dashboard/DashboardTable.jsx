@@ -156,23 +156,55 @@ const LABELS = {
 };
 
 const LIVE_STATS = [
-  {
-    key: 'device_stats',
-    label: 'Device Stats',
-    accent: 'var(--accent-primary)',
-    noDynamic: true,
+   {
+    key: 'app_users',
+    label: 'App Users',
+    accent: 'var(--accent-secondary)',
     rows: [
-      { label: 'Total',                              fields: ['devices.total_devices',         'stats.total',    'total_devices'] },
-      { label: 'Active',                             fields: ['devices.active_devices',        'stats.active',   'active_devices'] },
-      { label: 'Inactive',                           fields: ['devices.inactive_devices',      'stats.inactive', 'inactive_devices'] },
-      { label: 'Total Blocked Devices (Auto+Admin)', fields: ['devices.total_blocked_devices', 'stats.blocked',  'total_blocked_devices', 'blocked_devices'] },
-      { label: 'Auto Blocked',                       fields: ['devices.auto_blocked_devices',  'auto_blocked_devices'] },
-      { label: 'Admin Blocked',                      fields: ['devices.admin_blocked_devices', 'admin_blocked_devices'] },
-      { label: 'High Risk',                          fields: ['devices.high_risk_devices',     'high_risk_devices'] },
-      { label: 'New (24h)',                          fields: ['devices.new_enrollments_24h',   'new_enrollments_24h'] },
-      { label: 'New (7d)',                           fields: ['devices.new_enrollments_7d',    'new_enrollments_7d'] },
-      { label: 'Never Heartbeat',                    fields: ['devices.never_heartbeat',       'never_heartbeat'] },
-      { label: 'Push Enabled',                       fields: ['devices.push_enabled',          'push_enabled'] },
+      {
+        label: 'Registered Users (Till Now)',
+        fields: ['app_users.registered_users']
+      },
+      {
+        label: 'Present Users',
+        fields: ['app_users.total_present_users.count']
+      },
+      {
+        label: 'Enabled / Blocked',
+        fields: [
+          'app_users.total_present_users.enabled_users',
+          'app_users.total_present_users.blocked_users'
+        ],
+        combine: true
+      },
+      {
+        label: 'Trial Users',
+        fields: ['app_users.trial_users']
+      },
+       {
+        label: 'Paid Users',
+        fields: ['app_users.paid_users']
+      },
+       {
+        label: 'Inactive Due To Payment Users',
+        fields: ['app_users.inactive_due_to_payment_users']
+      },
+       {
+        label: 'Unsubscribed Users',
+        fields: ['app_users.unsubscribed_users']
+      },
+       {
+        label: 'Never Subscribed Users',
+        fields: ['app_users.never_subscribed_users']
+      },
+      {
+        label: 'New Signups 24h',
+        fields: ['app_users.new_signups_24h']
+      },
+      {
+        label: 'New Signups 7d',
+        fields: ['app_users.new_signups_7d']
+      },
     ],
   },
   {
@@ -181,28 +213,60 @@ const LIVE_STATS = [
     accent: 'var(--accent-success)',
     noDynamic: true,
     rows: [
-      { label: 'Total',        fields: ['licenses.total_licenses',   'total_licenses'] },
-      { label: 'Active',       fields: ['licenses.active_licenses',  'active_licenses'] },
-      { label: 'Expired',      fields: ['licenses.expired_licenses', 'expired_licenses'] },
-      { label: 'Revoked',      fields: ['licenses.revoked_licenses', 'revoked_licenses'] },
-      { label: 'Expiring 48h', fields: ['licenses.expiring_48h',     'expiring_48h'] },
-      { label: 'Expiring 7d',  fields: ['licenses.expiring_7d',      'expiring_7d'] },
-      { label: 'Expiring 30d', fields: ['licenses.expiring_30d',     'expiring_30d'] },
+      { label: 'Total', fields: ['licenses.total_licenses', 'total_licenses'] },
+      { label: 'Active', fields: ['licenses.active_licenses', 'active_licenses'] },
+      { label: 'Expired', fields: ['licenses.expired_licenses', 'expired_licenses'] },
+      { label: 'Revoked', fields: ['licenses.revoked_licenses', 'revoked_licenses'] },
+      { label: 'Expiring 48h', fields: ['licenses.expiring_48h', 'expiring_48h'] },
+      { label: 'Expiring 7d', fields: ['licenses.expiring_7d', 'expiring_7d'] },
+      { label: 'Expiring 30d', fields: ['licenses.expiring_30d', 'expiring_30d'] },
     ],
   },
   {
-    key: 'users',
-    label: 'Users',
-    accent: 'var(--accent-secondary)',
+    key: 'device_stats',
+    label: 'Device Stats',
+    accent: 'var(--accent-primary)',
+    noDynamic: true,
     rows: [
-      { label: 'Total', fields: ['total_users', 'users_total', 'user_count', 'users'] },
-      { label: 'Admin', fields: ['admin_users', 'users.admin', 'roles.admin'] },
-      { label: 'Super Admin', fields: ['superadmin_users', 'super_admin_users', 'users.superadmin', 'roles.superadmin'] },
-      { label: 'Viewer', fields: ['viewer_users', 'users.viewer', 'roles.viewer'] },
+      { label: 'Total', fields: ['devices.total_devices', 'stats.total', 'total_devices'] },
+      { label: 'Active', fields: ['devices.active_devices', 'stats.active', 'active_devices'] },
+      { label: 'Inactive', fields: ['devices.inactive_devices', 'stats.inactive', 'inactive_devices'] },
+      { label: 'Total Blocked Devices (Auto+Admin)', fields: ['devices.total_blocked_devices', 'stats.blocked', 'total_blocked_devices', 'blocked_devices'] },
+      { label: 'Auto Blocked', fields: ['devices.auto_blocked_devices', 'auto_blocked_devices'] },
+      { label: 'Admin Blocked', fields: ['devices.admin_blocked_devices', 'admin_blocked_devices'] },
+      { label: 'High Risk', fields: ['devices.high_risk_devices', 'high_risk_devices'] },
+      { label: 'New (24h)', fields: ['devices.new_enrollments_24h', 'new_enrollments_24h'] },
+      { label: 'New (7d)', fields: ['devices.new_enrollments_7d', 'new_enrollments_7d'] },
+      { label: 'Never Heartbeat', fields: ['devices.never_heartbeat', 'never_heartbeat'] },
+      { label: 'Push Enabled', fields: ['devices.push_enabled', 'push_enabled'] },
     ],
-    includes: ['user', 'admin', 'viewer'],
-    excludes: ['device_user'],
   },
+  {
+    key: 'admins',
+    label: 'Admin',
+    accent: 'var(--accent-success)',
+    noDynamic: true,
+    rows: [
+      { label: 'Total Admin', fields: ['admins.total_admins', 'total_admins'] },
+      { label: 'Viewer', fields: ['admins.viewer', 'viewer'] },
+      { label: 'Admin', fields: ['admins.admin', 'admin'] },
+      { label: 'Superadmin', fields: ['admins.superadmin', 'superadmin'] },
+    ],
+  },
+  // {
+  //   key: 'users',
+  //   label: 'Users',
+  //   accent: 'var(--accent-secondary)',
+  //   rows: [
+  //     { label: 'Total', fields: ['total_users', 'users_total', 'user_count', 'users'] },
+  //     { label: 'Admin', fields: ['admin_users', 'users.admin', 'roles.admin'] },
+  //     { label: 'Super Admin', fields: ['superadmin_users', 'super_admin_users', 'users.superadmin', 'roles.superadmin'] },
+  //     { label: 'Viewer', fields: ['viewer_users', 'users.viewer', 'roles.viewer'] },
+  //   ],
+  //   includes: ['user', 'admin', 'viewer'],
+  //   excludes: ['device_user'],
+  // },
+ 
   {
     key: 'heartbeat',
     label: 'Heartbeat',
@@ -341,10 +405,12 @@ const buildLiveStats = (stats, revenue, overview) => (
     // Platform-style cards: read an entire sub-object as rows
     if (card.sourceKey) {
       const source = getNestedValue(stats, card.sourceKey)
-                  || getNestedValue(overview, card.sourceKey)
-                  || {};
+        || getNestedValue(overview, card.sourceKey)
+        || {};
+
       const entries = Object.entries(source);
       const total = entries.reduce((sum, [, v]) => sum + Number(v || 0), 0);
+
       const rows = [
         { label: 'Total', value: total || undefined },
         ...entries.map(([key, value]) => ({
@@ -352,33 +418,80 @@ const buildLiveStats = (stats, revenue, overview) => (
           value: numericValue(value) ?? value,
         })),
       ];
+
       return { ...card, rows };
     }
 
     const usedKeys = new Set();
+
     const rows = card.rows.map((row, index) => {
+
+      // Handle combined values (example: Enabled / Blocked)
+      if (row.combine) {
+        const values = row.fields.map(field =>
+          metricValue(getNestedValue(stats, field))
+        );
+
+        row.fields.forEach(field => usedKeys.add(normalizeKey(field)));
+
+        return {
+          ...row,
+          value: `${values[0] ?? 0} Enabled | ${values[1] ?? 0} Blocked`,
+        };
+      }
+
+
       const statsMatches = row.fields.map(field => ({
         key: field,
         value: metricValue(getNestedValue(stats, field)),
       }));
+
       const revenueMatches = (row.revenueFields || []).map(field => ({
         key: field,
         value: metricValue(getNestedValue(revenue, field)),
       }));
-      const fallbackSum = index === 0 ? sumMatchingStats(stats, card.includes) : undefined;
-      const matched = [...revenueMatches, ...statsMatches].find(item => item.value !== undefined && item.value !== null && item.value !== '');
-      const value = firstPresent(matched?.value, fallbackSum);
+
+      const fallbackSum = index === 0
+        ? sumMatchingStats(stats, card.includes)
+        : undefined;
+
+      const matched = [
+        ...revenueMatches,
+        ...statsMatches
+      ].find(
+        item =>
+          item.value !== undefined &&
+          item.value !== null &&
+          item.value !== ''
+      );
+
+      const value = firstPresent(
+        matched?.value,
+        fallbackSum
+      );
+
+      [...row.fields, ...(row.revenueFields || [])]
+        .forEach(field => usedKeys.add(normalizeKey(field)));
+
+      if (matched?.key) {
+        usedKeys.add(normalizeKey(matched.key));
+      }
+
       const numeric = numericValue(value);
-      [...row.fields, ...(row.revenueFields || [])].forEach(field => usedKeys.add(normalizeKey(field)));
-      if (matched?.key) usedKeys.add(normalizeKey(matched.key));
 
       return {
         ...row,
-        value: numeric !== null && !String(value).includes('$') ? numeric : value,
+        value: numeric !== null && !String(value).includes('$')
+          ? numeric
+          : value,
       };
     });
 
-    if (card.noDynamic) return { ...card, rows };
+
+    if (card.noDynamic) {
+      return { ...card, rows };
+    }
+
 
     const dynamicRows = [
       ...flattenStats(stats),
@@ -388,14 +501,22 @@ const buildLiveStats = (stats, revenue, overview) => (
       .filter(item => !usedKeys.has(normalizeKey(item.key)))
       .map(item => {
         usedKeys.add(normalizeKey(item.key));
+
         const numeric = numericValue(item.value);
+
         return {
           label: formatLabel(item.key),
-          value: numeric !== null && !String(item.value).includes('$') ? numeric : item.value,
+          value: numeric !== null && !String(item.value).includes('$')
+            ? numeric
+            : item.value,
         };
       });
 
-    return { ...card, rows: [...rows, ...dynamicRows] };
+
+    return {
+      ...card,
+      rows: [...rows, ...dynamicRows],
+    };
   })
 );
 
@@ -404,7 +525,7 @@ const entriesFromObject = (items) => Object.entries(items || {}).map(([label, va
 
 function StatCard({ label, rows, accent }) {
   const primary = rows?.[0];
-
+  console.log(8777, rows, label, accent)
   return (
     <div className="stat-card" style={{ '--stat-accent': accent || 'var(--accent-primary)' }}>
       <div className="stat-card-head">
@@ -441,24 +562,24 @@ function ExportButton({ onExportPDF, onExportExcel }) {
     <div className="dash-export-wrap" ref={ref}>
       <button className="dash-export-btn" onClick={() => setOpen(o => !o)}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
         </svg>
         Export
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-          <polyline points="6 9 12 15 18 9"/>
+          <polyline points="6 9 12 15 18 9" />
         </svg>
       </button>
       {open && (
         <div className="dash-export-menu">
           <button onClick={() => { onExportPDF(); setOpen(false); }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
             </svg>
             Export as PDF
           </button>
           <button onClick={() => { onExportExcel(); setOpen(false); }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
+              <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M9 21V9" />
             </svg>
             Export as Excel
           </button>
@@ -589,7 +710,7 @@ export default function DashboardTable({ activeDashboardTab = 'liveStats' }) {
           />
           {loading && !stats ? (
             <div className="dashboard-stats">
-              {[1,2,3,4,5,6,7,8].map(i => (
+              {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
                 <div key={i} className="stat-card dash-skel-card">
                   <div className="dash-skel-label" />
                   <div className="dash-skel-val" />

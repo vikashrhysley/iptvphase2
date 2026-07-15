@@ -4,18 +4,19 @@ import { fetchPlanDetail, clearPlanDetail, togglePlanStatus, clearToggleState, u
 import { fmtDateTime } from '../Subscriptions/subscriptionsHelpers';
 import './PlansPage.css';
 import './PlanDetailPage.css';
+import toast from "react-hot-toast";
 
 /* ── Icons ─────────────────────────────────────────────── */
-const BackIcon  = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>;
-const CheckIcon = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>;
-const XIcon     = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
-const PowerIcon = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>;
-const EditIcon  = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
+const BackIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>;
+const CheckIcon = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>;
+const XIcon = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>;
+const PowerIcon = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18.36 6.64a9 9 0 1 1-12.73 0" /><line x1="12" y1="2" x2="12" y2="12" /></svg>;
+const EditIcon = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>;
 
 const planClass = (p) => {
   const v = (p || '').toLowerCase();
-  if (v.includes('trial'))   return 'pp-type-trial';
-  if (v.includes('life'))    return 'pp-type-lifetime';
+  if (v.includes('trial')) return 'pp-type-trial';
+  if (v.includes('life')) return 'pp-type-lifetime';
   if (v.includes('premium') || v.includes('pro')) return 'pp-type-premium';
   return 'pp-type-default';
 };
@@ -43,21 +44,21 @@ function EditPlanModal({ plan, onClose }) {
       : '';
 
   const [form, setForm] = useState({
-    name:                    plan.name                    || '',
-    description:             plan.description             || '',
-    amount:                  initAmount,
-    currency:                plan.currency                || 'USD',
-    trial_days:              plan.trial_days              != null ? String(plan.trial_days) : '',
-    max_devices:             plan.max_devices             ?? 1,
-    max_concurrent_streams:  plan.max_concurrent_streams  ?? 1,
-    hd:                      !!features.hd,
-    fourk:                   !!features['4k'],
-    device_limit_policy:     plan.device_limit_policy     || 'hard_block',
+    name: plan.name || '',
+    description: plan.description || '',
+    amount: initAmount,
+    currency: plan.currency || 'USD',
+    trial_days: plan.trial_days != null ? String(plan.trial_days) : '',
+    max_devices: plan.max_devices ?? 1,
+    max_concurrent_streams: plan.max_concurrent_streams ?? 1,
+    hd: !!features.hd,
+    fourk: !!features['4k'],
+    device_limit_policy: plan.device_limit_policy || 'hard_block',
     requires_payment_method: plan.requires_payment_method ?? true,
-    authorization_type:      plan.authorization_type      || 'setup_intent',
-    requires_phone_verify:   plan.requires_phone_verify   ?? true,
-    is_default:              plan.is_default              ?? false,
-    reason:                  '',
+    authorization_type: plan.authorization_type || 'setup_intent',
+    requires_phone_verify: plan.requires_phone_verify ?? true,
+    is_default: plan.is_default ?? false,
+    reason: '',
   });
   const [localError, setLocalError] = useState('');
 
@@ -73,12 +74,12 @@ function EditPlanModal({ plan, onClose }) {
     if (form.amount !== '' && Number(form.amount) < 0) { setLocalError('Amount cannot be negative.'); return; }
 
     const payload = { reason: form.reason.trim() };
-    if (form.name.trim()  !== (plan.name || ''))        payload.name        = form.name.trim();
+    if (form.name.trim() !== (plan.name || '')) payload.name = form.name.trim();
     if (form.description.trim() !== (plan.description || '')) payload.description = form.description.trim();
     if (form.amount !== '' && Number(form.amount) !== Number(initAmount)) payload.amount = Number(form.amount);
     if (form.currency.trim().toUpperCase() !== (plan.currency || '')) payload.currency = form.currency.trim().toUpperCase();
     if (form.trial_days !== '' && Number(form.trial_days) !== plan.trial_days) payload.trial_days = Number(form.trial_days);
-    if (Number(form.max_devices) !== plan.max_devices)   payload.max_devices = Number(form.max_devices);
+    if (Number(form.max_devices) !== plan.max_devices) payload.max_devices = Number(form.max_devices);
     if (Number(form.max_concurrent_streams) !== plan.max_concurrent_streams) payload.max_concurrent_streams = Number(form.max_concurrent_streams);
     if (form.device_limit_policy !== plan.device_limit_policy) payload.device_limit_policy = form.device_limit_policy;
     if (form.requires_payment_method !== (plan.requires_payment_method ?? true)) payload.requires_payment_method = form.requires_payment_method;
@@ -241,6 +242,16 @@ function TogglePlanStatusModal({ plan, onClose }) {
     dispatch(togglePlanStatus({ id: plan.id, isActive: activating }));
   };
 
+  useEffect(() => {
+    if (toggleSuccess) {
+      onClose()
+      toast.success(
+        `Plan ${activating ? "deactivated" : "activated"} successfully`
+      );
+    }
+
+  }, [toggleSuccess])
+
   return (
     <div className="pdp-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <form className="pdp-modal" onSubmit={handleConfirm}>
@@ -281,7 +292,7 @@ export default function PlanDetailPage({ planId, onBack }) {
   const { selectedPlan: plan, detailLoading, detailError } = useSelector((s) => s.plans);
   const { user: me } = useSelector((s) => s.auth);
   const [showToggle, setShowToggle] = useState(false);
-  const [showEdit,   setShowEdit]   = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
   const isSuperAdmin = me?.role === 'superadmin';
 
   useEffect(() => {
@@ -290,6 +301,7 @@ export default function PlanDetailPage({ planId, onBack }) {
   }, [dispatch, planId]);
 
   const handleCloseToggle = () => {
+    console.log(6777, "hello .....")
     dispatch(clearToggleState());
     setShowToggle(false);
   };
@@ -362,10 +374,10 @@ export default function PlanDetailPage({ planId, onBack }) {
                 <InfoField label="Device Limit Policy" value={plan.device_limit_policy} />
                 <InfoField label="Requires Payment Method" value={plan.requires_payment_method ? 'Yes' : 'No'} />
                 <InfoField label="HD" value={
-                  <span className={`pp-feature-chip ${features.hd ? 'on' : 'off'}`}>{features.hd ? <CheckIcon/> : <XIcon/>} HD</span>
+                  <span className={`pp-feature-chip ${features.hd ? 'on' : 'off'}`}>{features.hd ? <CheckIcon /> : <XIcon />} HD</span>
                 } />
                 <InfoField label="4K" value={
-                  <span className={`pp-feature-chip ${features['4k'] ? 'on' : 'off'}`}>{features['4k'] ? <CheckIcon/> : <XIcon/>} 4K</span>
+                  <span className={`pp-feature-chip ${features['4k'] ? 'on' : 'off'}`}>{features['4k'] ? <CheckIcon /> : <XIcon />} 4K</span>
                 } />
               </div>
             </div>
@@ -382,7 +394,7 @@ export default function PlanDetailPage({ planId, onBack }) {
         </>
       )}
 
-      {showEdit   && plan && <EditPlanModal   plan={plan} onClose={handleCloseEdit}   />}
+      {showEdit && plan && <EditPlanModal plan={plan} onClose={handleCloseEdit} />}
       {showToggle && plan && <TogglePlanStatusModal plan={plan} onClose={handleCloseToggle} />}
     </div>
   );
