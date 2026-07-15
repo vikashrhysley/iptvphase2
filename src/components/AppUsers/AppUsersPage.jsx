@@ -173,44 +173,6 @@ const relativeTime = (iso) => {
   return `${val} ${unit}${val !== 1 ? 's' : ''} ago`;
 };
 
-function FixedTooltip({ label, children }) {
-  const [pos, setPos] = useState(null);
-  if (!label) return <>{children}</>;
-  return (
-    <span
-      style={{ position: 'relative', display: 'inline-block' }}
-      onMouseEnter={(e) => {
-        const r = e.currentTarget.getBoundingClientRect();
-        setPos({ x: r.left + r.width / 2, y: r.top });
-      }}
-      onMouseLeave={() => setPos(null)}
-    >
-      {children}
-      {pos && (
-        <span style={{
-          position: 'fixed',
-          left: pos.x,
-          top: pos.y - 8,
-          transform: 'translate(-50%, -100%)',
-          background: 'var(--bg-raised, #1e293b)',
-          color: 'var(--text-primary, #e2e8f0)',
-          border: '1px solid var(--border-subtle, rgba(255,255,255,0.1))',
-          borderRadius: 6,
-          padding: '5px 10px',
-          fontSize: '0.75rem',
-          fontWeight: 500,
-          whiteSpace: 'nowrap',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.35)',
-          zIndex: 9999,
-          pointerEvents: 'none',
-        }}>
-          {label}
-        </span>
-      )}
-    </span>
-  );
-}
-
 const statusClass = (s) => {
   if (s === 'active')    return 'active';
   if (s === 'blocked')   return 'blocked';

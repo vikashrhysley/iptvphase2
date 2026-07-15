@@ -13,7 +13,6 @@
 
 .rbac-page {
   padding: 24px 28px;
-  max-width: 1340px;
   width: 100%;
   animation: rb-fade-up 0.3s ease both;
 }

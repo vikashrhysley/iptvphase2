@@ -5,6 +5,7 @@ const DEFAULT_FILTERS = {
   status:    '',
   plan_type: '',
   user_id:   '',
+  search:    '',
   date_from: '',
   date_to:   '',
   page:      1,

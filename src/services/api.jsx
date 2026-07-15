@@ -1336,6 +1336,7 @@ export const apiFetchSubscriptions = async (accessToken, params = {}) => {
   if (params.status)    query.set('status', params.status);
   if (params.plan_type) query.set('plan_type', params.plan_type);
   if (params.user_id)   query.set('user_id', params.user_id);
+  if (params.search)    query.set('search', params.search);
   if (params.date_from) query.set('date_from', params.date_from);
   if (params.date_to)   query.set('date_to', params.date_to);
   if (params.page)      query.set('page', String(params.page));

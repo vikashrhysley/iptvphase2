@@ -78,6 +78,9 @@
 .sb-user-email { font-size:0.82rem; color:var(--text-secondary); }
 .sb-user-id    { font-family:monospace; font-size:0.72rem; color:var(--text-muted); margin-top:2px; }
 
+/* Truncated IDs reveal the full value on hover (native title tooltip) */
+.sb-id-hover:hover { color:var(--accent-primary); }
+
 .sb-billing-cycle { font-size:0.72rem; color:var(--text-muted); margin-top:3px; text-transform:capitalize; }
 .sb-currency      { margin-left:6px; font-size:0.7rem; font-weight:700; color:var(--text-muted); }
 .sb-cancelled-date { font-size:0.7rem; color:#f87171; margin-top:3px; }

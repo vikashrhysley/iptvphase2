@@ -145,7 +145,7 @@ export default function SubscriptionsPage() {
   const dispatch = useDispatch();
   const { subscriptions, total, page, pageSize, loading, error, filters } = useSelector((s) => s.subscriptions);
 
-  const [userIdInput, setUserIdInput] = useState(filters.user_id || '');
+  const [searchInput, setSearchInput] = useState(filters.search || '');
   const [detailSubscriptionId, setDetailSubscriptionId] = useState(null);
   const debounceRef = useRef(null);
   const totalPages  = Math.max(1, Math.ceil(total / (pageSize || 20)));
@@ -161,37 +161,37 @@ export default function SubscriptionsPage() {
     return [...PLAN_TYPE_OPTIONS, ...extras];
   })();
 
-  /* Debounce user_id free-text filter */
+  /* Debounce search (user email) free-text filter */
   useEffect(() => {
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      dispatch(setSubscriptionFilters({ user_id: userIdInput.trim(), page: 1 }));
+      dispatch(setSubscriptionFilters({ search: searchInput.trim(), page: 1 }));
     }, 350);
     return () => clearTimeout(debounceRef.current);
-  }, [userIdInput, dispatch]);
+  }, [searchInput, dispatch]);
 
   /* Fetch on filter change */
   useEffect(() => {
     const p = {};
     if (filters.status)    p.status    = filters.status;
     if (filters.plan_type) p.plan_type = filters.plan_type;
-    if (filters.user_id)   p.user_id   = filters.user_id;
+    if (filters.search)    p.search    = filters.search;
     if (filters.date_from) p.date_from = filters.date_from;
     if (filters.date_to)   p.date_to   = filters.date_to;
     p.page      = filters.page;
     p.page_size = filters.page_size;
     dispatch(fetchSubscriptions(p));
-  }, [dispatch, filters.status, filters.plan_type, filters.user_id, filters.date_from, filters.date_to, filters.page, filters.page_size]);
+  }, [dispatch, filters.status, filters.plan_type, filters.search, filters.date_from, filters.date_to, filters.page, filters.page_size]);
 
   /* All hooks above — conditional render AFTER */
   if (detailSubscriptionId) {
     return <SubscriptionDetailPage subscriptionId={detailSubscriptionId} onBack={() => setDetailSubscriptionId(null)} />;
   }
 
-  const hasActiveFilters = filters.status || filters.plan_type || filters.user_id || filters.date_from || filters.date_to;
+  const hasActiveFilters = filters.status || filters.plan_type || filters.search || filters.date_from || filters.date_to;
 
   const handleClear = () => {
-    setUserIdInput('');
+    setSearchInput('');
     dispatch(clearSubscriptionFilters());
   };
 
@@ -215,8 +215,8 @@ export default function SubscriptionsPage() {
       <div className="sb-toolbar">
         <div className="sb-search-wrap">
           <SearchIcon />
-          <input className="sb-search" placeholder="User ID…"
-            value={userIdInput} onChange={e => setUserIdInput(e.target.value)} />
+          <input className="sb-search" placeholder="Search by user email…"
+            value={searchInput} onChange={e => setSearchInput(e.target.value)} />
         </div>
 
         <div className="sb-filter">
@@ -280,9 +280,9 @@ export default function SubscriptionsPage() {
                   <tr key={sub.id} className="sb-row" onClick={() => setDetailSubscriptionId(sub.id)}>
                     <td>
                       <div className="sb-user-email">{sub.user_email || '—'}</div>
-                      <div className="sb-user-id">{shortId(sub.user_id)}</div>
+                      <div className="sb-user-id sb-id-hover" title={sub.user_id || ''}>{shortId(sub.user_id)}</div>
                     </td>
-                    <td className="sb-mono">{shortId(sub.device_id)}</td>
+                    <td className="sb-mono sb-id-hover" title={sub.device_id || ''}>{shortId(sub.device_id)}</td>
                     <td>
                       <span className={`sb-plan-pill ${planClass(sub.plan_type)}`}>
                         {sub.plan_name || sub.plan_type || '—'}
