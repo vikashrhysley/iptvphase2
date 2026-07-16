@@ -740,7 +740,7 @@ export default function DashboardTable({ activeDashboardTab = 'liveStats' }) {
           {!overviewError && (
             <>
               <div className="dash-grid">
-                <BreakdownCard title="Platform Breakdown" items={entriesFromObject(overview?.platform_breakdown)} labelSuffix=" Device" />
+                <BreakdownCard title="Platform Breakdown By Device" items={entriesFromObject(overview?.platform_breakdown)} labelSuffix=" Device" />
                 <BreakdownCard title="Device Types" items={entriesFromObject(overview?.device_type_breakdown)} />
                 <BreakdownCard title="Plan Distribution" items={entriesFromObject(overview?.plan_distribution)} />
               </div>
