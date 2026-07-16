@@ -216,6 +216,7 @@ const LIVE_STATS = [
       { label: 'Total', fields: ['licenses.total_licenses', 'total_licenses'] },
       { label: 'Active', fields: ['licenses.active_licenses', 'active_licenses'] },
       { label: 'Expired', fields: ['licenses.expired_licenses', 'expired_licenses'] },
+      { label: 'Inactive Due To Payment', fields: ['licenses.inactive_due_to_payment_licenses' ] },
       { label: 'Revoked', fields: ['licenses.revoked_licenses', 'revoked_licenses'] },
       { label: 'Expiring 48h', fields: ['licenses.expiring_48h', 'expiring_48h'] },
       { label: 'Expiring 7d', fields: ['licenses.expiring_7d', 'expiring_7d'] },
