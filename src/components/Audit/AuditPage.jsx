@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
-  fetchAuditLogs, fetchAuditLogDetail,
+  fetchAuditLogDetail,
   setAuditFilters, clearAuditFilters, clearAuditDetail,
 } from '../../store/slices/auditSlice';
 import { apiFetchAuditLogs } from '../../services/api';
@@ -164,7 +164,7 @@ const exportAuditToExcel = async (logs) => {
 };
 
 const exportAuditToPDF = async (logs) => {
-  const { default: jsPDF }     = await import('jspdf');
+  const { jsPDF }              = await import('jspdf');
   const { default: autoTable } = await import('jspdf-autotable');
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
   doc.setFontSize(13);
@@ -556,50 +556,95 @@ function DetailDrawer({ onClose }) {
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function AuditPage() {
   const dispatch = useDispatch();
-  const { logs, total, globalTotal, page, pageSize, loading, error, filters, selectedLog } = useSelector(s => s.audit);
+  const { filters, selectedLog } = useSelector(s => s.audit);
   const { accessToken, user: me } = useSelector(s => s.auth);
   const isSuperAdmin = me?.role === 'superadmin';
 
-  const [showDrawer,    setShowDrawer]    = useState(false);
-  const [emailInput,    setEmailInput]    = useState(filters.actor_email || '');
-  const [ipInput,       setIpInput]       = useState(filters.ip_address || '');
-  const [exportLoading, setExportLoading] = useState(false);
+  const CLIENT_PAGE_SIZE   = 10;   // rows shown per page
+  const SERVER_PAGE_SIZE   = 100;  // backend caps page_size at 100
+  const MAX_PAGES          = 10;   // pull up to 10×100 = 1000 records for client-side search
+
+  const [allLogs,      setAllLogs]      = useState([]);
+  const [serverTotal,  setServerTotal]  = useState(0);
+  const [listLoading,  setListLoading]  = useState(true);
+  const [listError,    setListError]    = useState(null);
+  const [showDrawer,   setShowDrawer]   = useState(false);
+  const [searchInput,  setSearchInput]  = useState('');
+  const [roleFilter,   setRoleFilter]   = useState('');   // exact actor_role match
+  const [ipInput,      setIpInput]      = useState(filters.ip_address || '');
+  const [exportLoading,setExportLoading]= useState(false);
+  const [localPage,    setLocalPage]    = useState(1);
   const debounceRef = useRef(null);
-  const totalPages  = Math.max(1, Math.ceil(total / (pageSize || 20)));
 
-  // Client-side filter by actor email or role (backend doesn't support these params yet)
-  const visibleLogs = emailInput.trim()
-    ? logs.filter(l => {
-        const q = emailInput.trim().toLowerCase();
-        if (q.includes('@')) {
-          return (l.actor_email || '').toLowerCase().includes(q);
-        }
-        return (l.actor_role || '').toLowerCase().includes(q);
-      })
-    : logs;
+  // Distinct roles present in the loaded logs (for the exact-match Role dropdown).
+  const roleOptions = Array.from(new Set(allLogs.map(l => l.actor_role).filter(Boolean)))
+    .sort((a, b) => a.localeCompare(b));
 
-  // Derived severity counts from current page
-  const criticalCount = visibleLogs.filter(l => l.severity === 'critical').length;
-  const warningCount  = visibleLogs.filter(l => l.severity === 'warning').length;
-  const infoCount     = visibleLogs.filter(l => l.severity === 'info').length;
+  // Client-side filtering:
+  //  • Role dropdown = EXACT match (so "admin" never matches "superadmin").
+  //  • Search box     = substring across email / role / name / action.
+  const q      = searchInput.trim().toLowerCase();
+  const roleQ  = roleFilter.trim().toLowerCase();
+  const filteredLogs = allLogs.filter(l => {
+    if (roleQ && (l.actor_role || '').toLowerCase() !== roleQ) return false;
+    if (q) {
+      return (l.actor_email || '').toLowerCase().includes(q) ||
+             (l.actor_role || '').toLowerCase().includes(q) ||
+             (l.actor_full_name || '').toLowerCase().includes(q) ||
+             (l.action || '').toLowerCase().includes(q);
+    }
+    return true;
+  });
 
+  // Client-side pagination over the filtered set.
+  const totalPages   = Math.max(1, Math.ceil(filteredLogs.length / CLIENT_PAGE_SIZE));
+  const currentPage  = Math.min(localPage, totalPages);
+  const visibleLogs  = filteredLogs.slice((currentPage - 1) * CLIENT_PAGE_SIZE, currentPage * CLIENT_PAGE_SIZE);
+
+  // Derived severity counts from the full filtered set
+  const criticalCount = filteredLogs.filter(l => l.severity === 'critical').length;
+  const warningCount  = filteredLogs.filter(l => l.severity === 'warning').length;
+  const infoCount     = filteredLogs.filter(l => l.severity === 'info').length;
+
+  // Fetch all pages (100 at a time — backend max) whenever the server-side filters
+  // change, so client-side search covers every record it pulled.
   useEffect(() => {
     if (!isSuperAdmin) return;
-    const p = { force: true };
-    if (filters.actor_email) p.actor_email = filters.actor_email;
-    if (filters.actor_role)  p.actor_role  = filters.actor_role;
-    if (filters.entity_type) p.entity_type = filters.entity_type;
-    if (filters.severity)    p.severity    = filters.severity;
-    if (filters.date_from)   p.date_from   = filters.date_from;
-    if (filters.date_to)     p.date_to     = filters.date_to;
-    if (filters.ip_address)  p.ip_address  = filters.ip_address;
-    p.page      = filters.page;
-    p.page_size = filters.page_size;
-    dispatch(fetchAuditLogs(p));
-  }, [dispatch, isSuperAdmin,
-      filters.actor_email, filters.actor_role, filters.entity_type, filters.severity,
-      filters.date_from, filters.date_to, filters.ip_address,
-      filters.page, filters.page_size]);
+    let cancelled = false;
+    (async () => {
+      setListLoading(true);
+      setListError(null);
+      try {
+        const base = {};
+        if (filters.entity_type) base.entity_type = filters.entity_type;
+        if (filters.severity)    base.severity    = filters.severity;
+        if (filters.date_from)   base.date_from   = filters.date_from;
+        if (filters.date_to)     base.date_to     = filters.date_to;
+        if (filters.ip_address)  base.ip_address  = filters.ip_address;
+
+        const collected = [];
+        let total = 0;
+        for (let pageNum = 1; pageNum <= MAX_PAGES; pageNum++) {
+          const res = await apiFetchAuditLogs(accessToken, { ...base, page: pageNum, page_size: SERVER_PAGE_SIZE });
+          const items = Array.isArray(res?.logs) ? res.logs : [];
+          total = res?.total ?? total;
+          collected.push(...items);
+          if (items.length < SERVER_PAGE_SIZE || collected.length >= total) break;
+        }
+        if (!cancelled) { setAllLogs(collected); setServerTotal(total || collected.length); }
+      } catch (e) {
+        if (!cancelled) setListError(e.message || 'Failed to load audit logs.');
+      } finally {
+        if (!cancelled) setListLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [accessToken, isSuperAdmin,
+      filters.entity_type, filters.severity, filters.date_from, filters.date_to, filters.ip_address]);
+
+  // Reset to first page whenever the search / role or a server filter changes.
+  useEffect(() => { setLocalPage(1); }, [searchInput, roleFilter, filters.entity_type, filters.severity,
+    filters.date_from, filters.date_to, filters.ip_address]);
 
   const debounce = (key, value) => {
     clearTimeout(debounceRef.current);
@@ -612,20 +657,10 @@ export default function AuditPage() {
     if (exportLoading) return;
     setExportLoading(true);
     try {
-      const p = {};
-      if (filters.actor_email) p.actor_email = filters.actor_email;
-      if (filters.actor_role)  p.actor_role  = filters.actor_role;
-      if (filters.entity_type) p.entity_type = filters.entity_type;
-      if (filters.severity)    p.severity    = filters.severity;
-      if (filters.date_from)   p.date_from   = filters.date_from;
-      if (filters.date_to)     p.date_to     = filters.date_to;
-      if (filters.ip_address)  p.ip_address  = filters.ip_address;
-      p.page      = 1;
-      p.page_size = total || 10000;
-      const result = await apiFetchAuditLogs(accessToken, p);
-      const allLogs = Array.isArray(result?.logs) ? result.logs : logs;
-      if (format === 'pdf') await exportAuditToPDF(allLogs);
-      else                  await exportAuditToExcel(allLogs);
+      // Export exactly what the current search/filters produce.
+      const rows = filteredLogs;
+      if (format === 'pdf') await exportAuditToPDF(rows);
+      else                  await exportAuditToExcel(rows);
     } catch (e) {
       console.error('Export failed', e);
     } finally {
@@ -638,7 +673,7 @@ export default function AuditPage() {
     setShowDrawer(true);
   };
 
-  const hasFilters = filters.actor_email || filters.actor_role || filters.entity_type ||
+  const hasFilters = searchInput.trim() || roleFilter || filters.actor_email || filters.actor_role || filters.entity_type ||
                      filters.severity || filters.date_from || filters.date_to || filters.ip_address;
 
   // ── Access denied ──────────────────────────────────────────────────────────
@@ -667,7 +702,7 @@ export default function AuditPage() {
             <p className="al-hero-sub">Track every admin action across the platform with timestamps and full details.</p>
           </div>
         </div>
-        {logs.length > 0 && (
+        {allLogs.length > 0 && (
           <div className="al-hero-right">
             <ExportButton
               onExportPDF={() => handleExport('pdf')}
@@ -680,7 +715,7 @@ export default function AuditPage() {
 
       {/* ── Stat cards ── */}
       <div className="al-stats">
-        <StatCard icon={<ActivityIcon />} label="Total Logs"      value={globalTotal ?? total} color="#60a5fa" glow="rgba(96,165,250,0.15)" />
+        <StatCard icon={<ActivityIcon />} label="Total Logs"      value={serverTotal} color="#60a5fa" glow="rgba(96,165,250,0.15)" />
         <StatCard icon={<AlertTriIcon />} label="Critical Events" value={criticalCount}        color="#f87171" glow="rgba(248,113,113,0.15)" />
         <StatCard icon={<AlertTriIcon />} label="Warnings"        value={warningCount}         color="#fbbf24" glow="rgba(251,191,36,0.15)"  />
         <StatCard icon={<InfoIcon />}     label="Info Events"     value={infoCount}            color="#38bdf8" glow="rgba(56,189,248,0.15)"  />
@@ -692,9 +727,9 @@ export default function AuditPage() {
           <span className="al-filter-ico"><SearchIcon /></span>
           <input
             className="al-filter-input"
-            placeholder="Search by actor email or role…"
-            value={emailInput}
-            onChange={e => setEmailInput(e.target.value)}
+            placeholder="Search by email, role…"
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
           />
         </div>
 
@@ -726,6 +761,14 @@ export default function AuditPage() {
           <option value="critical">Critical</option>
         </select>
 
+        <select className="al-filter-select" value={roleFilter}
+          onChange={e => setRoleFilter(e.target.value)}>
+          <option value="">All Roles</option>
+          {roleOptions.map(r => (
+            <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>
+          ))}
+        </select>
+
         <div className="al-filter-date-section">
           <span className="al-filter-date-title">Date Range</span>
           <div className="al-filter-date-wrap">
@@ -753,7 +796,7 @@ export default function AuditPage() {
 
         {hasFilters && (
           <button className="al-clear-btn" onClick={() => {
-            setEmailInput(''); setIpInput('');
+            setSearchInput(''); setRoleFilter(''); setIpInput(''); setLocalPage(1);
             clearTimeout(debounceRef.current);
             dispatch(clearAuditFilters());
           }}>
@@ -779,14 +822,14 @@ export default function AuditPage() {
               </tr>
             </thead>
             <tbody>
-              {loading && !logs.length ? (
+              {listLoading && !allLogs.length ? (
                 <SkeletonRows />
-              ) : error ? (
+              ) : listError ? (
                 <tr>
                   <td colSpan={8}>
                     <div className="al-error-state">
                       <span className="al-error-icon">⚠</span>
-                      <span>{error}</span>
+                      <span>{listError}</span>
                     </div>
                   </td>
                 </tr>
@@ -797,7 +840,7 @@ export default function AuditPage() {
                       <div className="al-empty-icon"><LogIcon /></div>
                       <div className="al-empty-title">No audit logs found</div>
                       <div className="al-empty-sub">
-                        {hasFilters || emailInput.trim() ? 'Try adjusting your filters.' : 'No admin actions have been recorded yet.'}
+                        {hasFilters ? 'Try adjusting your filters.' : 'No admin actions have been recorded yet.'}
                       </div>
                     </div>
                   </td>
@@ -854,10 +897,10 @@ export default function AuditPage() {
           </table>
         </div>
 
-        {!loading && !error && (
+        {!listLoading && !listError && (
           <Pagination
-            current={page} totalPages={totalPages} total={total} pageSize={pageSize}
-            onPage={p => dispatch(setAuditFilters({ page: p }))}
+            current={currentPage} totalPages={totalPages} total={filteredLogs.length} pageSize={CLIENT_PAGE_SIZE}
+            onPage={setLocalPage}
           />
         )}
       </div>

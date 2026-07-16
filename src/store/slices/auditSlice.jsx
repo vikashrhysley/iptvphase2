@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { apiFetchAuditLogs, apiFetchAuditLogDetail } from '../../services/api';
 
 const DEFAULT_FILTERS = {
+  search:      '',
   actor_email: '',
   actor_role:  '',
   entity_type: '',
@@ -37,7 +38,7 @@ export const fetchAuditLogDetail = createAsyncThunk('audit/fetchDetail',
 );
 
 const isUnfiltered = (params = {}) =>
-  !params.actor_email && !params.actor_role && !params.entity_type && !params.severity &&
+  !params.search && !params.actor_email && !params.actor_role && !params.entity_type && !params.severity &&
   !params.date_from && !params.date_to && !params.ip_address;
 
 const auditSlice = createSlice({

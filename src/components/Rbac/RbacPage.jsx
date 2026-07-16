@@ -208,7 +208,7 @@ const exportRbacToExcel = async (roles) => {
 };
 
 const exportRbacToPDF = async (roles) => {
-  const { default: jsPDF }     = await import('jspdf');
+  const { jsPDF }              = await import('jspdf');
   const { default: autoTable } = await import('jspdf-autotable');
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
   const date = new Date().toLocaleString();

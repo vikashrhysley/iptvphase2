@@ -26,7 +26,7 @@ const buildRevenueAnalyticsRows = (revenue) => {
 };
 
 const exportRevenueAnalyticsToPDF = async (revenue) => {
-  const { default: jsPDF }     = await import('jspdf');
+  const { jsPDF }              = await import('jspdf');
   const { default: autoTable } = await import('jspdf-autotable');
   const { summary, daily } = buildRevenueAnalyticsRows(revenue);
 
