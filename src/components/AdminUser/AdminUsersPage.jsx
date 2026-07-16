@@ -14,6 +14,9 @@ import {
   updateAdminUser,
 } from '../../store/slices/adminUsersSlice';
 import './AdminUsersPage.css';
+import { Eye } from "lucide-react";
+import { Button } from "react-bootstrap";
+
 
 
 const CheckIcon = () => (
@@ -780,6 +783,7 @@ export default function AdminUsersPage() {
             <table className="au-table">
               <thead>
                 <tr>
+                  <th>Action</th>
                   <th>Name</th>
                   <th>Email</th>
                   <th>Role</th>
@@ -788,12 +792,25 @@ export default function AdminUsersPage() {
                   <th>Last Login</th>
                   <th className="au-col-locked">Locked</th>
                   <th>Created</th>
+
                 </tr>
               </thead>
               <tbody>
                 {filteredUsers.length ? (
                   filteredUsers.map((u) => (
-                    <tr key={u.id} className="au-row-clickable" onClick={() => setDetailUserId(u.id)}>
+                    <tr key={u.id} className="au-row-clickable" >
+                      <td>
+                        <Button
+                          variant="success"
+                          size="sm"
+                          onClick={() => setDetailUserId(u.id)}
+                          style={{ fontSize: "11px" }}
+                          className="d-flex align-items-center gap-1 text-light py-1 fw-bold"
+                        >
+                          View
+                          <Eye size={15} />
+                        </Button>
+                      </td>
                       <td className="au-name">{u.full_name || '—'}</td>
                       <td className="au-email">
                         {u.email || '—'}
@@ -824,6 +841,7 @@ export default function AdminUsersPage() {
                         )}
                       </td>
                       <td title={fmtDateTime(u.created_at)}>{fmtDateTime(u.created_at)}</td>
+
                     </tr>
                   ))
                 ) : (

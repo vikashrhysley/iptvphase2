@@ -3,7 +3,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { fetchAppUsers, fetchAppUsersStats, setFilters, clearFilters } from '../../store/slices/appUsersSlice';
 import AppUserDetail from './AppUserDetail';
 import './AppUsersPage.css';
-
+import { Button } from 'react-bootstrap';
+import { SquareArrowRightExit } from 'lucide-react';
 /* ── Export helpers ─────────────────────────────────────── */
 const EXPORT_COLS = ['Name', 'Email', 'Phone', 'Country', 'Status', 'Email Verified', 'Trial Used', 'Active Devices', 'Subscriptions', 'Last Login', 'Registered'];
 
@@ -80,22 +81,22 @@ function ExportButton({ onExportPDF, onExportExcel }) {
     <div className="su-export-wrap" ref={ref}>
       <button className="su-export-btn" onClick={() => setOpen(o => !o)}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
         </svg>
         Export
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9" /></svg>
       </button>
       {open && (
         <div className="su-export-menu">
           <button onClick={() => { onExportPDF(); setOpen(false); }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
             </svg>
             Export as PDF
           </button>
           <button onClick={() => { onExportExcel(); setOpen(false); }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
+              <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M9 21V9" />
             </svg>
             Export as Excel
           </button>
@@ -164,12 +165,12 @@ const relativeTime = (iso) => {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '—';
   const diff = Date.now() - date.getTime();
-  const abs  = Math.abs(diff);
-  const mins  = Math.round(abs / 60000);
+  const abs = Math.abs(diff);
+  const mins = Math.round(abs / 60000);
   const hours = Math.round(abs / 3600000);
-  const days  = Math.round(abs / 86400000);
-  const unit  = mins < 60 ? 'min' : hours < 24 ? 'hour' : 'day';
-  const val   = unit === 'min' ? mins : unit === 'hour' ? hours : days;
+  const days = Math.round(abs / 86400000);
+  const unit = mins < 60 ? 'min' : hours < 24 ? 'hour' : 'day';
+  const val = unit === 'min' ? mins : unit === 'hour' ? hours : days;
   return `${val} ${unit}${val !== 1 ? 's' : ''} ago`;
 };
 
@@ -212,10 +213,10 @@ function FixedTooltip({ label, children }) {
 }
 
 const statusClass = (s) => {
-  if (s === 'active')    return 'active';
-  if (s === 'blocked')   return 'blocked';
+  if (s === 'active') return 'active';
+  if (s === 'blocked') return 'blocked';
   if (s === 'suspended') return 'suspended';
-  if (s === 'inactive')  return 'inactive';
+  if (s === 'inactive') return 'inactive';
   return 'unknown';
 };
 
@@ -241,7 +242,7 @@ function SortIcon({ field, sortBy, sortOrder }) {
 function Pagination({ current, totalPages, totalItems, pageSize, onPage }) {
   if (!totalItems) return null;
   const start = (current - 1) * pageSize + 1;
-  const end   = Math.min(current * pageSize, totalItems);
+  const end = Math.min(current * pageSize, totalItems);
   const pages = Array.from({ length: totalPages }, (_, i) => i + 1)
     .filter(p => p === 1 || p === totalPages || Math.abs(p - current) <= 1)
     .reduce((acc, p, i, arr) => {
@@ -306,15 +307,15 @@ export default function AppUsersPage() {
   useEffect(() => {
     const p = {};
     if (filters.search) p.search = filters.search;
-    if (filters.status !== 'all')            p.status        = filters.status;
-    if (filters.trial_used !== 'all')        p.trial_used    = filters.trial_used === 'yes';
-    if (filters.sort_by)                     p.sort_by       = filters.sort_by;
-    if (filters.sort_order)                  p.sort_order    = filters.sort_order;
-    p.page      = filters.page;
+    if (filters.status !== 'all') p.status = filters.status;
+    if (filters.trial_used !== 'all') p.trial_used = filters.trial_used === 'yes';
+    if (filters.sort_by) p.sort_by = filters.sort_by;
+    if (filters.sort_order) p.sort_order = filters.sort_order;
+    p.page = filters.page;
     p.page_size = filters.page_size;
     dispatch(fetchAppUsers(p));
   }, [dispatch, filters.search, filters.status,
-      filters.trial_used, filters.sort_by, filters.sort_order, filters.page, filters.page_size]);
+    filters.trial_used, filters.sort_by, filters.sort_order, filters.page, filters.page_size]);
 
   /* All hooks above — conditional render AFTER */
   if (detailUserId) {
@@ -354,35 +355,35 @@ export default function AppUsersPage() {
       {statsLoading && <div className="su-stats-loading" />}
       {statsError && <div className="su-stats-error">Failed to load stats: {statsError}</div>}
       {stats && !statsLoading && (() => {
-        const S       = stats.stats || {};
-        const V       = stats.verification || {};
-        const L       = stats.license || {};
-        const N       = stats.new_users || {};
-        const by      = S;
-        const total   = S.total || 1;
+        const S = stats.stats || {};
+        const V = stats.verification || {};
+        const L = stats.license || {};
+        const N = stats.new_users || {};
+        const by = S;
+        const total = S.total || 1;
         const countries = stats.top_countries || [];
-        const maxC    = Math.max(...countries.map(c => c.count), 1);
-        const max30d  = Math.max(N.new_30d ?? 1, 1);
-        const pct     = (n) => Math.min(100, Math.round(((n ?? 0) / total) * 100));
+        const maxC = Math.max(...countries.map(c => c.count), 1);
+        const max30d = Math.max(N.new_30d ?? 1, 1);
+        const pct = (n) => Math.min(100, Math.round(((n ?? 0) / total) * 100));
 
         // SVG ring helper
         const Ring = ({ value, color, size = 68, sw = 6 }) => {
-          const r    = (size - sw) / 2;
+          const r = (size - sw) / 2;
           const circ = 2 * Math.PI * r;
-          const p    = pct(value);
+          const p = pct(value);
           return (
             <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-              <circle cx={size/2} cy={size/2} r={r} fill="none"
+              <circle cx={size / 2} cy={size / 2} r={r} fill="none"
                 style={{ stroke: 'var(--border-subtle)' }} strokeWidth={sw} />
-              <circle cx={size/2} cy={size/2} r={r} fill="none"
+              <circle cx={size / 2} cy={size / 2} r={r} fill="none"
                 stroke={color} strokeWidth={sw}
                 strokeDasharray={circ}
                 strokeDashoffset={circ * (1 - p / 100)}
                 strokeLinecap="round"
-                transform={`rotate(-90 ${size/2} ${size/2})`}
+                transform={`rotate(-90 ${size / 2} ${size / 2})`}
                 style={{ transition: 'stroke-dashoffset 0.9s ease' }}
               />
-              <text x={size/2} y={size/2 + 1} textAnchor="middle" dominantBaseline="middle"
+              <text x={size / 2} y={size / 2 + 1} textAnchor="middle" dominantBaseline="middle"
                 fontSize={size < 72 ? '11' : '13'} fontWeight="800" fill={color}>{p}%</text>
             </svg>
           );
@@ -403,18 +404,18 @@ export default function AppUsersPage() {
                 <div className="su-card-big">{total.toLocaleString()}</div>
 
                 <div className="su-seg-bar">
-                  <div className="su-seg c-active"    style={{ flex: by.active ?? 0 }} />
-                  <div className="su-seg c-blocked"   style={{ flex: by.blocked ?? 0 }} />
+                  <div className="su-seg c-active" style={{ flex: by.active ?? 0 }} />
+                  <div className="su-seg c-blocked" style={{ flex: by.blocked ?? 0 }} />
                   <div className="su-seg c-suspended" style={{ flex: by.suspended ?? 0 }} />
-                  <div className="su-seg c-inactive"  style={{ flex: by.inactive ?? 0 }} />
+                  <div className="su-seg c-inactive" style={{ flex: by.inactive ?? 0 }} />
                 </div>
 
                 <div className="su-status-chips">
                   {[
-                    { cls: 'c-active',    clr: '#10b981', label: 'Active',    val: by.active },
-                    { cls: 'c-blocked',   clr: '#ef4444', label: 'Blocked',   val: by.blocked },
+                    { cls: 'c-active', clr: '#10b981', label: 'Active', val: by.active },
+                    { cls: 'c-blocked', clr: '#ef4444', label: 'Blocked', val: by.blocked },
                     { cls: 'c-suspended', clr: '#f59e0b', label: 'Suspended', val: by.suspended },
-                    { cls: 'c-inactive',  clr: '#64748b', label: 'Inactive',  val: by.inactive },
+                    { cls: 'c-inactive', clr: '#64748b', label: 'Inactive', val: by.inactive },
                   ].map(({ cls, clr, label, val }) => (
                     <div className="su-chip" key={label} style={{ '--cc': clr }}>
                       <span className={`su-chip-dot ${cls}`} />
@@ -438,7 +439,7 @@ export default function AppUsersPage() {
                   {[
                     { label: 'Email Verified', val: V.email_verified, color: '#7c3aed' },
                     { label: 'Phone Verified', val: V.phone_verified, color: '#0284c7' },
-                    { label: 'Trial Used',     val: L.trial_used,     color: '#f59e0b' },
+                    { label: 'Trial Used', val: L.trial_used, color: '#f59e0b' },
                   ].map(({ label, val, color }) => (
                     <div className="su-ring-item" key={label}>
                       <Ring value={val} color={color} />
@@ -464,8 +465,8 @@ export default function AppUsersPage() {
                 </div>
                 <div className="su-rings-row">
                   {[
-                    { label: 'Licensed',   val: L.with_active_license, color: '#00d4ff', size: 80, sw: 7 },
-                    { label: 'w/ Device',  val: L.with_active_device,  color: '#10b981', size: 80, sw: 7 },
+                    { label: 'Licensed', val: L.with_active_license, color: '#00d4ff', size: 80, sw: 7 },
+                    { label: 'w/ Device', val: L.with_active_device, color: '#10b981', size: 80, sw: 7 },
                   ].map(({ label, val, color, size, sw }) => (
                     <div className="su-ring-item" key={label}>
                       <Ring value={val} color={color} size={size} sw={sw} />
@@ -509,8 +510,8 @@ export default function AppUsersPage() {
                 </div>
                 <div className="su-new-bars">
                   {[
-                    { label: 'Today',   val: N.new_24h, cls: 'today' },
-                    { label: '7 Days',  val: N.new_7d,  cls: 'week' },
+                    { label: 'Today', val: N.new_24h, cls: 'today' },
+                    { label: '7 Days', val: N.new_7d, cls: 'week' },
                     { label: '30 Days', val: N.new_30d, cls: 'month' },
                   ].map(({ label, val, cls }) => (
                     <div className="su-new-row" key={label}>
@@ -625,6 +626,7 @@ export default function AppUsersPage() {
             <table className="su-table">
               <thead>
                 <tr>
+                  <th>Action</th>
                   <th {...thProps('full_name')}>
                     Name <SortIcon field="full_name" sortBy={filters.sort_by} sortOrder={filters.sort_order} />
                   </th>
@@ -652,8 +654,20 @@ export default function AppUsersPage() {
                 {users.length ? (
                   users.map((u) => (
                     <tr key={u.id}>
-                      <td className="su-name su-clickable" onClick={() => setDetailUserId(u.id)}>{u.full_name || '—'}</td>
-                      <td className="su-email su-clickable" onClick={() => setDetailUserId(u.id)}>{u.email || '—'}</td>
+                      <td>
+                        <Button
+                          variant="success"
+                          size="sm"
+                          onClick={() => setDetailUserId(u.id)}
+                          style={{ fontSize: "11px" }}
+                          className="d-flex align-items-center gap-1 text-light py-1 fw-bold"
+                        >
+                          View
+                          <SquareArrowRightExit size={15} />
+                        </Button>
+                      </td>
+                      <td className="su-name su-clickable" >{u.full_name || '—'}</td>
+                      <td className="su-email su-clickable" >{u.email || '—'}</td>
                       <td className="su-phone">{u.phone_number || '—'}</td>
                       <td>
                         {u.country_code

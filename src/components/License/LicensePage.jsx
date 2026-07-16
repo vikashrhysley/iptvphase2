@@ -9,45 +9,47 @@ import {
 } from '../../store/slices/licenseSlice';
 import LicenseDetail from './LicenseDetail';
 import './LicensePage.css';
+import {SquareArrowRightExit } from "lucide-react"
+import { Button } from 'react-bootstrap';
 
 /* ── Icons ─────────────────────────────────────────────── */
-const SearchIcon  = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
-const EditIcon    = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
-const ChevLeft    = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>;
-const ChevRight   = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>;
-const SortAsc     = () => <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>;
-const SortDesc    = () => <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>;
-const SortNone    = () => <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="5 10 12 5 19 10"/><polyline points="5 14 12 19 19 14"/></svg>;
-const CheckIcon   = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>;
-const XIcon       = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
-const LicenseStatIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>;
-const LayersIcon  = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
-const TagIcon     = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r="1.5" fill="currentColor"/></svg>;
-const ClockIcon      = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
-const DownloadIcon   = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
-const ExcelIcon      = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>;
-const PdfIcon        = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h1.5a1.5 1.5 0 0 1 0 3H9v-3z"/><path d="M13 13h2"/><path d="M13 16h2"/></svg>;
+const SearchIcon = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>;
+const EditIcon = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>;
+const ChevLeft = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>;
+const ChevRight = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6" /></svg>;
+const SortAsc = () => <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></svg>;
+const SortDesc = () => <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" /></svg>;
+const SortNone = () => <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="12" y1="5" x2="12" y2="19" /><polyline points="5 10 12 5 19 10" /><polyline points="5 14 12 19 19 14" /></svg>;
+const CheckIcon = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>;
+const XIcon = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>;
+const LicenseStatIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>;
+const LayersIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 2 7 12 12 22 7 12 2" /><polyline points="2 17 12 22 22 17" /><polyline points="2 12 12 17 22 12" /></svg>;
+const TagIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" /><circle cx="7.5" cy="7.5" r="1.5" fill="currentColor" /></svg>;
+const ClockIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>;
+const DownloadIcon = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>;
+const ExcelIcon = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="8" y1="13" x2="16" y2="13" /><line x1="8" y1="17" x2="16" y2="17" /></svg>;
+const PdfIcon = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><path d="M9 13h1.5a1.5 1.5 0 0 1 0 3H9v-3z" /><path d="M13 13h2" /><path d="M13 16h2" /></svg>;
 
 /* ── Helpers ────────────────────────────────────────────── */
 const fmtDate = (iso) => {
   if (!iso) return '—';
-  try { return new Date(iso).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }); } catch { return '—'; }
+  try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch { return '—'; }
 };
-const PLATFORM_ICONS = { android:'🤖', ios:'🍎', firetv:'🔥', roku:'📺', samsung:'📺' };
-const statusClass = (s) => ({ active:'lc-active', expired:'lc-expired', revoked:'lc-revoked', suspended:'lc-suspended', grace:'lc-grace' }[s] || 'lc-unknown');
-const planClass   = (p) => ({ paid:'lc-paid', trial:'lc-trial', grace:'lc-grace-plan' }[p] || 'lc-unknown');
+const PLATFORM_ICONS = { android: '🤖', ios: '🍎', firetv: '🔥', roku: '📺', samsung: '📺' };
+const statusClass = (s) => ({ active: 'lc-active', expired: 'lc-expired', revoked: 'lc-revoked', suspended: 'lc-suspended', grace: 'lc-grace' }[s] || 'lc-unknown');
+const planClass = (p) => ({ paid: 'lc-paid', trial: 'lc-trial', grace: 'lc-grace-plan' }[p] || 'lc-unknown');
 
 const STATUS_META = {
-  active:    { label: 'Active',    color: '#34d399' },
-  expired:   { label: 'Expired',   color: '#f87171' },
-  revoked:   { label: 'Revoked',   color: '#94a3b8' },
+  active: { label: 'Active', color: '#34d399' },
+  expired: { label: 'Expired', color: '#f87171' },
+  revoked: { label: 'Revoked', color: '#94a3b8' },
   suspended: { label: 'Suspended', color: '#fbbf24' },
-  grace:     { label: 'Grace',     color: '#7c3aed' },
+  grace: { label: 'Grace', color: '#7c3aed' },
 };
 
 const PLAN_META = {
   trial: { label: 'Trial', color: '#a78bfa' },
-  paid:  { label: 'Paid',  color: '#00d4ff' },
+  paid: { label: 'Paid', color: '#00d4ff' },
   grace: { label: 'Grace', color: '#f59e0b' },
 };
 
@@ -66,7 +68,7 @@ const escCsv = (v) => {
 };
 
 const exportToCSV = (licenses) => {
-  const headers = ['License ID','User Email','User Name','Device Name','Platform','Plan Name','Plan Type','Status','Expiry Date','Days Left','Auto-Renew','Reminder Sent','Issued Date'];
+  const headers = ['License ID', 'User Email', 'User Name', 'Device Name', 'Platform', 'Plan Name', 'Plan Type', 'Status', 'Expiry Date', 'Days Left', 'Auto-Renew', 'Reminder Sent', 'Issued Date'];
   const rows = licenses.map(l => [
     getLicId(l),
     l.user_email || '',
@@ -148,7 +150,7 @@ function ExportDropdown({ licenses }) {
     <div className="lc-export-wrap" ref={ref}>
       <button className="lc-export-btn" onClick={() => setOpen(v => !v)} disabled={!licenses.length}>
         <DownloadIcon /> Export
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginLeft:2 }}><polyline points="6 9 12 15 18 9"/></svg>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginLeft: 2 }}><polyline points="6 9 12 15 18 9" /></svg>
       </button>
       {open && (
         <div className="lc-export-menu">
@@ -183,22 +185,22 @@ function Toast() {
 function Pagination({ current, totalPages, total, pageSize, onPage }) {
   if (!total) return null;
   const start = (current - 1) * pageSize + 1;
-  const end   = Math.min(current * pageSize, total);
+  const end = Math.min(current * pageSize, total);
   const pages = Array.from({ length: totalPages }, (_, i) => i + 1)
     .filter(p => p === 1 || p === totalPages || Math.abs(p - current) <= 1)
-    .reduce((acc, p, i, arr) => { if (i > 0 && p - arr[i-1] > 1) acc.push(`e${p}`); acc.push(p); return acc; }, []);
+    .reduce((acc, p, i, arr) => { if (i > 0 && p - arr[i - 1] > 1) acc.push(`e${p}`); acc.push(p); return acc; }, []);
   return (
     <div className="lc-pagination">
       <span className="lc-pg-info">Showing <strong>{start}</strong>–<strong>{end}</strong> of <strong>{total}</strong> licenses</span>
       <div className="lc-pg-controls">
-        <button className="lc-pg-nav" onClick={() => onPage(Math.max(1, current-1))} disabled={current===1}><ChevLeft /> Prev</button>
+        <button className="lc-pg-nav" onClick={() => onPage(Math.max(1, current - 1))} disabled={current === 1}><ChevLeft /> Prev</button>
         <div className="lc-pg-pages">
           {pages.map(p => typeof p === 'string'
             ? <span key={p} className="lc-pg-ellipsis">…</span>
-            : <button key={p} className={`lc-pg-page${p===current?' active':''}`} onClick={() => onPage(p)}>{p}</button>
+            : <button key={p} className={`lc-pg-page${p === current ? ' active' : ''}`} onClick={() => onPage(p)}>{p}</button>
           )}
         </div>
-        <button className="lc-pg-nav" onClick={() => onPage(Math.min(totalPages, current+1))} disabled={current===totalPages}>Next <ChevRight /></button>
+        <button className="lc-pg-nav" onClick={() => onPage(Math.min(totalPages, current + 1))} disabled={current === totalPages}>Next <ChevRight /></button>
       </div>
     </div>
   );
@@ -250,9 +252,9 @@ function EditModalForm({ editModal, actionLoading }) {
         <div className="lc-modal-field">
           <label>Action</label>
           <div className="lc-action-opts">
-            {[{ v:'extend', l:'Extend Expiry' }, { v:'revoke', l:'Revoke' }].map(o => (
-              <label key={o.v} className={`lc-action-opt${form.action===o.v?' selected':''}`}>
-                <input type="radio" name="action" value={o.v} checked={form.action===o.v} onChange={() => setForm(f=>({...f,action:o.v}))} />
+            {[{ v: 'extend', l: 'Extend Expiry' }, { v: 'revoke', l: 'Revoke' }].map(o => (
+              <label key={o.v} className={`lc-action-opt${form.action === o.v ? ' selected' : ''}`}>
+                <input type="radio" name="action" value={o.v} checked={form.action === o.v} onChange={() => setForm(f => ({ ...f, action: o.v }))} />
                 {o.l}
               </label>
             ))}
@@ -262,15 +264,15 @@ function EditModalForm({ editModal, actionLoading }) {
         {form.action === 'extend' && (
           <div className="lc-modal-field">
             <label>New Expiry Date</label>
-            <input type="date" value={form.expires_at} onChange={e => setForm(f=>({...f,expires_at:e.target.value}))} disabled={busy} required />
+            <input type="date" value={form.expires_at} onChange={e => setForm(f => ({ ...f, expires_at: e.target.value }))} disabled={busy} required />
           </div>
         )}
         {form.action === 'revoke' && (
           <div className="lc-modal-field">
-            <label>Reason <span style={{ color:'#f87171' }}>*</span></label>
+            <label>Reason <span style={{ color: '#f87171' }}>*</span></label>
             <textarea
               value={form.reason}
-              onChange={e => { setForm(f=>({...f,reason:e.target.value})); setLocalError(''); }}
+              onChange={e => { setForm(f => ({ ...f, reason: e.target.value })); setLocalError(''); }}
               placeholder="Revocation reason is required…"
               rows={3}
               disabled={busy}
@@ -299,10 +301,10 @@ function EditModalForm({ editModal, actionLoading }) {
 function SortTh({ field, sortBy, sortOrder, onSort, children }) {
   const active = sortBy === field;
   return (
-    <th className={`lc-th-sort${active?' lc-th-active':''}`} onClick={() => onSort(field)}>
+    <th className={`lc-th-sort${active ? ' lc-th-active' : ''}`} onClick={() => onSort(field)}>
       <span className="lc-th-inner">
         {children}
-        <span className="lc-sort-icon">{!active ? <SortNone /> : sortOrder==='asc' ? <SortAsc /> : <SortDesc />}</span>
+        <span className="lc-sort-icon">{!active ? <SortNone /> : sortOrder === 'asc' ? <SortAsc /> : <SortDesc />}</span>
       </span>
     </th>
   );
@@ -315,7 +317,7 @@ export default function LicensePage() {
   const { user: me } = useSelector(s => s.auth);
   const canEdit = me?.role === 'superadmin' || me?.role === 'admin';
 
-  const [searchInput,   setSearchInput]   = useState(filters.search || '');
+  const [searchInput, setSearchInput] = useState(filters.search || '');
   const [detailLicenseId, setDetailLicenseId] = useState(null);
   const debounceRef = useRef(null);
   const totalPages = Math.max(1, Math.ceil(total / (pageSize || 20)));
@@ -335,13 +337,13 @@ export default function LicensePage() {
   /* Fetch on filter change */
   useEffect(() => {
     const p = {};
-    if (filters.status)      p.status      = filters.status;
+    if (filters.status) p.status = filters.status;
     if (filters.plan_filter) p.plan_filter = filters.plan_filter;
-    if (filters.search)      p.search      = filters.search;
-    p.sort_by    = filters.sort_by;
+    if (filters.search) p.search = filters.search;
+    p.sort_by = filters.sort_by;
     p.sort_order = filters.sort_order;
-    p.page       = filters.page;
-    p.page_size  = filters.page_size;
+    p.page = filters.page;
+    p.page_size = filters.page_size;
     dispatch(fetchLicenses(p));
   }, [dispatch, filters.status, filters.plan_filter, filters.search, filters.sort_by, filters.sort_order, filters.page, filters.page_size]);
 
@@ -357,12 +359,12 @@ export default function LicensePage() {
     return <LicenseDetail licenseId={detailLicenseId} onBack={() => setDetailLicenseId(null)} />;
   }
 
-  const S  = stats || {};
-  const ST = S.stats    || {};
+  const S = stats || {};
+  const ST = S.stats || {};
   const EX = S.expiring || {};
-  const BP = S.by_plan   || {};
+  const BP = S.by_plan || {};
   const ovTotal = ST.total_licenses || 1;
-  const ovPct   = (n) => Math.min(100, Math.round(((n ?? 0) / ovTotal) * 100));
+  const ovPct = (n) => Math.min(100, Math.round(((n ?? 0) / ovTotal) * 100));
 
   return (
     <div className="license-page">
@@ -392,13 +394,13 @@ export default function LicensePage() {
               <div className="lc-ov-big">{(ST.total_licenses ?? 0).toLocaleString()}</div>
               <div className="lc-ov-sub">Total Licenses</div>
               <div className="lc-seg-bar">
-                <div className="lc-seg" style={{ flex: ST.active_count  || 0, background: '#34d399' }} />
+                <div className="lc-seg" style={{ flex: ST.active_count || 0, background: '#34d399' }} />
                 <div className="lc-seg" style={{ flex: ST.expired_count || 0, background: '#f87171' }} />
                 <div className="lc-seg" style={{ flex: ST.revoked_count || 0, background: '#94a3b8' }} />
               </div>
               <div className="lc-ov-chips">
                 {[
-                  { key: 'active_count',  label: 'Active',  color: '#34d399' },
+                  { key: 'active_count', label: 'Active', color: '#34d399' },
                   { key: 'expired_count', label: 'Expired', color: '#f87171' },
                   { key: 'revoked_count', label: 'Revoked', color: '#94a3b8' },
                 ].map(({ key, label, color }) => (
@@ -530,30 +532,44 @@ export default function LicensePage() {
             <table className="lc-table">
               <thead>
                 <tr>
+                  <th>Action</th>
                   <th>License ID</th>
                   <th>User</th>
                   <th>Device</th>
                   <th>Plan</th>
                   <th>Status</th>
-                  <SortTh field="expires_at"     sortBy={filters.sort_by} sortOrder={filters.sort_order} onSort={handleSort}>Expiry</SortTh>
+                  <SortTh field="expires_at" sortBy={filters.sort_by} sortOrder={filters.sort_order} onSort={handleSort}>Expiry</SortTh>
                   <SortTh field="days_remaining" sortBy={filters.sort_by} sortOrder={filters.sort_order} onSort={handleSort}>Days Left</SortTh>
                   <th>Auto-Renew</th>
                   <th>Reminder</th>
-                  <SortTh field="created_at"     sortBy={filters.sort_by} sortOrder={filters.sort_order} onSort={handleSort}>Issued</SortTh>
+                  <SortTh field="created_at" sortBy={filters.sort_by} sortOrder={filters.sort_order} onSort={handleSort}>Issued</SortTh>
                   {canEdit && <th>Actions</th>}
                 </tr>
               </thead>
               <tbody>
                 {licenses.length ? licenses.map(l => {
-                  const lid  = getLicId(l);
+                  const lid = getLicId(l);
                   const busy = actionLoading === lid;
                   const days = l.days_remaining;
                   return (
                     <tr key={lid} className={l.is_expiring_soon ? 'lc-row-warn' : ''}>
                       <td>
+                        <Button
+                          variant="success"
+                          size="sm"
+                         onClick={() => lid && setDetailLicenseId(lid)}
+                          style={{ fontSize: "11px" }}
+                          className="d-flex align-items-center gap-1 text-light py-1 fw-bold"
+
+                        >
+                          View
+                          <SquareArrowRightExit size={15} />
+                        </Button>
+                      </td>
+                      <td>
                         <span className="lc-license-id" title={lid}>{lid || '—'}</span>
                       </td>
-                      <td className="lc-clickable" onClick={() => lid && setDetailLicenseId(lid)}>
+                      <td className="lc-clickable" >
                         <div className="lc-user-email">{l.user_email || '—'}</div>
                         {l.user_full_name && <div className="lc-user-name">{l.user_full_name}</div>}
                       </td>

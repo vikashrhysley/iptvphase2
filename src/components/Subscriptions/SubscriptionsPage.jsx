@@ -4,6 +4,8 @@ import { fetchSubscriptions, setSubscriptionFilters, clearSubscriptionFilters } 
 import { fmtDate, shortId, statusClass, planClass, STATUS_OPTIONS, PLAN_TYPE_OPTIONS, titleCasePlan } from './subscriptionsHelpers';
 import SubscriptionDetailPage from './SubscriptionDetailPage';
 import './SubscriptionsPage.css';
+import {SquareArrowRightExit } from "lucide-react"
+import { Button } from 'react-bootstrap';
 
 /* ── Export helpers ─────────────────────────────────────── */
 const SUB_COLS = ['User Email', 'User ID', 'Device ID', 'Plan Name', 'Plan Type', 'Billing Cycle', 'Amount', 'Currency', 'Status', 'Cancelled At', 'Period Start', 'Period End', 'Next Billing', 'Auto-Renew', 'Last Payment', 'Created'];
@@ -263,6 +265,7 @@ export default function SubscriptionsPage() {
             <table className="sb-table">
               <thead>
                 <tr>
+                  <th>Action</th>
                   <th>User</th>
                   <th>Device</th>
                   <th>Plan</th>
@@ -277,14 +280,27 @@ export default function SubscriptionsPage() {
               </thead>
               <tbody>
                 {subscriptions.length ? subscriptions.map(sub => (
-                  <tr key={sub.id} className="sb-row" onClick={() => setDetailSubscriptionId(sub.id)}>
+                  <tr key={sub.id} className="sb-row" >
+                    <td>
+                        <Button
+                          variant="success"
+                          size="sm"
+                         onClick={() => setDetailSubscriptionId(sub.id)}
+                          style={{ fontSize: "11px" }}
+                          className="d-flex align-items-center gap-1 text-light py-1 fw-bold"
+
+                        >
+                          View
+                          <SquareArrowRightExit size={15} />
+                        </Button>
+                      </td>
                     <td>
                       <div className="sb-user-email">{sub.user_email || '—'}</div>
                       <div className="sb-user-id">{shortId(sub.user_id)}</div>
                     </td>
                     <td className="sb-mono">{shortId(sub.device_id)}</td>
                     <td>
-                      <span className={`sb-plan-pill ${planClass(sub.plan_type)}`}>
+                      <span className={`sb-plan-pill  ${planClass(sub.plan_type)}`}>
                         {sub.plan_name || sub.plan_type || '—'}
                       </span>
                       {sub.billing_cycle && <div className="sb-billing-cycle">{sub.billing_cycle}</div>}

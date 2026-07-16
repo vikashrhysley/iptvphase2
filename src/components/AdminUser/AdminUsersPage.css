@@ -335,132 +335,221 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .au-table-scroll {
   width: 100%;
   overflow-x: auto;
-  overflow-y: hidden;
 }
 
 .au-table {
   width: 100%;
-  min-width: 980px;
   border-collapse: collapse;
-  table-layout: fixed;
+  table-layout: auto;
 }
 
+/* Header */
 .au-table th {
-  text-align: left;
-  font-size: 0.69rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  text-align: center;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 11px 18px;
+  padding: 9px 12px;
   color: var(--text-muted);
   background: rgba(0,0,0,0.12);
   border-bottom: 1px solid var(--border-subtle);
   white-space: nowrap;
+
 }
 
+/* Body */
 .au-table td {
-  padding: 12px 18px;
+  padding: 9px 12px;
+  font-size: 0.76rem;
+  color: var(--text-secondary);
   border-bottom: 1px solid rgba(255,255,255,0.025);
-  font-size: 0.84rem;
   vertical-align: middle;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.au-table tr:last-child td {
+  border-bottom: none;
+}
+
+.au-row-clickable {
+  cursor: pointer;
+  transition: background .2s ease;
+}
+
+.au-row-clickable:hover td {
+  background: rgba(255,255,255,0.035);
+}
+
+
+/* Action */
+.au-action-cell {
+  width: 1%;
+  text-align: center;
+}
+
+.au-view-btn {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px !important;
+  font-size: 0.68rem !important;
+  font-weight: 600;
+  border-radius: 7px !important;
+}
+
+
+/* Text */
+.au-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.au-email {
+  color: var(--text-secondary);
+  max-width: 240px;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.au-table tr:hover td {
-  background: rgba(255,255,255,0.02);
-}
 
-.au-table tr:last-child td { border-bottom: none; }
-
-.au-table th:nth-child(1) { width: 170px; }
-.au-table th:nth-child(2) { width: 250px; }
-.au-table th:nth-child(3) { width: 130px; }
-.au-table th:nth-child(4) { width: 110px; }
-.au-table th:nth-child(5) { width: 72px; }
-.au-table th:nth-child(6) { width: 130px; }
-.au-table th:nth-child(7) { width: 86px; }
-.au-table th:nth-child(8) { width: 210px; }
-
-.au-name,
-.au-email,
-.au-date-cell {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.au-name { font-weight: 700; color: var(--text-primary); }
-.au-email { color: var(--text-secondary); }
-
+/* Role */
 .au-role-pill {
   display: inline-flex;
   align-items: center;
-  padding: 4px 10px;
+  padding: 3px 8px;
   border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 800;
+  font-size: 0.65rem;
+  font-weight: 700;
   border: 1px solid var(--border-subtle);
-  background: rgba(255,255,255,0.03);
+  white-space: nowrap;
 }
 
-.au-role-pill.role-superadmin { color: #a78bfa; border-color: rgba(167,139,250,0.35); background: rgba(167,139,250,0.08); }
-.au-role-pill.role-admin { color: var(--accent-primary); border-color: rgba(0,212,255,0.3); background: rgba(0,212,255,0.08); }
-.au-role-pill.role-viewer { color: #94a3b8; border-color: rgba(148,163,184,0.3); background: rgba(148,163,184,0.08); }
+.au-role-pill.role-superadmin {
+  color: #a78bfa;
+  background: rgba(167,139,250,.08);
+  border-color: rgba(167,139,250,.35);
+}
 
+.au-role-pill.role-admin {
+  color: var(--accent-primary);
+  background: rgba(0,212,255,.08);
+  border-color: rgba(0,212,255,.3);
+}
+
+.au-role-pill.role-viewer {
+  color: #94a3b8;
+  background: rgba(148,163,184,.08);
+  border-color: rgba(148,163,184,.3);
+}
+
+
+/* Status */
 .au-status-pill {
   display: inline-flex;
   align-items: center;
-  padding: 4px 10px;
+  padding: 3px 8px;
   border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 900;
-  border: 1px solid rgba(255,255,255,0.16);
+  font-size: .65rem;
+  font-weight: 700;
 }
 
-.au-status-pill.active { color: #34d399; background: rgba(16,185,129,0.08); border-color: rgba(16,185,129,0.25); }
-.au-status-pill.disabled { color: #f87171; background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.25); }
-.au-status-pill.unknown { color: var(--text-muted); background: rgba(100,100,100,0.08); border-color: rgba(100,100,100,0.2); }
+.au-status-pill.active {
+  color:#34d399;
+  background:rgba(16,185,129,.08);
+  border:1px solid rgba(16,185,129,.25);
+}
 
+.au-status-pill.disabled {
+  color:#f87171;
+  background:rgba(239,68,68,.08);
+  border:1px solid rgba(239,68,68,.25);
+}
+
+.au-status-pill.unknown {
+  color:var(--text-muted);
+}
+
+
+/* 2FA */
 .au-2fa-pill {
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-  border: 1px solid var(--border-subtle);
-  background: rgba(255,255,255,0.03);
+  width:24px;
+  height:24px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:8px;
+  border:1px solid var(--border-subtle);
 }
 
-.au-2fa-pill.yes { color: #34d399; border-color: rgba(16,185,129,0.35); background: rgba(16,185,129,0.08); }
-.au-2fa-pill.no { color: #f87171; border-color: rgba(239,68,68,0.35); background: rgba(239,68,68,0.08); }
+.au-2fa-pill.yes {
+  color:#34d399;
+  background:rgba(16,185,129,.08);
+}
 
+.au-2fa-pill.no {
+  color:#f87171;
+  background:rgba(239,68,68,.08);
+}
+
+
+/* Locked */
 .au-locked-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 12px;
-  color: #f87171;
-  border: 1px solid rgba(248,113,113,0.35);
-  background: rgba(248,113,113,0.08);
+  width:28px;
+  height:28px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:8px;
+  color:#f87171;
+  background:rgba(248,113,113,.08);
+  border:1px solid rgba(248,113,113,.3);
 }
 
-.au-locked-empty { color: var(--text-muted); }
+.au-locked-empty {
+  color:var(--text-muted);
+}
 
+
+/* Loading / Error */
+.au-loading-wrap,
+.au-error-wrap {
+  padding:35px;
+  text-align:center;
+  font-size:.8rem;
+  color:var(--text-muted);
+}
+
+
+/* Empty */
 .au-empty {
-  text-align: center;
-  color: var(--text-muted);
-  padding: 44px 12px;
+  text-align:center;
+  padding:40px 10px;
+  color:var(--text-muted);
+}
+
+
+/* Mobile */
+@media(max-width:768px){
+
+  .au-table {
+    min-width:900px;
+  }
+
+  .au-table th,
+  .au-table td {
+    padding:8px 10px;
+  }
+
 }
 
 .au-loading-row,
