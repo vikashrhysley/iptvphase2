@@ -103,7 +103,7 @@ export default function AppLayout() {
 
   const renderPage = () => {
     switch (activePage) {
-      case 'home':    return <DashboardTable activeDashboardTab={dashboardTab} />;
+      case 'home':    return <DashboardTable activeDashboardTab={dashboardTab}  setActivePage={setActivePage} setCollapsed={setCollapsed}/>;
       case 'device':  return <DevicePage />;
       case 'heartbeat': return <HeartbeatPage />;
       case 'license': return <LicensePage />;

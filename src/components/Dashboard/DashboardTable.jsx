@@ -156,7 +156,7 @@ const LABELS = {
 };
 
 const LIVE_STATS = [
-   {
+  {
     key: 'app_users',
     label: 'App Users',
     accent: 'var(--accent-secondary)',
@@ -181,19 +181,19 @@ const LIVE_STATS = [
         label: 'Trial Users',
         fields: ['app_users.trial_users']
       },
-       {
+      {
         label: 'Paid Users',
         fields: ['app_users.paid_users']
       },
-       {
+      {
         label: 'Inactive Due To Payment Users',
         fields: ['app_users.inactive_due_to_payment_users']
       },
-       {
+      {
         label: 'Unsubscribed Users',
         fields: ['app_users.unsubscribed_users']
       },
-       {
+      {
         label: 'Never Subscribed Users',
         fields: ['app_users.never_subscribed_users']
       },
@@ -216,7 +216,7 @@ const LIVE_STATS = [
       { label: 'Total', fields: ['licenses.total_licenses', 'total_licenses'] },
       { label: 'Active', fields: ['licenses.active_licenses', 'active_licenses'] },
       { label: 'Expired', fields: ['licenses.expired_licenses', 'expired_licenses'] },
-      { label: 'Inactive Due To Payment', fields: ['licenses.inactive_due_to_payment_licenses' ] },
+      { label: 'Inactive Due To Payment', fields: ['licenses.inactive_due_to_payment_licenses'] },
       { label: 'Revoked', fields: ['licenses.revoked_licenses', 'revoked_licenses'] },
       { label: 'Expiring 48h', fields: ['licenses.expiring_48h', 'expiring_48h'] },
       { label: 'Expiring 7d', fields: ['licenses.expiring_7d', 'expiring_7d'] },
@@ -267,7 +267,7 @@ const LIVE_STATS = [
   //   includes: ['user', 'admin', 'viewer'],
   //   excludes: ['device_user'],
   // },
- 
+
   {
     key: 'heartbeat',
     label: 'Heartbeat',
@@ -524,11 +524,26 @@ const buildLiveStats = (stats, revenue, overview) => (
 const sumValues = (items) => Object.values(items || {}).reduce((sum, value) => sum + Number(value || 0), 0);
 const entriesFromObject = (items) => Object.entries(items || {}).map(([label, value]) => ({ label, value }));
 
-function StatCard({ label, rows, accent }) {
+
+function StatCard({ label, rows, accent, setActivePage }) {
   const primary = rows?.[0];
-  console.log(8777, rows, label, accent)
+  const handleCardRoute = (label) => {
+    if (label === 'Licenses') {
+      setActivePage("license")
+    }else if(label === "App Users"){
+      setActivePage("app_users")
+    }else if(label === "Device Stats"){
+      setActivePage("device")
+    }else if(label === "Admin"){
+      setActivePage("admin_users")
+    }else if(label === "Heartbeat"){
+      setActivePage("heartbeat")
+    }else if(label === "Audit"){
+      setActivePage("audit")
+    }
+  }
   return (
-    <div className="stat-card" style={{ '--stat-accent': accent || 'var(--accent-primary)' }}>
+    <div  className="stat-card" style={{ '--stat-accent': accent || 'var(--accent-primary)' }} onClick={() => handleCardRoute(label)}>
       <div className="stat-card-head">
         <div>
           <div className="stat-label">{label}</div>
@@ -665,7 +680,7 @@ function TrendCard({ items }) {
   );
 }
 
-export default function DashboardTable({ activeDashboardTab = 'liveStats' }) {
+export default function DashboardTable({ activeDashboardTab = 'liveStats', setActivePage , }) {
   const dispatch = useDispatch();
   const {
     stats,
@@ -728,6 +743,7 @@ export default function DashboardTable({ activeDashboardTab = 'liveStats' }) {
                   label={card.label}
                   rows={card.rows}
                   accent={card.accent}
+                  setActivePage={setActivePage}
                 />
               ))}
             </div>
