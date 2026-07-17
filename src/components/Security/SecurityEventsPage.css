@@ -311,7 +311,9 @@
 }
 
 .se-panel-count-display {
-  text-align: center; padding: 24px 16px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center; padding: 20px 16px; min-height: 92px;
   background: linear-gradient(135deg, rgba(255,255,255,0.02), rgba(255,255,255,0.06));
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
@@ -327,7 +329,8 @@
   font-size: 3.2rem; font-weight: 900;
   font-family: var(--font-display);
   letter-spacing: -0.03em; line-height: 1;
-  position: relative;
+  color: var(--text-primary);
+  position: relative; z-index: 1;
 }
 .se-panel-count-label {
   font-size: 0.72rem; color: var(--text-muted);

@@ -171,14 +171,19 @@ const fmtDay = (iso) => {
 /* ── Mini spark-line for the detail panel ──────────────── */
 function SparkLine({ daily, color }) {
   if (!daily?.length) return null;
-  const max = Math.max(...daily.map(d => d.count ?? 0), 1);
+  const counts = daily.map(d => d.count ?? 0);
+  const max = Math.max(...counts, 1);
+  const min = Math.min(...counts);
+  const flat = max === min; // all days equal → draw a centred line instead of a top-edge block
   const n = daily.length;
   const pts = daily.map((d, i) => ({
     x: n > 1 ? (i / (n - 1)) * 100 : 50,
-    y: 4 + (1 - (d.count ?? 0) / max) * 52,
+    y: flat ? 30 : 4 + (1 - (d.count ?? 0) / max) * 52,
   }));
-  const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-  const area = `${d} L ${pts[n-1].x} 60 L ${pts[0].x} 60 Z`;
+  // A single data point can't form a line — stretch it into a horizontal segment.
+  const linePts = pts.length === 1 ? [{ ...pts[0], x: 0 }, { ...pts[0], x: 100 }] : pts;
+  const d = linePts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+  const area = `${d} L ${linePts[linePts.length-1].x} 60 L ${linePts[0].x} 60 Z`;
   return (
     <div className="se-spark-wrap">
       <svg viewBox="0 0 100 60" className="se-spark-svg" preserveAspectRatio="none">
