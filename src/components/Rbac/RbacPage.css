@@ -166,6 +166,34 @@
   scrollbar-color: rgba(255,255,255,0.06) transparent;
 }
 
+/* ── Roles pagination ─────────────────────────────────────── */
+.rb-pagination {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 10px;
+  padding: 13px 18px;
+  border-top: 1px solid var(--border-subtle, rgba(255,255,255,0.07));
+  background: rgba(0,0,0,0.08);
+}
+.rb-pg-info { font-size: 0.78rem; color: var(--text-muted, #64748b); }
+.rb-pg-info strong { color: var(--text-secondary, #cbd5e1); font-weight: 700; }
+.rb-pg-controls { display: flex; align-items: center; gap: 6px; }
+.rb-pg-pages { display: flex; align-items: center; gap: 4px; }
+.rb-pg-nav, .rb-pg-page {
+  display: inline-flex; align-items: center; gap: 5px;
+  min-width: 32px; height: 32px; padding: 0 12px; justify-content: center;
+  background: var(--bg-surface, #1a2136); color: var(--text-secondary, #cbd5e1);
+  border: 1px solid var(--border-subtle, rgba(255,255,255,0.07));
+  border-radius: 8px; font-size: 0.8rem; font-weight: 600; cursor: pointer;
+  transition: all 0.15s;
+}
+.rb-pg-page { padding: 0; }
+.rb-pg-nav:hover:not(:disabled), .rb-pg-page:hover { border-color: var(--border-medium, rgba(255,255,255,0.16)); color: var(--text-heading, #f1f5f9); }
+.rb-pg-nav:disabled { opacity: 0.4; cursor: not-allowed; }
+.rb-pg-page.active {
+  background: rgba(99,102,241,0.15); border-color: rgba(99,102,241,0.5); color: #a5b4fc;
+}
+.rb-pg-ellipsis { color: var(--text-muted, #64748b); padding: 0 4px; }
+
 .rb-roles-table {
   width: 100%;
   border-collapse: collapse;

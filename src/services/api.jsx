@@ -590,12 +590,7 @@ export const apiFetchHeartbeatStats = async (accessToken) => {
 
 export const apiFetchHeartbeatLogs = async (accessToken, params = {}) => {
   if (!accessToken) throw new Error('Unauthorized');
-  // Backend expects the email/text filter under `search` (same as the other
-  // list endpoints), not `user_email`.
-  const { user_email, ...rest } = params;
-  const query = { ...rest };
-  if (user_email) query.search = user_email;
-  const res = await request(`${BASE}/admin/heartbeat/logs${cleanParams(query)}`, {
+  const res = await request(`${BASE}/admin/heartbeat/logs${cleanParams(params)}`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${accessToken}` },
   });

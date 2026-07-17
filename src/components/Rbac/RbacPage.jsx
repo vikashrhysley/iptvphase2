@@ -1025,11 +1025,29 @@ function DeleteConfirmModal({ role, deleting, deleteError, onClose, onConfirm })
 }
 
 // ─── Roles table ──────────────────────────────────────────
+const ROLES_PAGE_SIZE = 10;
+
 function RolesTable({ roles, loading, onSelect, onEdit, onDelete }) {
+  const [page, setPage] = useState(1);
+
+  const totalPages  = Math.max(1, Math.ceil(roles.length / ROLES_PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageRoles   = roles.slice((currentPage - 1) * ROLES_PAGE_SIZE, currentPage * ROLES_PAGE_SIZE);
+
+  // Keep page in range when the roles list changes.
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [totalPages, page]);
+
   if (loading) return <SkeletonTable />;
   if (!roles.length) return (
     <div className="rb-empty"><LockIcon /><span>No roles found.</span></div>
   );
+
+  const start = (currentPage - 1) * ROLES_PAGE_SIZE + 1;
+  const end   = Math.min(currentPage * ROLES_PAGE_SIZE, roles.length);
+  const pageNums = Array.from({ length: totalPages }, (_, i) => i + 1)
+    .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+    .reduce((acc, p, i, arr) => { if (i > 0 && p - arr[i - 1] > 1) acc.push(`e${p}`); acc.push(p); return acc; }, []);
+
   return (
     <div className="rb-table-wrap">
       <table className="rb-roles-table">
@@ -1045,7 +1063,7 @@ function RolesTable({ roles, loading, onSelect, onEdit, onDelete }) {
           </tr>
         </thead>
         <tbody>
-          {roles.map((role, idx) => {
+          {pageRoles.map((role, idx) => {
             const color      = roleColor(role.name);
             const canDelete  = !role.is_system && !(role.user_count > 0);
             return (
@@ -1101,6 +1119,28 @@ function RolesTable({ roles, loading, onSelect, onEdit, onDelete }) {
           })}
         </tbody>
       </table>
+
+      {totalPages > 1 && (
+        <div className="rb-pagination">
+          <span className="rb-pg-info">
+            Showing <strong>{start}</strong>–<strong>{end}</strong> of <strong>{roles.length}</strong> roles
+          </span>
+          <div className="rb-pg-controls">
+            <button className="rb-pg-nav" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
+              <ArrowLeftIcon /> Prev
+            </button>
+            <div className="rb-pg-pages">
+              {pageNums.map(p => typeof p === 'string'
+                ? <span key={p} className="rb-pg-ellipsis">…</span>
+                : <button key={p} className={`rb-pg-page${p === currentPage ? ' active' : ''}`} onClick={() => setPage(p)}>{p}</button>
+              )}
+            </div>
+            <button className="rb-pg-nav" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
+              Next <ChevronRightIcon />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
