@@ -77,12 +77,14 @@
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+  margin-top: 10px;
 }
 
 /* ── Export button ────────────────────────────────────────── */
 .al-export-wrap {
   position: relative;
   display: inline-flex;
+  margin-top: 15px;
 }
 
 .al-export-btn {

@@ -256,13 +256,10 @@ export default function Sidebar({
   });
 
   useEffect(() => {
-    if(activePage === "dashboard" ){
-      setOpenSubmenu(activePage)
-    }else{
-      setOpenSubmenu(null);
-    }
-  },[activePage])
- 
+    const pagesWithSubmenu = new Set(['home', 'analytics', 'infra', 'monitoring']);
+    setOpenSubmenu(pagesWithSubmenu.has(activePage) ? activePage : null);
+  }, [activePage]);
+
   const profileUser = user || {};
   const displayRole = profileUser.role_display || roleLabel(profileUser.role);
   const displayName = profileUser.full_name || profileUser.fullName || profileUser.name || profileUser.username || profileUser.email || displayRole;

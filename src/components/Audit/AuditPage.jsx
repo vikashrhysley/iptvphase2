@@ -699,18 +699,42 @@ export default function AuditPage() {
           <div className="al-hero-icon"><LogIcon /></div>
           <div>
             <h1 className="al-hero-title">Audit Logs</h1>
-            <p className="al-hero-sub">Track every admin action across the platform with timestamps and full details.</p>
+            <p className="al-hero-sub">Track every admin action across the platform.</p>
           </div>
         </div>
-        {allLogs.length > 0 && (
-          <div className="al-hero-right">
+        <div className="al-hero-right">
+          <div className="al-filter-date-section">
+            <span className="al-filter-date-title">Date Range</span>
+            <div className="al-filter-date-wrap">
+              <div className="al-filter-date-field">
+                <span className="al-filter-date-lbl">From</span>
+                <input
+                  className="al-filter-date-input"
+                  type="date"
+                  value={filters.date_from}
+                  onChange={e => dispatch(setAuditFilters({ date_from: e.target.value, page: 1 }))}
+                />
+              </div>
+              <span className="al-date-sep">→</span>
+              <div className="al-filter-date-field al-filter-date-field--to">
+                <span className="al-filter-date-lbl">To</span>
+                <input
+                  className="al-filter-date-input"
+                  type="date"
+                  value={filters.date_to}
+                  onChange={e => dispatch(setAuditFilters({ date_to: e.target.value, page: 1 }))}
+                />
+              </div>
+            </div>
+          </div>
+          {allLogs.length > 0 && (
             <ExportButton
               onExportPDF={() => handleExport('pdf')}
               onExportExcel={() => handleExport('excel')}
               loading={exportLoading}
             />
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* ── Stat cards ── */}
@@ -768,31 +792,6 @@ export default function AuditPage() {
             <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>
           ))}
         </select>
-
-        <div className="al-filter-date-section">
-          <span className="al-filter-date-title">Date Range</span>
-          <div className="al-filter-date-wrap">
-          <div className="al-filter-date-field">
-            <span className="al-filter-date-lbl">From</span>
-            <input
-              className="al-filter-date-input"
-              type="date"
-              value={filters.date_from}
-              onChange={e => dispatch(setAuditFilters({ date_from: e.target.value, page: 1 }))}
-            />
-          </div>
-          <span className="al-date-sep">→</span>
-          <div className="al-filter-date-field al-filter-date-field--to">
-            <span className="al-filter-date-lbl">To</span>
-            <input
-              className="al-filter-date-input"
-              type="date"
-              value={filters.date_to}
-              onChange={e => dispatch(setAuditFilters({ date_to: e.target.value, page: 1 }))}
-            />
-          </div>
-          </div>
-        </div>
 
         {hasFilters && (
           <button className="al-clear-btn" onClick={() => {

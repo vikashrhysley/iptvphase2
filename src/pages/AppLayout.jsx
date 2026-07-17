@@ -80,8 +80,12 @@ export default function AppLayout() {
   const [analyticsTab, setAnalyticsTab] = useState(
     () => sessionStorage.getItem('analyticsTab') || 'revenue'
   );
-  const [infraSection, setInfraSection] = useState(null);
-  const [monitoringSection, setMonitoringSection] = useState(null);
+  const [infraSection, setInfraSection] = useState(
+    () => sessionStorage.getItem('infraSection') || null
+  );
+  const [monitoringSection, setMonitoringSection] = useState(
+    () => sessionStorage.getItem('monitoringSection') || null
+  );
 
   const mainLeft = collapsed ? 'var(--sidebar-collapsed)' : 'var(--sidebar-width)';
 
@@ -99,6 +103,20 @@ export default function AppLayout() {
   const handleAnalyticsTabChange = (tab) => {
     setAnalyticsTab(tab);
     sessionStorage.setItem('analyticsTab', tab);
+  };
+
+  const handleInfraSectionChange = (sec) => {
+    if (sec !== null) handleNavigate('infra');
+    setInfraSection(sec);
+    if (sec === null) sessionStorage.removeItem('infraSection');
+    else sessionStorage.setItem('infraSection', sec);
+  };
+
+  const handleMonitoringSectionChange = (sec) => {
+    if (sec !== null) handleNavigate('monitoring');
+    setMonitoringSection(sec);
+    if (sec === null) sessionStorage.removeItem('monitoringSection');
+    else sessionStorage.setItem('monitoringSection', sec);
   };
 
   const renderPage = () => {
@@ -139,9 +157,9 @@ export default function AppLayout() {
         analyticsTab={analyticsTab}
         onAnalyticsTabChange={handleAnalyticsTabChange}
         infraSection={infraSection}
-        onInfraSectionChange={(sec) => { if (sec !== null) handleNavigate('infra'); setInfraSection(sec); }}
+        onInfraSectionChange={handleInfraSectionChange}
         monitoringSection={monitoringSection}
-        onMonitoringSectionChange={(sec) => { if (sec !== null) handleNavigate('monitoring'); setMonitoringSection(sec); }}
+        onMonitoringSectionChange={handleMonitoringSectionChange}
         onNavigate={handleNavigate}
       />
       <Header
