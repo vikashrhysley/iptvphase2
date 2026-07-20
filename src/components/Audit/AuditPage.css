@@ -703,18 +703,13 @@
 
 /* ── Detail Drawer overlay ────────────────────────────────── */
 .al-overlay {
-  position: fixed;
-  inset: 0;
   background: rgba(0,0,0,0.55);
-  z-index: 200;
-  display: flex;
-  justify-content: flex-end;
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
 }
 
-.al-drawer {
-  width: min(560px, 100vw);
+.offcanvas.al-drawer {
+  width: 700px;
   height: 100%;
   background: var(--bg-card, #161b2e);
   border-left: 1px solid rgba(255,255,255,0.08);
@@ -724,7 +719,6 @@
   box-shadow: -16px 0 48px rgba(0,0,0,0.5);
   animation: al-slide-in 0.24s cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
-
 /* Drawer head */
 .al-drawer-head {
   position: relative;
