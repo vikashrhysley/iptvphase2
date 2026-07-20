@@ -1,19 +1,29 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchSubscriptionPlans, createPlan, clearCreateState } from '../../store/slices/plansSlice';
 import PlanDetailPage from './PlanDetailPage';
+import {
+  AMOUNT_MAX, isAmountInputAllowed, isIntegerInputAllowed,
+  blockNonNumericKeys, blockIntegerKeys, validateAmount, validateInteger,
+} from './planFormFields';
 import './PlansPage.css';
 
 /* ── Icons ─────────────────────────────────────────────── */
 const CheckIcon  = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>;
 const XIcon      = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
 const PlusIcon   = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+const SearchIcon = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
 
 /* ── Helpers ────────────────────────────────────────────── */
 const fmtDate = (iso) => {
   if (!iso) return '—';
   try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch { return '—'; }
 };
+
+// Display name for a raw plan_type value: 'trial' -> 'Trial', 'monthly' -> 'Monthly'.
+const planTypeLabel = (type) => (
+  type ? type.charAt(0).toUpperCase() + type.slice(1) : '—'
+);
 
 const planClass = (p) => {
   const v = (p || '').toLowerCase();
@@ -50,7 +60,12 @@ function CreatePlanModal({ onClose }) {
     if (!form.name.trim())      { setLocalError('Name is required.'); return; }
     if (!form.plan_code.trim()) { setLocalError('Plan code is required.'); return; }
     if (!/^[a-z0-9_]+$/.test(form.plan_code.trim())) { setLocalError('Plan code must be lowercase letters, numbers and underscores only.'); return; }
-    if (form.amount === '' || Number(form.amount) < 0) { setLocalError('Amount must be 0 or greater.'); return; }
+    if (form.amount === '') { setLocalError('Amount is required.'); return; }
+    const fieldError = validateAmount(form.amount)
+      || validateInteger(form.trial_days, 'Trial days', 365)
+      || validateInteger(form.max_devices, 'Max devices', 100)
+      || validateInteger(form.max_concurrent_streams, 'Max concurrent streams', 10);
+    if (fieldError) { setLocalError(fieldError); return; }
 
     const payload = {
       name:                    form.name.trim(),
@@ -129,29 +144,33 @@ function CreatePlanModal({ onClose }) {
           {/* Amount */}
           <label className="pp-modal-field">
             <span>Amount ($) <span className="pp-required">*</span></span>
-            <input type="number" min={0} step="0.01" value={form.amount}
-              onChange={(e) => set('amount', e.target.value)} placeholder="9.99" disabled={createLoading} />
+            <input type="number" min={0} max={AMOUNT_MAX} step="0.01" value={form.amount}
+              onChange={(e) => isAmountInputAllowed(e.target.value) && set('amount', e.target.value)}
+              onKeyDown={blockNonNumericKeys} placeholder="9.99" disabled={createLoading} />
           </label>
 
           {/* Trial days */}
           <label className="pp-modal-field">
             <span>Trial Days</span>
-            <input type="number" min={1} max={365} value={form.trial_days}
-              onChange={(e) => set('trial_days', e.target.value)} placeholder="7" disabled={createLoading} />
+            <input type="number" min={0} max={365} value={form.trial_days}
+              onChange={(e) => isIntegerInputAllowed(e.target.value, 365) && set('trial_days', e.target.value)}
+              onKeyDown={blockIntegerKeys} placeholder="7" disabled={createLoading} />
           </label>
 
           {/* Max devices */}
           <label className="pp-modal-field">
             <span>Max Devices</span>
-            <input type="number" min={1} max={100} value={form.max_devices}
-              onChange={(e) => set('max_devices', e.target.value)} disabled={createLoading} />
+            <input type="number" min={0} max={100} value={form.max_devices}
+              onChange={(e) => isIntegerInputAllowed(e.target.value, 100) && set('max_devices', e.target.value)}
+              onKeyDown={blockIntegerKeys} disabled={createLoading} />
           </label>
 
           {/* Max concurrent streams */}
           <label className="pp-modal-field">
             <span>Max Concurrent Streams</span>
-            <input type="number" min={1} max={10} value={form.max_concurrent_streams}
-              onChange={(e) => set('max_concurrent_streams', e.target.value)} disabled={createLoading} />
+            <input type="number" min={0} max={10} value={form.max_concurrent_streams}
+              onChange={(e) => isIntegerInputAllowed(e.target.value, 10) && set('max_concurrent_streams', e.target.value)}
+              onKeyDown={blockIntegerKeys} disabled={createLoading} />
           </label>
 
           {/* Device limit policy */}
@@ -286,6 +305,26 @@ export default function PlansPage() {
   const isSuperAdmin = me?.role === 'superadmin';
   const [detailPlanId, setDetailPlanId] = useState(null);
   const [showCreate,   setShowCreate]   = useState(false);
+  const [search,       setSearch]       = useState('');
+  const [planType,     setPlanType]     = useState('all');
+  const [status,       setStatus]       = useState('all');
+
+  // Options come from the data rather than a hardcoded list, so a plan type added
+  // server-side shows up here without a code change.
+  const planTypes = useMemo(
+    () => [...new Set(plans.map(p => p.plan_type).filter(Boolean))].sort(),
+    [plans]
+  );
+
+  const filteredPlans = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return plans.filter(plan => {
+      if (planType !== 'all' && plan.plan_type !== planType) return false;
+      if (status !== 'all' && !!plan.is_active !== (status === 'active')) return false;
+      if (query && !(plan.name || '').toLowerCase().includes(query)) return false;
+      return true;
+    });
+  }, [plans, search, planType, status]);
 
   useEffect(() => { dispatch(fetchSubscriptionPlans()); }, [dispatch]);
 
@@ -338,6 +377,51 @@ export default function PlansPage() {
         </div>
       )}
 
+      {/* ── Filters ── */}
+      {!loading && !error && plans.length > 0 && (
+        <div className="pp-toolbar">
+          <div className="pp-search-wrap">
+            <label htmlFor="pp-search">Search</label>
+            <div className="pp-search-input-wrap">
+              <SearchIcon />
+              <input
+                id="pp-search"
+                className="pp-search-input"
+                type="text"
+                placeholder="Search by plan name…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              {search && (
+                <button type="button" className="pp-search-clear" onClick={() => setSearch('')} aria-label="Clear search">
+                  <XIcon />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="pp-filter">
+            <label htmlFor="pp-plan-type">Plan Type</label>
+            <select id="pp-plan-type" className="pp-select" value={planType} onChange={(e) => setPlanType(e.target.value)}>
+              <option value="all">All</option>
+              {planTypes.map(type => (
+                <option key={type} value={type}>{planTypeLabel(type)}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="pp-filter">
+            <label htmlFor="pp-status">Status</label>
+            <select id="pp-status" className="pp-select" value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="all">All</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+
+        </div>
+      )}
+
       {/* ── Plans grid ── */}
       {loading ? (
         <div className="pp-loading">Loading plans…</div>
@@ -345,9 +429,11 @@ export default function PlansPage() {
         <div className="pp-error">{error}</div>
       ) : plans.length === 0 ? (
         <div className="pp-empty">No subscription plans found.</div>
+      ) : filteredPlans.length === 0 ? (
+        <div className="pp-empty">No plans match these filters.</div>
       ) : (
         <div className="pp-grid">
-          {plans.map(plan => <PlanCard key={plan.id} plan={plan} onClick={() => setDetailPlanId(plan.id)} />)}
+          {filteredPlans.map(plan => <PlanCard key={plan.id} plan={plan} onClick={() => setDetailPlanId(plan.id)} />)}
         </div>
       )}
     </div>

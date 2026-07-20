@@ -260,6 +260,236 @@
   white-space: nowrap;
 }
 
+/* ── Live Stats: one full-width row card per domain ───────── */
+.ls-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.ls-card {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 28px;
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--stat-accent, var(--accent-primary)) 12%, transparent), transparent 42%),
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-card) 94%, white 6%), var(--bg-card));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 22px 24px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+}
+
+.ls-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--stat-accent, var(--accent-primary));
+}
+
+.ls-card:hover {
+  border-color: color-mix(in srgb, var(--stat-accent, var(--accent-primary)) 42%, var(--border-medium));
+  box-shadow: var(--shadow-card);
+}
+
+/* Skeletons reuse the row-card shell but not its two-column grid */
+.ls-card.dash-skel-card {
+  display: block;
+  min-height: 120px;
+}
+
+/* Left rail: section identity + the one number the section is about */
+.ls-card-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-right: 1px solid var(--border-subtle);
+  padding-right: 24px;
+}
+
+.ls-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.ls-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--stat-accent, var(--accent-primary));
+  flex-shrink: 0;
+}
+
+.ls-hero-label {
+  margin-top: 10px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.ls-hero-value {
+  font-family: var(--font-display);
+  font-size: 2.6rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.ls-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.ls-chip {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--stat-accent, var(--accent-primary)) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--stat-accent, var(--accent-primary)) 22%, transparent);
+}
+
+.ls-chip span {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
+.ls-chip strong {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Right side: the bar charts */
+.ls-card-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 22px 32px;
+  align-content: start;
+}
+
+.ls-group {
+  min-width: 0;
+}
+
+.ls-group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.ls-group-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* Bars are scaled inside their own group, so the scale max is stated rather than assumed */
+.ls-group-scale {
+  font-size: 0.66rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.ls-bar-row {
+  display: grid;
+  grid-template-columns: 118px minmax(0, 1fr) 46px;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 0;
+  border-radius: 4px;
+  transition: background var(--transition-fast);
+}
+
+.ls-bar-row:hover {
+  background: color-mix(in srgb, var(--stat-accent, var(--accent-primary)) 7%, transparent);
+}
+
+.ls-bar-label {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ls-bar-track {
+  height: 10px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--text-muted) 18%, transparent);
+  overflow: hidden;
+}
+
+.ls-bar-fill {
+  height: 100%;
+  border-radius: 5px;
+  background: var(--stat-accent, var(--accent-primary));
+  transition: width var(--transition-slow);
+}
+
+/* Status tones — reserved for states that are genuinely good/at-risk/bad.
+   Every bar is text-labelled, so these reinforce meaning and never carry it alone. */
+.ls-tone-good  { background: var(--accent-success); }
+.ls-tone-warn  { background: var(--accent-warning); }
+.ls-tone-bad   { background: var(--accent-danger); }
+.ls-tone-muted { background: color-mix(in srgb, var(--text-muted) 70%, transparent); }
+
+.ls-bar-value {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 900px) {
+  .ls-card {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+
+  .ls-card-aside {
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+    padding-right: 0;
+    padding-bottom: 16px;
+  }
+
+  .ls-hero-value {
+    font-size: 2.1rem;
+  }
+}
+
+@media (max-width: 520px) {
+  .ls-bar-row {
+    grid-template-columns: 96px minmax(0, 1fr) 40px;
+  }
+}
+
 .dash-feature-card,
 .dash-panel {
   background: var(--bg-card);

@@ -143,6 +143,15 @@ const LABELS = {
   ios: 'iOS',
   windows: 'Windows',
   web: 'Web',
+  // device type breakdown
+  streaming_stick: 'Streaming Stick',
+  phone: 'Phone',
+  smart_tv: 'Smart TV',
+  android_tv: 'Android TV',
+  // plan distribution
+  free: 'Free',
+  premium: 'Premium',
+  trial: 'Trial',
   // licenses
   active_licenses: 'Active Licenses',
   expired_licenses: 'Expired Licenses',
@@ -158,323 +167,287 @@ const LABELS = {
 
 
 
-const LIVE_STATS = [
+// ─── Live Stats sections ──────────────────────────────────────────────────────
+// One full-width card per domain. Each card leads with a hero figure (the single
+// number that domain is about), a row of context chips, and horizontal bar charts
+// for the breakdown. Bars carry the section's own hue — magnitude is encoded by
+// length, so one hue is enough — and the status palette (bad/warn) is reserved for
+// states that are genuinely negative. Every bar is direct-labelled, so identity and
+// value are never carried by color alone.
+//
+// Bars are scaled per group rather than to the section total: a group like
+// "Risk & Blocking" is usually all small numbers, and scaling those against a
+// 191-device total would flatten every bar to nothing.
+const LIVE_SECTIONS = [
   {
-    key: "app_users",
-    label: "App Users",
-    accent: "var(--accent-secondary)",
-    sourceKey: "app_users",
-    nested: true,
+    key: 'app_users',
+    label: 'App Users',
+    accent: 'var(--accent-secondary)',
+    source: 'app_users',
+    hero: { label: 'Total Users Ever', path: 'total_users_ever.count' },
+    chips: [
+      { label: 'Signups 24h', path: 'growth.new_signups_24h' },
+      { label: 'Signups 7d', path: 'growth.new_signups_7d' },
+    ],
+    groups: [
+      {
+        label: 'Total Traffic Till Date',
+        // Part-to-whole: the header states the total and the bars are its parts,
+        // so the total needs no bar of its own.
+        totalPath: 'total_users_ever.count',
+        bars: [
+          { label: 'Existing Users', path: 'total_users_ever.existing_users.count', tone: 'good' },
+          { label: 'Deleted Users', path: 'total_users_ever.deleted_users', tone: 'muted' },
+        ],
+      },
+      {
+        label: 'Funnel Drop-off (Existing Users)',
+        // Part-to-whole again: unverified + verified sum exactly to the existing-user count.
+        totalPath: 'total_users_ever.existing_users.count',
+        bars: [
+          { label: 'Unverified Users', path: 'total_users_ever.existing_users.unverified_users', tone: 'warn' },
+          { label: 'Verified Users', path: 'total_users_ever.existing_users.verified_users.count', tone: 'good' },
+        ],
+      },
+      {
+        label: 'Verified Users',
+        // NOTE: unlike the other totalPath groups, these bars are NOT disjoint parts —
+        // Enabled + Blocked is a breakdown *of* Present Users, so they double-count.
+        totalPath: 'total_users_ever.existing_users.verified_users.count',
+        bars: [
+          { label: 'Present Users', path: 'total_users_ever.existing_users.verified_users.activated_users.presently_using.count' },
+          { label: 'Stopped Users', path: 'total_users_ever.existing_users.verified_users.activated_users.stopped_using.count', tone: 'warn' },
+          { label: 'Blocked Users', path: 'total_users_ever.existing_users.verified_users.activated_users.presently_using.by_account_state.blocked_users', tone: 'bad' },
+          { label: 'Enabled Users', path: 'total_users_ever.existing_users.verified_users.activated_users.presently_using.by_account_state.enabled_users', tone: 'good' },
+        ],
+      },
+      {
+        label: 'Stopped Working',
+        // Part-to-whole: plan-expired + payment-failed are the only two reasons, and
+        // they sum to the stopped count.
+        totalPath: 'total_users_ever.existing_users.verified_users.activated_users.stopped_using.count',
+        bars: [
+          { label: 'Plan Expired', path: 'total_users_ever.existing_users.verified_users.activated_users.stopped_using.plan_expired_users', tone: 'warn' },
+          { label: 'Payment Failed', path: 'total_users_ever.existing_users.verified_users.activated_users.stopped_using.payment_failed_users', tone: 'bad' },
+        ],
+      },
+    ],
   },
 
   {
-    key: "licenses",
-    label: "Licenses",
-    accent: "var(--accent-success)",
-    sourceKey: "licenses",
-    nested: true,
+    key: 'licenses',
+    label: 'Licenses',
+    accent: 'var(--accent-success)',
+    source: 'licenses',
+    hero: { label: 'Total Licenses Ever', path: 'total_licenses_ever.count' },
+    chips: [
+      { label: 'Expiring 48h', path: 'expiring_soon.expiring_48h' },
+      { label: 'Expiring 7d', path: 'expiring_soon.expiring_7d' },
+      { label: 'Expiring 30d', path: 'expiring_soon.expiring_30d' },
+    ],
+    groups: [
+      {
+        label: 'Lifecycle Funnel',
+        bars: [
+          { label: 'Ever Issued', path: 'total_licenses_ever.count' },
+          { label: 'Still Existing', path: 'total_licenses_ever.existing_licenses.count' },
+          { label: 'Presently Held', path: 'total_licenses_ever.existing_licenses.presently_held.count', tone: 'good' },
+        ],
+      },
+      {
+        label: 'Held Licenses',
+        bars: [
+          { label: 'Working', path: 'total_licenses_ever.existing_licenses.presently_held.by_state.working_licenses', tone: 'good' },
+          { label: 'Blocked', path: 'total_licenses_ever.existing_licenses.presently_held.by_state.blocked_licenses', tone: 'bad' },
+          { label: 'Trial', path: 'total_licenses_ever.existing_licenses.presently_held.by_plan.trial_licenses' },
+          { label: 'Paid', path: 'total_licenses_ever.existing_licenses.presently_held.by_plan.paid_licenses' },
+        ],
+      },
+      {
+        label: 'Stopped Working',
+        bars: [
+          { label: 'Stopped (Total)', path: 'total_licenses_ever.existing_licenses.stopped_working.count', tone: 'warn' },
+          { label: 'Plan Expired', path: 'total_licenses_ever.existing_licenses.stopped_working.plan_expired_licenses', tone: 'warn' },
+          { label: 'Payment Failed', path: 'total_licenses_ever.existing_licenses.stopped_working.payment_failed_licenses', tone: 'bad' },
+          { label: 'Deleted', path: 'total_licenses_ever.deleted_licenses', tone: 'muted' },
+        ],
+      },
+    ],
   },
 
   {
-    key: "device_stats",
-    label: "Device Stats",
-    accent: "var(--accent-primary)",
-    sourceKey: "devices",
-    nested: true,
+    key: 'devices',
+    label: 'Devices',
+    accent: 'var(--accent-primary)',
+    source: 'devices',
+    hero: { label: 'Total Devices', path: 'total_devices' },
+    chips: [
+      { label: 'New 24h', path: 'new_enrollments_24h' },
+      { label: 'New 7d', path: 'new_enrollments_7d' },
+    ],
+    groups: [
+      {
+        label: 'Connectivity',
+        bars: [
+          { label: 'Active', path: 'active_devices', tone: 'good' },
+          { label: 'Inactive', path: 'inactive_devices', tone: 'muted' },
+          { label: 'Never Heartbeat', path: 'never_heartbeat', tone: 'warn' },
+          { label: 'Push Enabled', path: 'push_enabled' },
+        ],
+      },
+      {
+        label: 'Risk & Blocking',
+        bars: [
+          { label: 'Blocked (Total)', path: 'total_blocked_devices', tone: 'bad' },
+          { label: 'Auto Blocked', path: 'auto_blocked_devices', tone: 'bad' },
+          { label: 'Admin Blocked', path: 'admin_blocked_devices', tone: 'bad' },
+          { label: 'High Risk', path: 'high_risk_devices', tone: 'warn' },
+        ],
+      },
+    ],
   },
 
   {
-    key: "admins",
-    label: "Admin",
-    accent: "var(--accent-success)",
-    sourceKey: "admins",
-    nested: true,
+    key: 'admins',
+    label: 'Admins',
+    accent: 'var(--accent-success)',
+    source: 'admins',
+    hero: { label: 'Total Admins', path: 'total_admins' },
+    groups: [
+      {
+        label: 'By Role',
+        bars: [
+          { label: 'Superadmin', path: 'superadmin' },
+          { label: 'Admin', path: 'admin' },
+          { label: 'Viewer', path: 'viewer' },
+        ],
+      },
+    ],
   },
 
   {
-    key: "heartbeat",
-    label: "Heartbeat",
-    accent: "#f59e0b",
-    sourceKey: "heartbeat",
-    nested: true,
+    key: 'heartbeat',
+    label: 'Heartbeat',
+    accent: 'var(--accent-warning)',
+    source: 'heartbeat',
+    hero: { label: 'Success Rate 24h', path: 'success_rate_pct', suffix: '%' },
+    chips: [
+      { label: 'Total 24h', path: 'total_24h' },
+      { label: 'Beats Last Hour', path: 'beats_last_hour' },
+      { label: 'Failed Last Hour', path: 'failed_last_hour' },
+    ],
+    groups: [
+      {
+        label: 'Last 24 Hours',
+        bars: [
+          { label: 'Success', path: 'success_24h', tone: 'good' },
+          { label: 'Failed', path: 'failed_24h', tone: 'bad' },
+          { label: 'Blocked', path: 'blocked_24h', tone: 'bad' },
+          { label: 'Expired', path: 'expired_24h', tone: 'warn' },
+          { label: 'Risky Active Devices', path: 'risky_active_devices', tone: 'warn' },
+        ],
+      },
+    ],
   },
 
   {
-    key: "billing",
-    label: "Billing",
-    accent: "#7c3aed",
-    sourceKey: "billing",
-    nested: true,
+    key: 'billing',
+    // Reads `payments`, which is a strict superset of `billing` in this API — same
+    // six fields plus all-time revenue and all-time failed payments. Falls back to
+    // `billing` so the card still fills if only that block is returned.
+    label: 'Billing',
+    accent: 'var(--accent-secondary)',
+    source: 'payments',
+    fallbackSource: 'billing',
+    hero: { label: 'Revenue 30d', path: 'revenue_30d_display' },
+    chips: [
+      { label: 'Revenue All Time', path: 'total_revenue_display' },
+      { label: 'Active Subscriptions', path: 'active_subscriptions' },
+    ],
+    groups: [
+      {
+        label: 'Subscription Health',
+        bars: [
+          { label: 'Active Subscriptions', path: 'active_subscriptions', tone: 'good' },
+          { label: 'Past Due', path: 'past_due_subscriptions', tone: 'warn' },
+          { label: 'Cancelled 30d', path: 'cancelled_30d', tone: 'muted' },
+        ],
+      },
+      {
+        label: 'Payment Failures',
+        bars: [
+          { label: 'Failed 7d', path: 'failed_payments_7d', tone: 'bad' },
+          { label: 'Failed All Time', path: 'failed_payments', tone: 'bad' },
+        ],
+      },
+    ],
   },
 
   {
-    key: "audit",
-    label: "Audit",
-    accent: "#94a3b8",
-    sourceKey: "audit",
-    nested: true,
+    key: 'audit',
+    label: 'Audit',
+    accent: '#94a3b8',
+    source: 'audit',
+    hero: { label: 'Warning Events 24h', path: 'warning_events_24h' },
+    groups: [
+      {
+        label: 'Events (24h)',
+        bars: [
+          { label: 'Critical', path: 'critical_events_24h', tone: 'bad' },
+          { label: 'Warning', path: 'warning_events_24h', tone: 'warn' },
+        ],
+      },
+    ],
   },
 ];
-const buildNestedRows = (obj, level = 0) => {
 
-  if (!obj || typeof obj !== "object") {
-    return [];
-  }
+// Resolves every configured path against the API payload once, so the render layer
+// only deals with plain numbers and never re-walks the response.
+const buildLiveSections = (stats, overview) => (
+  LIVE_SECTIONS.map(section => {
+    const source = getNestedValue(stats, section.source)
+      || (section.fallbackSource && getNestedValue(stats, section.fallbackSource))
+      || getNestedValue(overview, section.source)
+      || {};
 
+    const read = (path) => metricValue(getNestedValue(source, path));
 
-  return Object.entries(obj)
-    .filter(([key]) => key !== "count")
-    .flatMap(([key, value]) => {
+    const groups = (section.groups || []).map(group => {
+      const bars = group.bars.map(bar => ({
+        label: bar.label,
+        tone: bar.tone || 'accent',
+        value: numericValue(read(bar.path)) ?? 0,
+      }));
+      // A group with a totalPath is part-to-whole: bars scale against that total and
+      // the header states it plainly. Without one, bars scale to the largest bar and
+      // the header says "peak N", so a scale max is never mistaken for a total.
+      const total = group.totalPath ? numericValue(read(group.totalPath)) : null;
 
-
-      const rows = [];
-
-
-      // number/string value
-      if (
-        typeof value === "number" ||
-        typeof value === "string"
-      ) {
-
-        rows.push({
-          label: formatLabel(key),
-          value,
-        });
-
-        return rows;
-      }
-
-
-
-      // nested object
-      if (
-        typeof value === "object"
-      ) {
-
-        rows.push(
-          ...buildNestedRows(
-            value,
-            level + 1
-          )
-        );
-
-      }
-
-
-      return rows;
-
+      return { ...group, bars, total, max: total ?? Math.max(...bars.map(b => b.value), 0) };
     });
 
-};
-
-
-
-
-
-const buildLiveStats = (
-  stats,
-  revenue,
-  overview
-) => {
-
-  return LIVE_STATS.map(card => {
-
-
-    // Nested JSON cards
-    if (card.nested) {
-
-
-      let source =
-        getNestedValue(
-          stats,
-          card.sourceKey
-        );
-
-
-      if (!source) {
-
-        source =
-          getNestedValue(
-            overview,
-            card.sourceKey
-          );
-
-      }
-
-
-
-      return {
-
-        ...card,
-
-        rows:
-          buildNestedRows(
-            source || {}
-          )
-
-      };
-
-    }
-
-
-
-
-    const usedKeys = new Set();
-
-
-
-    const rows =
-      card.rows.map((row, index) => {
-
-
-        // Combined fields
-        if (row.combine) {
-
-
-          const values =
-            row.fields.map(field =>
-              metricValue(
-                getNestedValue(
-                  stats,
-                  field
-                )
-              )
-            );
-
-
-
-          row.fields.forEach(field =>
-            usedKeys.add(
-              normalizeKey(field)
-            )
-          );
-
-
-
-          return {
-
-            ...row,
-
-            value:
-              `${values[0] ?? 0} Enabled | ${values[1] ?? 0} Blocked`
-
-          };
-
-        }
-
-
-
-
-        const statsMatches =
-          row.fields.map(field => ({
-
-            key: field,
-
-            value:
-              metricValue(
-                getNestedValue(
-                  stats,
-                  field
-                )
-              )
-
-          }));
-
-
-
-
-
-        const revenueMatches =
-          (row.revenueFields || [])
-            .map(field => ({
-
-              key: field,
-
-              value:
-                metricValue(
-                  getNestedValue(
-                    revenue,
-                    field
-                  )
-                )
-
-            }));
-
-
-
-
-
-        const matched =
-          [
-            ...statsMatches,
-            ...revenueMatches
-          ]
-            .find(item =>
-              item.value !== undefined &&
-              item.value !== null &&
-              item.value !== ""
-            );
-
-
-
-
-
-        const value =
-          firstPresent(
-            matched?.value,
-            undefined
-          );
-
-
-
-
-
-        [
-          ...row.fields,
-          ...(row.revenueFields || [])
-        ]
-          .forEach(field =>
-            usedKeys.add(
-              normalizeKey(field)
-            )
-          );
-
-
-
-
-
-        return {
-
-          ...row,
-
-          value:
-            numericValue(value) !== null &&
-              !String(value).includes("$")
-              ? numericValue(value)
-              : value
-
-        };
-
-
-      });
-
-
-
-
-
-
     return {
-
-      ...card,
-
-      rows
-
+      ...section,
+      hero: { ...section.hero, value: read(section.hero.path) },
+      chips: (section.chips || []).map(chip => ({ ...chip, value: read(chip.path) })),
+      groups,
     };
+  })
+);
 
-
-  });
-
-};
+// Flattens sections back into the { label, rows } shape the PDF/Excel exporters expect.
+const sectionsToExportCards = (sections) => (
+  sections.map(section => ({
+    label: section.label,
+    rows: [
+      { label: section.hero.label, value: section.hero.value, suffix: section.hero.suffix },
+      ...section.chips.map(chip => ({ label: chip.label, value: chip.value })),
+      ...section.groups.flatMap(group =>
+        group.bars.map(bar => ({ label: `${group.label} — ${bar.label}`, value: bar.value }))
+      ),
+    ],
+  }))
+);
 
 const REVENUE_CARDS = [
   { label: 'Revenue 30d', value: 'revenue_30d_display', sub: 'Last 30 days', accent: 'var(--accent-primary)' },
@@ -695,6 +668,74 @@ const sumMatchingStats = (stats, includes = []) => {
 const sumValues = (items) => Object.values(items || {}).reduce((sum, value) => sum + Number(value || 0), 0);
 const entriesFromObject = (items) => Object.entries(items || {}).map(([label, value]) => ({ label, value }));
 
+// One horizontal bar. Length is the encoding, the value is always printed, and the
+// tone class only ever *reinforces* a label that is already there in text.
+function MetricBar({ label, value, max, tone }) {
+  const pct = max > 0 ? (value / max) * 100 : 0;
+
+  return (
+    <div className="ls-bar-row" title={`${label}: ${value.toLocaleString()}`}>
+      <span className="ls-bar-label">{label}</span>
+      <div className="ls-bar-track">
+        <div className={`ls-bar-fill ls-tone-${tone}`} style={{ width: `${pct}%` }} />
+      </div>
+      <strong className="ls-bar-value">{value.toLocaleString()}</strong>
+    </div>
+  );
+}
+
+// A full-width Live Stats row: hero figure and chips on the left, bar charts on the right.
+function MetricSectionCard({ section }) {
+  const { label, accent, hero, chips, groups } = section;
+
+  return (
+    <section className="ls-card" style={{ '--stat-accent': accent }}>
+      <header className="ls-card-aside">
+        <div className="ls-card-title">
+          <span className="ls-dot" />
+          {label}
+        </div>
+
+        <div className="ls-hero-label">{hero.label}</div>
+        <div className="ls-hero-value">{formatMetricValue(hero.value, hero.suffix)}</div>
+
+        {chips.length > 0 && (
+          <div className="ls-chips">
+            {chips.map(chip => (
+              <div className="ls-chip" key={chip.label}>
+                <span>{chip.label}</span>
+                <strong>{formatValue(chip.value)}</strong>
+              </div>
+            ))}
+          </div>
+        )}
+      </header>
+
+      <div className="ls-card-charts">
+        {groups.map(group => (
+          <div className="ls-group" key={group.label}>
+            <div className="ls-group-head">
+              <span className="ls-group-label">{group.label}</span>
+              <span className="ls-group-scale">
+                {group.total != null ? group.total.toLocaleString() : `peak ${group.max.toLocaleString()}`}
+              </span>
+            </div>
+
+            {group.bars.map(bar => (
+              <MetricBar
+                key={bar.label}
+                label={bar.label}
+                value={bar.value}
+                max={group.max}
+                tone={bar.tone}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
 function StatCard({
   label,
   rows,
@@ -806,8 +847,6 @@ function StatCard({
   );
 
 }
-
-
 
 function ExportButton({ onExportPDF, onExportExcel }) {
   const [open, setOpen] = useState(false);
@@ -925,7 +964,7 @@ function TrendCard({ items }) {
   );
 }
 
-export default function DashboardTable({ activeDashboardTab = 'liveStats', setActivePage, }) {
+export default function DashboardTable({ activeDashboardTab = 'liveStats' }) {
   const dispatch = useDispatch();
   const {
     stats,
@@ -951,7 +990,8 @@ export default function DashboardTable({ activeDashboardTab = 'liveStats', setAc
     }
   }, [activeDashboardTab, dispatch]);
 
-  const statCards = useMemo(() => buildLiveStats(stats, revenue, overview), [stats, revenue, overview]);
+  const liveSections = useMemo(() => buildLiveSections(stats, overview), [stats, overview]);
+  const statCards = useMemo(() => sectionsToExportCards(liveSections), [liveSections]);
   const revenueCards = REVENUE_CARDS.map(card => ({
     ...card,
     value: revenue?.[card.value],
@@ -963,16 +1003,18 @@ export default function DashboardTable({ activeDashboardTab = 'liveStats', setAc
         <div className="dash-tab-panel">
           <SectionHeader
             title="Live Stats"
-            subtitle="Core operational counts from dashboard stats."
+            subtitle={stats?.generated_at
+              ? `Core operational counts — generated ${new Date(stats.generated_at).toLocaleString()}`
+              : 'Core operational counts from dashboard stats.'}
             loading={loading}
             error={error}
             onExportPDF={() => exportToPDF(statCards)}
             onExportExcel={() => exportToExcel(statCards)}
           />
           {loading && !stats ? (
-            <div className="dashboard-stats">
-              {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
-                <div key={i} className="stat-card dash-skel-card">
+            <div className="ls-stack">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="ls-card dash-skel-card">
                   <div className="dash-skel-label" />
                   <div className="dash-skel-val" />
                   <div className="dash-skel-row" />
@@ -981,15 +1023,9 @@ export default function DashboardTable({ activeDashboardTab = 'liveStats', setAc
               ))}
             </div>
           ) : (
-            <div className="dashboard-stats">
-              {statCards.map(card => (
-                <StatCard
-                  key={card.key}
-                  label={card.label}
-                  rows={card.rows}
-                  accent={card.accent}
-                  setActivePage={setActivePage}
-                />
+            <div className="ls-stack">
+              {liveSections.map(section => (
+                <MetricSectionCard key={section.key} section={section} />
               ))}
             </div>
           )}

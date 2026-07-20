@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchPlanDetail, clearPlanDetail, togglePlanStatus, clearToggleState, updatePlan, clearUpdateState } from '../../store/slices/plansSlice';
 import { fmtDateTime } from '../Subscriptions/subscriptionsHelpers';
+import {
+  AMOUNT_MAX, isAmountInputAllowed, isIntegerInputAllowed,
+  blockNonNumericKeys, blockIntegerKeys, validateAmount, validateInteger,
+} from './planFormFields';
 import './PlansPage.css';
 import './PlanDetailPage.css';
 import toast from "react-hot-toast";
@@ -71,7 +75,11 @@ function EditPlanModal({ plan, onClose }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.reason.trim()) { setLocalError('Reason is required for the audit log.'); return; }
-    if (form.amount !== '' && Number(form.amount) < 0) { setLocalError('Amount cannot be negative.'); return; }
+    const fieldError = validateAmount(form.amount)
+      || validateInteger(form.trial_days, 'Trial days', 365)
+      || validateInteger(form.max_devices, 'Max devices', 100)
+      || validateInteger(form.max_concurrent_streams, 'Max concurrent streams', 10);
+    if (fieldError) { setLocalError(fieldError); return; }
 
     const payload = { reason: form.reason.trim() };
     if (form.name.trim() !== (plan.name || '')) payload.name = form.name.trim();
@@ -116,8 +124,9 @@ function EditPlanModal({ plan, onClose }) {
           {/* Amount */}
           <label className="pdp-edit-field">
             <span>Amount ($)</span>
-            <input type="number" min={0} step="0.01" value={form.amount}
-              onChange={(e) => set('amount', e.target.value)} placeholder="9.99" disabled={updateLoading} />
+            <input type="number" min={0} max={AMOUNT_MAX} step="0.01" value={form.amount}
+              onChange={(e) => isAmountInputAllowed(e.target.value) && set('amount', e.target.value)}
+              onKeyDown={blockNonNumericKeys} placeholder="9.99" disabled={updateLoading} />
           </label>
 
           {/* Currency */}
@@ -130,22 +139,25 @@ function EditPlanModal({ plan, onClose }) {
           {/* Trial days */}
           <label className="pdp-edit-field">
             <span>Trial Days</span>
-            <input type="number" min={1} max={365} value={form.trial_days}
-              onChange={(e) => set('trial_days', e.target.value)} placeholder="7" disabled={updateLoading} />
+            <input type="number" min={0} max={365} value={form.trial_days}
+              onChange={(e) => isIntegerInputAllowed(e.target.value, 365) && set('trial_days', e.target.value)}
+              onKeyDown={blockIntegerKeys} placeholder="7" disabled={updateLoading} />
           </label>
 
           {/* Max devices */}
           <label className="pdp-edit-field">
             <span>Max Devices</span>
-            <input type="number" min={1} max={100} value={form.max_devices}
-              onChange={(e) => set('max_devices', e.target.value)} disabled={updateLoading} />
+            <input type="number" min={0} max={100} value={form.max_devices}
+              onChange={(e) => isIntegerInputAllowed(e.target.value, 100) && set('max_devices', e.target.value)}
+              onKeyDown={blockIntegerKeys} disabled={updateLoading} />
           </label>
 
           {/* Max concurrent streams */}
           <label className="pdp-edit-field">
             <span>Max Concurrent Streams</span>
-            <input type="number" min={1} max={10} value={form.max_concurrent_streams}
-              onChange={(e) => set('max_concurrent_streams', e.target.value)} disabled={updateLoading} />
+            <input type="number" min={0} max={10} value={form.max_concurrent_streams}
+              onChange={(e) => isIntegerInputAllowed(e.target.value, 10) && set('max_concurrent_streams', e.target.value)}
+              onKeyDown={blockIntegerKeys} disabled={updateLoading} />
           </label>
 
           {/* Device limit policy */}
