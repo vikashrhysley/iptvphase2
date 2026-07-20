@@ -7,6 +7,7 @@ import {
   fetchDashboardStats,
 } from '../../store/slices/dashboardSlice';
 import './DashboardTable.css';
+import { ChevronRight, ChevronDown } from "lucide-react"
 
 // ─── Export helpers ───────────────────────────────────────────────────────────
 const buildRevenueExportRows = (revenueCards, topPlan) => {
@@ -155,156 +156,325 @@ const LABELS = {
   total_users: 'Total Users',
 };
 
+
+
 const LIVE_STATS = [
   {
-    key: 'app_users',
-    label: 'App Users',
-    accent: 'var(--accent-secondary)',
-    rows: [
-      {
-        label: 'Registered Users (Till Now)',
-        fields: ['app_users.registered_users']
-      },
-      {
-        label: 'Present Users',
-        fields: ['app_users.total_present_users.count']
-      },
-      {
-        label: 'Enabled / Blocked',
-        fields: [
-          'app_users.total_present_users.enabled_users',
-          'app_users.total_present_users.blocked_users'
-        ],
-        combine: true
-      },
-      {
-        label: 'Trial Users',
-        fields: ['app_users.trial_users']
-      },
-      {
-        label: 'Paid Users',
-        fields: ['app_users.paid_users']
-      },
-      {
-        label: 'Inactive Due To Payment Users',
-        fields: ['app_users.inactive_due_to_payment_users']
-      },
-      {
-        label: 'Unsubscribed Users',
-        fields: ['app_users.unsubscribed_users']
-      },
-      {
-        label: 'Never Subscribed Users',
-        fields: ['app_users.never_subscribed_users']
-      },
-      {
-        label: 'New Signups 24h',
-        fields: ['app_users.new_signups_24h']
-      },
-      {
-        label: 'New Signups 7d',
-        fields: ['app_users.new_signups_7d']
-      },
-    ],
+    key: "app_users",
+    label: "App Users",
+    accent: "var(--accent-secondary)",
+    sourceKey: "app_users",
+    nested: true,
   },
-  {
-    key: 'licenses',
-    label: 'Licenses',
-    accent: 'var(--accent-success)',
-    noDynamic: true,
-    rows: [
-      { label: 'Total', fields: ['licenses.total_licenses', 'total_licenses'] },
-      { label: 'Active', fields: ['licenses.active_licenses', 'active_licenses'] },
-      { label: 'Expired', fields: ['licenses.expired_licenses', 'expired_licenses'] },
-      { label: 'Inactive Due To Payment', fields: ['licenses.inactive_due_to_payment_licenses'] },
-      { label: 'Revoked', fields: ['licenses.revoked_licenses', 'revoked_licenses'] },
-      { label: 'Expiring 48h', fields: ['licenses.expiring_48h', 'expiring_48h'] },
-      { label: 'Expiring 7d', fields: ['licenses.expiring_7d', 'expiring_7d'] },
-      { label: 'Expiring 30d', fields: ['licenses.expiring_30d', 'expiring_30d'] },
-    ],
-  },
-  {
-    key: 'device_stats',
-    label: 'Device Stats',
-    accent: 'var(--accent-primary)',
-    noDynamic: true,
-    rows: [
-      { label: 'Total', fields: ['devices.total_devices', 'stats.total', 'total_devices'] },
-      { label: 'Active', fields: ['devices.active_devices', 'stats.active', 'active_devices'] },
-      { label: 'Inactive', fields: ['devices.inactive_devices', 'stats.inactive', 'inactive_devices'] },
-      { label: 'Total Blocked Devices (Auto+Admin)', fields: ['devices.total_blocked_devices', 'stats.blocked', 'total_blocked_devices', 'blocked_devices'] },
-      { label: 'Auto Blocked', fields: ['devices.auto_blocked_devices', 'auto_blocked_devices'] },
-      { label: 'Admin Blocked', fields: ['devices.admin_blocked_devices', 'admin_blocked_devices'] },
-      { label: 'High Risk', fields: ['devices.high_risk_devices', 'high_risk_devices'] },
-      { label: 'New (24h)', fields: ['devices.new_enrollments_24h', 'new_enrollments_24h'] },
-      { label: 'New (7d)', fields: ['devices.new_enrollments_7d', 'new_enrollments_7d'] },
-      { label: 'Never Heartbeat', fields: ['devices.never_heartbeat', 'never_heartbeat'] },
-      { label: 'Push Enabled', fields: ['devices.push_enabled', 'push_enabled'] },
-    ],
-  },
-  {
-    key: 'admins',
-    label: 'Admin',
-    accent: 'var(--accent-success)',
-    noDynamic: true,
-    rows: [
-      { label: 'Total Admin', fields: ['admins.total_admins', 'total_admins'] },
-      { label: 'Viewer', fields: ['admins.viewer', 'viewer'] },
-      { label: 'Admin', fields: ['admins.admin', 'admin'] },
-      { label: 'Superadmin', fields: ['admins.superadmin', 'superadmin'] },
-    ],
-  },
-  // {
-  //   key: 'users',
-  //   label: 'Users',
-  //   accent: 'var(--accent-secondary)',
-  //   rows: [
-  //     { label: 'Total', fields: ['total_users', 'users_total', 'user_count', 'users'] },
-  //     { label: 'Admin', fields: ['admin_users', 'users.admin', 'roles.admin'] },
-  //     { label: 'Super Admin', fields: ['superadmin_users', 'super_admin_users', 'users.superadmin', 'roles.superadmin'] },
-  //     { label: 'Viewer', fields: ['viewer_users', 'users.viewer', 'roles.viewer'] },
-  //   ],
-  //   includes: ['user', 'admin', 'viewer'],
-  //   excludes: ['device_user'],
-  // },
 
   {
-    key: 'heartbeat',
-    label: 'Heartbeat',
-    accent: '#f59e0b',
-    rows: [
-      { label: 'Total', fields: ['total_heartbeats', 'heartbeat_total', 'heartbeat_count'] },
-      { label: 'Last Hour', fields: ['heartbeats_last_hour', 'heartbeat.last_hour'] },
-      { label: 'Success Rate', fields: ['success_rate_pct', 'heartbeat.success_rate_pct'], suffix: '%' },
-      { label: 'Miss Rate', fields: ['miss_rate_percent', 'heartbeat.miss_rate_percent'], suffix: '%' },
-    ],
-    includes: ['heartbeat', 'miss', 'risk', 'playback', 'response', 'success_rate', 'failed_last_hour'],
+    key: "licenses",
+    label: "Licenses",
+    accent: "var(--accent-success)",
+    sourceKey: "licenses",
+    nested: true,
   },
+
   {
-    key: 'billing',
-    label: 'Billing',
-    accent: '#7c3aed',
-    rows: [
-      { label: 'Revenue 30d', revenueFields: ['revenue_30d_display'], fields: ['revenue_30d_display'] },
-      { label: 'MRR', revenueFields: ['mrr_estimate_display'], fields: ['mrr_estimate_display'] },
-      { label: 'Failed', revenueFields: ['failed_payments_7d'], fields: ['failed_payments_7d'] },
-      { label: 'Refunds', revenueFields: ['refunds_30d_display'], fields: ['refunds_30d_display'] },
-    ],
-    includes: ['billing', 'revenue', 'payment', 'refund', 'subscription', 'mrr', 'churn', 'retry', 'plan'],
+    key: "device_stats",
+    label: "Device Stats",
+    accent: "var(--accent-primary)",
+    sourceKey: "devices",
+    nested: true,
   },
+
   {
-    key: 'audit',
-    label: 'Audit',
-    accent: '#94a3b8',
-    rows: [
-      { label: 'Total', fields: ['total_audit_events', 'audit_events', 'audit_logs', 'audit_count'] },
-      { label: 'Last 24h', fields: ['audit_events_24h', 'audit_last_24h', 'audit.24h'] },
-      { label: 'Failed', fields: ['failed_audit_events', 'audit_failed', 'audit.failed'] },
-      { label: 'Users', fields: ['audit_users', 'audit.user_count', 'audited_users'] },
-    ],
-    includes: ['audit', 'event', 'log'],
+    key: "admins",
+    label: "Admin",
+    accent: "var(--accent-success)",
+    sourceKey: "admins",
+    nested: true,
+  },
+
+  {
+    key: "heartbeat",
+    label: "Heartbeat",
+    accent: "#f59e0b",
+    sourceKey: "heartbeat",
+    nested: true,
+  },
+
+  {
+    key: "billing",
+    label: "Billing",
+    accent: "#7c3aed",
+    sourceKey: "billing",
+    nested: true,
+  },
+
+  {
+    key: "audit",
+    label: "Audit",
+    accent: "#94a3b8",
+    sourceKey: "audit",
+    nested: true,
   },
 ];
+const buildNestedRows = (obj, level = 0) => {
+
+  if (!obj || typeof obj !== "object") {
+    return [];
+  }
+
+
+  return Object.entries(obj)
+    .filter(([key]) => key !== "count")
+    .flatMap(([key, value]) => {
+
+
+      const rows = [];
+
+
+      // number/string value
+      if (
+        typeof value === "number" ||
+        typeof value === "string"
+      ) {
+
+        rows.push({
+          label: formatLabel(key),
+          value,
+        });
+
+        return rows;
+      }
+
+
+
+      // nested object
+      if (
+        typeof value === "object"
+      ) {
+
+        rows.push(
+          ...buildNestedRows(
+            value,
+            level + 1
+          )
+        );
+
+      }
+
+
+      return rows;
+
+    });
+
+};
+
+
+
+
+
+const buildLiveStats = (
+  stats,
+  revenue,
+  overview
+) => {
+
+  return LIVE_STATS.map(card => {
+
+
+    // Nested JSON cards
+    if (card.nested) {
+
+
+      let source =
+        getNestedValue(
+          stats,
+          card.sourceKey
+        );
+
+
+      if (!source) {
+
+        source =
+          getNestedValue(
+            overview,
+            card.sourceKey
+          );
+
+      }
+
+
+
+      return {
+
+        ...card,
+
+        rows:
+          buildNestedRows(
+            source || {}
+          )
+
+      };
+
+    }
+
+
+
+
+    const usedKeys = new Set();
+
+
+
+    const rows =
+      card.rows.map((row, index) => {
+
+
+        // Combined fields
+        if (row.combine) {
+
+
+          const values =
+            row.fields.map(field =>
+              metricValue(
+                getNestedValue(
+                  stats,
+                  field
+                )
+              )
+            );
+
+
+
+          row.fields.forEach(field =>
+            usedKeys.add(
+              normalizeKey(field)
+            )
+          );
+
+
+
+          return {
+
+            ...row,
+
+            value:
+              `${values[0] ?? 0} Enabled | ${values[1] ?? 0} Blocked`
+
+          };
+
+        }
+
+
+
+
+        const statsMatches =
+          row.fields.map(field => ({
+
+            key: field,
+
+            value:
+              metricValue(
+                getNestedValue(
+                  stats,
+                  field
+                )
+              )
+
+          }));
+
+
+
+
+
+        const revenueMatches =
+          (row.revenueFields || [])
+            .map(field => ({
+
+              key: field,
+
+              value:
+                metricValue(
+                  getNestedValue(
+                    revenue,
+                    field
+                  )
+                )
+
+            }));
+
+
+
+
+
+        const matched =
+          [
+            ...statsMatches,
+            ...revenueMatches
+          ]
+            .find(item =>
+              item.value !== undefined &&
+              item.value !== null &&
+              item.value !== ""
+            );
+
+
+
+
+
+        const value =
+          firstPresent(
+            matched?.value,
+            undefined
+          );
+
+
+
+
+
+        [
+          ...row.fields,
+          ...(row.revenueFields || [])
+        ]
+          .forEach(field =>
+            usedKeys.add(
+              normalizeKey(field)
+            )
+          );
+
+
+
+
+
+        return {
+
+          ...row,
+
+          value:
+            numericValue(value) !== null &&
+              !String(value).includes("$")
+              ? numericValue(value)
+              : value
+
+        };
+
+
+      });
+
+
+
+
+
+
+    return {
+
+      ...card,
+
+      rows
+
+    };
+
+
+  });
+
+};
 
 const REVENUE_CARDS = [
   { label: 'Revenue 30d', value: 'revenue_30d_display', sub: 'Last 30 days', accent: 'var(--accent-primary)' },
@@ -401,168 +571,243 @@ const sumMatchingStats = (stats, includes = []) => {
   return total > 0 ? total : undefined;
 };
 
-const buildLiveStats = (stats, revenue, overview) => (
-  LIVE_STATS.map(card => {
-    // Platform-style cards: read an entire sub-object as rows
-    if (card.sourceKey) {
-      const source = getNestedValue(stats, card.sourceKey)
-        || getNestedValue(overview, card.sourceKey)
-        || {};
+// const buildLiveStats = (stats, revenue, overview) => (
+//   LIVE_STATS.map(card => {
+//     // Platform-style cards: read an entire sub-object as rows
+//     if (card.sourceKey) {
+//       const source = getNestedValue(stats, card.sourceKey)
+//         || getNestedValue(overview, card.sourceKey)
+//         || {};
 
-      const entries = Object.entries(source);
-      const total = entries.reduce((sum, [, v]) => sum + Number(v || 0), 0);
+//       const entries = Object.entries(source);
+//       const total = entries.reduce((sum, [, v]) => sum + Number(v || 0), 0);
 
-      const rows = [
-        { label: 'Total', value: total || undefined },
-        ...entries.map(([key, value]) => ({
-          label: formatLabel(key),
-          value: numericValue(value) ?? value,
-        })),
-      ];
+//       const rows = [
+//         { label: 'Total', value: total || undefined },
+//         ...entries.map(([key, value]) => ({
+//           label: formatLabel(key),
+//           value: numericValue(value) ?? value,
+//         })),
+//       ];
 
-      return { ...card, rows };
-    }
+//       return { ...card, rows };
+//     }
 
-    const usedKeys = new Set();
+//     const usedKeys = new Set();
 
-    const rows = card.rows.map((row, index) => {
+//     const rows = card.rows.map((row, index) => {
 
-      // Handle combined values (example: Enabled / Blocked)
-      if (row.combine) {
-        const values = row.fields.map(field =>
-          metricValue(getNestedValue(stats, field))
-        );
+//       // Handle combined values (example: Enabled / Blocked)
+//       if (row.combine) {
+//         const values = row.fields.map(field =>
+//           metricValue(getNestedValue(stats, field))
+//         );
 
-        row.fields.forEach(field => usedKeys.add(normalizeKey(field)));
+//         row.fields.forEach(field => usedKeys.add(normalizeKey(field)));
 
-        return {
-          ...row,
-          value: `${values[0] ?? 0} Enabled | ${values[1] ?? 0} Blocked`,
-        };
-      }
-
-
-      const statsMatches = row.fields.map(field => ({
-        key: field,
-        value: metricValue(getNestedValue(stats, field)),
-      }));
-
-      const revenueMatches = (row.revenueFields || []).map(field => ({
-        key: field,
-        value: metricValue(getNestedValue(revenue, field)),
-      }));
-
-      const fallbackSum = index === 0
-        ? sumMatchingStats(stats, card.includes)
-        : undefined;
-
-      const matched = [
-        ...revenueMatches,
-        ...statsMatches
-      ].find(
-        item =>
-          item.value !== undefined &&
-          item.value !== null &&
-          item.value !== ''
-      );
-
-      const value = firstPresent(
-        matched?.value,
-        fallbackSum
-      );
-
-      [...row.fields, ...(row.revenueFields || [])]
-        .forEach(field => usedKeys.add(normalizeKey(field)));
-
-      if (matched?.key) {
-        usedKeys.add(normalizeKey(matched.key));
-      }
-
-      const numeric = numericValue(value);
-
-      return {
-        ...row,
-        value: numeric !== null && !String(value).includes('$')
-          ? numeric
-          : value,
-      };
-    });
+//         return {
+//           ...row,
+//           value: `${values[0] ?? 0} Enabled | ${values[1] ?? 0} Blocked`,
+//         };
+//       }
 
 
-    if (card.noDynamic) {
-      return { ...card, rows };
-    }
+//       const statsMatches = row.fields.map(field => ({
+//         key: field,
+//         value: metricValue(getNestedValue(stats, field)),
+//       }));
+
+//       const revenueMatches = (row.revenueFields || []).map(field => ({
+//         key: field,
+//         value: metricValue(getNestedValue(revenue, field)),
+//       }));
+
+//       const fallbackSum = index === 0
+//         ? sumMatchingStats(stats, card.includes)
+//         : undefined;
+
+//       const matched = [
+//         ...revenueMatches,
+//         ...statsMatches
+//       ].find(
+//         item =>
+//           item.value !== undefined &&
+//           item.value !== null &&
+//           item.value !== ''
+//       );
+
+//       const value = firstPresent(
+//         matched?.value,
+//         fallbackSum
+//       );
+
+//       [...row.fields, ...(row.revenueFields || [])]
+//         .forEach(field => usedKeys.add(normalizeKey(field)));
+
+//       if (matched?.key) {
+//         usedKeys.add(normalizeKey(matched.key));
+//       }
+
+//       const numeric = numericValue(value);
+
+//       return {
+//         ...row,
+//         value: numeric !== null && !String(value).includes('$')
+//           ? numeric
+//           : value,
+//       };
+//     });
 
 
-    const dynamicRows = [
-      ...flattenStats(stats),
-      ...(card.key === 'billing' ? flattenStats(revenue) : []),
-    ]
-      .filter(item => matchesCard(item.key, card))
-      .filter(item => !usedKeys.has(normalizeKey(item.key)))
-      .map(item => {
-        usedKeys.add(normalizeKey(item.key));
-
-        const numeric = numericValue(item.value);
-
-        return {
-          label: formatLabel(item.key),
-          value: numeric !== null && !String(item.value).includes('$')
-            ? numeric
-            : item.value,
-        };
-      });
+//     if (card.noDynamic) {
+//       return { ...card, rows };
+//     }
 
 
-    return {
-      ...card,
-      rows: [...rows, ...dynamicRows],
-    };
-  })
-);
+//     const dynamicRows = [
+//       ...flattenStats(stats),
+//       ...(card.key === 'billing' ? flattenStats(revenue) : []),
+//     ]
+//       .filter(item => matchesCard(item.key, card))
+//       .filter(item => !usedKeys.has(normalizeKey(item.key)))
+//       .map(item => {
+//         usedKeys.add(normalizeKey(item.key));
+
+//         const numeric = numericValue(item.value);
+
+//         return {
+//           label: formatLabel(item.key),
+//           value: numeric !== null && !String(item.value).includes('$')
+//             ? numeric
+//             : item.value,
+//         };
+//       });
+
+
+//     return {
+//       ...card,
+//       rows: [...rows, ...dynamicRows],
+//     };
+//   })
+// );
+// live stats, buildLiveStats , statcards
 
 const sumValues = (items) => Object.values(items || {}).reduce((sum, value) => sum + Number(value || 0), 0);
 const entriesFromObject = (items) => Object.entries(items || {}).map(([label, value]) => ({ label, value }));
 
+function StatCard({
+  label,
+  rows,
+  accent
+}) {
 
-function StatCard({ label, rows, accent, setActivePage }) {
+
   const primary = rows?.[0];
-  const handleCardRoute = (label) => {
-    if (label === 'Licenses') {
-      setActivePage("license")
-    }else if(label === "App Users"){
-      setActivePage("app_users")
-    }else if(label === "Device Stats"){
-      setActivePage("device")
-    }else if(label === "Admin"){
-      setActivePage("admin_users")
-    }else if(label === "Heartbeat"){
-      setActivePage("heartbeat")
-    }else if(label === "Audit"){
-      setActivePage("audit")
-    }
-  }
+
+
   return (
-    <div  className="stat-card" style={{ '--stat-accent': accent || 'var(--accent-primary)' }} onClick={() => handleCardRoute(label)}>
+
+    <div
+
+      className="stat-card"
+
+      style={{
+        "--stat-accent":
+          accent || "var(--accent-primary)"
+      }}
+
+    >
+
+
+
       <div className="stat-card-head">
+
+
         <div>
-          <div className="stat-label">{label}</div>
-          <div className="stat-primary-label">{primary?.label || 'Total'}</div>
-        </div>
-        <span className="stat-dot" />
-      </div>
-      <div className="stat-value">{formatMetricValue(primary?.value, primary?.suffix)}</div>
-      <div className="stat-fields">
-        {rows?.slice(1).map(row => (
-          <div className="stat-field-row" key={row.label}>
-            <span>{row.label}</span>
-            <strong>{formatMetricValue(row.value, row.suffix)}</strong>
+
+          <div className="stat-label">
+            {label}
           </div>
-        ))}
+
+
+          <div className="stat-primary-label">
+            {primary?.label || "Total"}
+          </div>
+
+
+        </div>
+
+
+        <span className="stat-dot" />
+
+
       </div>
+
+
+
+
+
+      <div className="stat-value">
+
+        {
+          primary?.value !== undefined
+            ?
+            formatMetricValue(
+              primary.value,
+              primary.suffix
+            )
+            :
+            "-"
+        }
+
+      </div>
+
+      <div className="stat-fields"  style={{
+    maxHeight: "220px",
+    overflowY: "auto",
+    paddingRight: "6px",
+  }}>
+
+  {
+    rows?.slice(1).map((row, index) => (
+
+      <div
+        key={`${row.label}-${index}`}
+        className="stat-field-row"
+      >
+
+        <span>
+          {row.label}
+        </span>
+
+
+        <strong>
+          {
+            formatMetricValue(
+              row.value,
+              row.suffix
+            )
+          }
+        </strong>
+
+
+      </div>
+
+    ))
+  }
+
+</div>
+
+
+
+
     </div>
+
   );
+
 }
+
+
 
 function ExportButton({ onExportPDF, onExportExcel }) {
   const [open, setOpen] = useState(false);
@@ -680,7 +925,7 @@ function TrendCard({ items }) {
   );
 }
 
-export default function DashboardTable({ activeDashboardTab = 'liveStats', setActivePage , }) {
+export default function DashboardTable({ activeDashboardTab = 'liveStats', setActivePage, }) {
   const dispatch = useDispatch();
   const {
     stats,

@@ -12,28 +12,44 @@ const BackIcon = () => (
 
 /* ── Helpers ────────────────────────────────────────────── */
 const fmtDate = (iso) => {
-  if (!iso) return '—';
-  try { return new Date(iso).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }); } catch { return '—'; }
+  if (!iso) return null;
+  try {
+    return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  } catch {
+    return null;
+  }
 };
+
 const fmt = (iso) => {
-  if (!iso) return '—';
-  try { return new Date(iso).toLocaleString('en-US', { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }); } catch { return '—'; }
+  if (!iso) return null;
+  try {
+    return new Date(iso).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return null;
+  }
 };
 
-const statusCls = (s) => ({ active:'ld-active', expired:'ld-expired', revoked:'ld-revoked', suspended:'ld-suspended', grace:'ld-grace' }[s] || 'ld-unknown');
-const planCls   = (p) => ({ paid:'ld-paid', trial:'ld-trial', grace:'ld-grace-plan' }[p] || 'ld-unknown');
-const riskCls   = (r) => r >= 70 ? 'high' : r >= 30 ? 'med' : 'low';
+const statusCls = (s) => ({ active: 'ld-active', expired: 'ld-expired', revoked: 'ld-revoked', suspended: 'ld-suspended', grace: 'ld-grace' }[s] || 'ld-unknown');
+const planCls = (p) => ({ paid: 'ld-paid', trial: 'ld-trial', grace: 'ld-grace-plan' }[p] || 'ld-unknown');
+const riskCls = (r) => (r >= 70 ? 'high' : r >= 30 ? 'med' : 'low');
 
-const PLATFORM_ICONS = { android:'🤖', ios:'🍎', firetv:'🔥', roku:'📺', samsung:'📺', phone:'📱', tablet:'📟', desktop:'🖥️', android_tv:'📺' };
+const PLATFORM_ICONS = {
+  android: '🤖', ios: '🍎', firetv: '🔥', roku: '📺', samsung: '📺',
+  phone: '📱', tablet: '📟', desktop: '🖥️', android_tv: '📺',
+};
 
-function InfoRow({ label, value }) {
+/* Renders a value, or a contextual empty-state label instead of a bare
+   dash / "N/A" — each field says what its absence actually means. */
+function InfoRow({ label, value, emptyLabel = 'Not set' }) {
+  const isEmpty = value === null || value === undefined || value === '';
   return (
     <div className="ld-info-row">
       <span className="ld-info-key">{label}</span>
-      <span className="ld-info-val">{value ?? '—'}</span>
+      <span className={`ld-info-val${isEmpty ? ' is-empty' : ''}`}>{isEmpty ? emptyLabel : value}</span>
     </div>
   );
 }
+
 function Card({ title, children }) {
   return (
     <div className="ld-card">
@@ -46,7 +62,7 @@ function Card({ title, children }) {
 /* ── Main ───────────────────────────────────────────────── */
 export default function LicenseDetail({ licenseId, onBack }) {
   const dispatch = useDispatch();
-  const { selectedDetail, detailLoading, detailError } = useSelector(s => s.licenses);
+  const { selectedDetail, detailLoading, detailError } = useSelector((s) => s.licenses);
 
   useEffect(() => {
     dispatch(fetchLicenseDetail({ licenseId }));
@@ -54,9 +70,9 @@ export default function LicenseDetail({ licenseId, onBack }) {
   }, [dispatch, licenseId]);
 
   const detail = selectedDetail;
-  const L      = detail?.license || null;
+  const L = detail?.license || null;
   const history = detail?.history || [];
-  const device  = detail?.device  || null;
+  const device = detail?.device || null;
 
   return (
     <div className="ld-page">
@@ -64,12 +80,10 @@ export default function LicenseDetail({ licenseId, onBack }) {
         <BackIcon /> Back to Licenses
       </button>
 
-      {/* Loading — covers initial render + API in-flight */}
       {(detailLoading || (!selectedDetail && !detailError)) && (
         <div className="ld-loading"><span className="ld-spinner" /> Loading license details…</div>
       )}
 
-      {/* Error */}
       {detailError && !detailLoading && (
         <div className="ld-error">{detailError}</div>
       )}
@@ -79,12 +93,46 @@ export default function LicenseDetail({ licenseId, onBack }) {
           {/* ── Hero ── */}
           <div className="ld-hero">
             <div className="ld-hero-body">
-              <div className="ld-hero-id">#{L.id?.slice(0, 16)}…</div>
+              <div className="ld-hero-id">ID: {L.id}</div>
               <div className="ld-hero-user">{L.user_email}</div>
               <div className="ld-hero-badges">
-                <span className={`ld-status-pill ${statusCls(L.status)}`}>{L.status}</span>
-                <span className={`ld-plan-pill ${planCls(L.plan_type)}`}>{L.plan_name || L.plan_type}</span>
-                {L.auto_renew && <span className="ld-badge cyan">Auto-Renew</span>}
+
+                <div className="ld-badge-group">
+                  <span className="ld-badge-label">
+                    Status:
+                  </span>
+
+                  <span className={`ld-status-pill ${statusCls(L.status)}`}>
+                    {L.status || "N/A"}
+                  </span>
+                </div>
+                {/* <br /> */}
+
+                <div className="ld-badge-group">
+                  <span className="ld-badge-label">
+                    Plan Type:
+                  </span>
+
+                  <span className={`ld-plan-pill bg-warning text-light rounded-1 px-2 py-0 ${planCls(L.plan_type)}`}>
+                    {L.plan_name || L.plan_type || "N/A"}
+                  </span>
+                </div>
+
+
+                {
+                  L.auto_renew && (
+                    <span className="ld-badge-group">
+                      <span className="ld-badge-label">
+                        Renewal:
+                      </span>
+
+                      <span className="ld-badge cyan">
+                        Auto-Renew
+                      </span>
+                    </span>
+                  )
+                }
+
               </div>
             </div>
             <div className="ld-hero-stats">
@@ -110,30 +158,32 @@ export default function LicenseDetail({ licenseId, onBack }) {
           {/* ── Row 1: License + Status ── */}
           <div className="ld-grid-2">
             <Card title="License Info">
-              <InfoRow label="Plan"           value={L.plan_name} />
-              <InfoRow label="Plan Code"      value={<span className="ld-mono">{L.plan_code}</span>} />
-              <InfoRow label="Billing Cycle"  value={L.billing_cycle} />
-              <InfoRow label="Duration"       value={L.license_duration_days ? `${L.license_duration_days} days` : '—'} />
-              <InfoRow label="Trial Days"     value={L.trial_days ?? 'N/A'} />
-              <InfoRow label="Max Streams"    value={L.max_concurrent_streams} />
-              <InfoRow label="Token TTL"      value={L.token_ttl_override ? `${L.token_ttl_override}s` : 'Default'} />
-              <InfoRow label="Issued"         value={fmtDate(L.created_at)} />
-              <InfoRow label="Last Updated"   value={fmtDate(L.updated_at)} />
+              <InfoRow label="Plan" value={L.plan_name} emptyLabel="No plan assigned" />
+              <InfoRow label="Plan Code" value={L.plan_code && <span className="ld-mono">{L.plan_code}</span>} emptyLabel="No plan code" />
+              <InfoRow label="Billing Cycle" value={L.billing_cycle} emptyLabel="No billing cycle" />
+              <InfoRow label="Duration" value={L.license_duration_days ? `${L.license_duration_days} days` : null} emptyLabel="No fixed duration" />
+              <InfoRow label="Trial Days" value={L.trial_days} emptyLabel="Not a trial" />
+              <InfoRow label="Max Streams" value={L.max_concurrent_streams} emptyLabel="Unlimited" />
+              <InfoRow label="Token TTL" value={L.token_ttl_override ? `${L.token_ttl_override}s` : null} emptyLabel="Using default TTL" />
+              <InfoRow label="Issued" value={fmtDate(L.created_at)} emptyLabel="Issue date unknown" />
+              <InfoRow label="Last Updated" value={fmtDate(L.updated_at)} emptyLabel="Never updated" />
             </Card>
 
             <Card title="Status & Expiry">
-              <InfoRow label="Status"         value={<span className={`ld-status-pill ${statusCls(L.status)}`}>{L.status}</span>} />
-              <InfoRow label="Is Active"      value={L.is_active ? '✅ Yes' : '❌ No'} />
-              <InfoRow label="Starts"         value={fmtDate(L.starts_at)} />
-              <InfoRow label="Expires"        value={fmtDate(L.expires_at)} />
-              <InfoRow label="Expiry Display" value={L.expiry_display} />
-              <InfoRow label="Auto-Renew"     value={L.auto_renew ? 'Yes' : 'No'} />
-              <InfoRow label="Reminder Sent"  value={L.reminder_sent ? fmtDate(L.reminder_sent_at) : 'No'} />
-              {L.revoked_at && <>
-                <InfoRow label="Revoked At"   value={fmt(L.revoked_at)} />
-                <InfoRow label="Revoked By"   value={L.revoked_by_email || '—'} />
-                <InfoRow label="Reason"       value={L.revocation_reason || '—'} />
-              </>}
+              <InfoRow label="Status" value={<span className={`ld-status-pill ${statusCls(L.status)}`}>{L.status}</span>} />
+              <InfoRow label="Is Active" value={L.is_active ? '✅ Yes' : '❌ No'} />
+              <InfoRow label="Starts" value={fmtDate(L.starts_at)} emptyLabel="No start date" />
+              <InfoRow label="Expires" value={fmtDate(L.expires_at)} emptyLabel="Does not expire" />
+              <InfoRow label="Expiry Display" value={L.expiry_display} emptyLabel="No expiry summary" />
+              <InfoRow label="Auto-Renew" value={L.auto_renew ? 'Yes' : 'No'} />
+              <InfoRow label="Reminder Sent" value={L.reminder_sent ? fmtDate(L.reminder_sent_at) : null} emptyLabel="Not sent yet" />
+              {L.revoked_at && (
+                <>
+                  <InfoRow label="Revoked At" value={fmt(L.revoked_at)} />
+                  <InfoRow label="Revoked By" value={L.revoked_by_email} emptyLabel="Unknown admin" />
+                  <InfoRow label="Reason" value={L.revocation_reason} emptyLabel="No reason logged" />
+                </>
+              )}
             </Card>
           </div>
 
@@ -150,8 +200,8 @@ export default function LicenseDetail({ licenseId, onBack }) {
                 <span className={`ld-risk-badge ${riskCls(device.risk_score ?? 0)}`}>Risk {device.risk_score ?? 0}</span>
               </div>
               <div className="ld-device-rows">
-                <InfoRow label="Last Heartbeat" value={fmt(device.last_heartbeat_at)} />
-                <InfoRow label="Enrolled"        value={fmtDate(device.enrolled_at)} />
+                <InfoRow label="Last Heartbeat" value={fmt(device.last_heartbeat_at)} emptyLabel="No heartbeat received" />
+                <InfoRow label="Enrolled" value={fmtDate(device.enrolled_at)} emptyLabel="Enrollment date unknown" />
               </div>
             </Card>
           )}
@@ -174,11 +224,11 @@ export default function LicenseDetail({ licenseId, onBack }) {
                   <tbody>
                     {history.map((h) => (
                       <tr key={h.id}>
-                        <td className="ld-mono">{fmt(h.created_at)}</td>
-                        <td className="ld-reason">{h.change_reason?.replace(/_/g,' ') || '—'}</td>
+                        <td className="ld-mono">{fmt(h.created_at) || 'Unknown date'}</td>
+                        <td className="ld-reason">{h.change_reason?.replace(/_/g, ' ') || 'No reason logged'}</td>
                         <td><span className={`ld-status-pill ${statusCls(h.status)}`}>{h.status}</span></td>
-                        <td className="ld-capitalize">{h.plan_type || '—'}</td>
-                        <td className="ld-mono">{fmtDate(h.expires_at)}</td>
+                        <td className="ld-capitalize">{h.plan_type || 'No plan'}</td>
+                        <td className="ld-mono">{fmtDate(h.expires_at) || 'No expiry'}</td>
                         <td className="ld-muted">{h.changed_by || 'System'}</td>
                       </tr>
                     ))}

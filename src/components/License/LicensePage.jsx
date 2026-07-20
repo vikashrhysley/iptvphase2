@@ -9,8 +9,9 @@ import {
 } from '../../store/slices/licenseSlice';
 import LicenseDetail from './LicenseDetail';
 import './LicensePage.css';
-import {SquareArrowRightExit } from "lucide-react"
+import { SquareArrowRightExit, Pencil } from "lucide-react"
 import { Button } from 'react-bootstrap';
+import { Copy, Check } from "lucide-react";
 
 /* ── Icons ─────────────────────────────────────────────── */
 const SearchIcon = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>;
@@ -321,6 +322,7 @@ export default function LicensePage() {
   const [detailLicenseId, setDetailLicenseId] = useState(null);
   const debounceRef = useRef(null);
   const totalPages = Math.max(1, Math.ceil(total / (pageSize || 20)));
+  const [copyId, setCopyId] = useState(false)
 
   /* Fetch stats on mount */
   useEffect(() => { dispatch(fetchLicenseStats()); }, [dispatch]);
@@ -366,11 +368,19 @@ export default function LicensePage() {
   const ovTotal = ST.total_licenses || 1;
   const ovPct = (n) => Math.min(100, Math.round(((n ?? 0) / ovTotal) * 100));
 
+  const handleClickCopy = (lid) => {
+    navigator.clipboard.writeText(lid);
+    setCopyId(lid);
+
+    setTimeout(() => {
+      setCopyId(null);
+    }, 2000);
+  }
+
   return (
     <div className="license-page">
       <Toast />
       <EditModal />
-
       {/* ── Header ── */}
       <div className="lc-header">
         <div>
@@ -379,7 +389,6 @@ export default function LicensePage() {
         </div>
         <ExportDropdown licenses={licenses} />
       </div>
-
       {/* ── Overview cards ── */}
       {statsLoading && <div className="lc-stats-shimmer" />}
       {!statsLoading && stats && (
@@ -535,15 +544,15 @@ export default function LicensePage() {
                   <th>Action</th>
                   <th>License ID</th>
                   <th>User</th>
-                  <th>Device</th>
-                  <th>Plan</th>
+                  {/* <th>Device</th> */}
+                  <th>Plan Type</th>
+                  <SortTh field="created_at" sortBy={filters.sort_by} sortOrder={filters.sort_order} onSort={handleSort}>Issued On</SortTh>
                   <th>Status</th>
-                  <SortTh field="expires_at" sortBy={filters.sort_by} sortOrder={filters.sort_order} onSort={handleSort}>Expiry</SortTh>
+                  {/* <SortTh field="expires_at" sortBy={filters.sort_by} sortOrder={filters.sort_order} onSort={handleSort}>Expiry</SortTh> */}
                   <SortTh field="days_remaining" sortBy={filters.sort_by} sortOrder={filters.sort_order} onSort={handleSort}>Days Left</SortTh>
-                  <th>Auto-Renew</th>
-                  <th>Reminder</th>
-                  <SortTh field="created_at" sortBy={filters.sort_by} sortOrder={filters.sort_order} onSort={handleSort}>Issued</SortTh>
-                  {canEdit && <th>Actions</th>}
+                  {/* <th>Auto-Renew</th>
+                  <th>Reminder</th> */}
+
                 </tr>
               </thead>
               <tbody>
@@ -554,51 +563,86 @@ export default function LicensePage() {
                   return (
                     <tr key={lid} className={l.is_expiring_soon ? 'lc-row-warn' : ''}>
                       <td>
-                        <Button
-                          variant="success"
-                          size="sm"
-                         onClick={() => lid && setDetailLicenseId(lid)}
-                          style={{ fontSize: "11px" }}
-                          className="d-flex align-items-center gap-1 text-light py-1 fw-bold"
-
-                        >
-                          View
-                          <SquareArrowRightExit size={15} />
-                        </Button>
+                        <div className="d-flex align-items-center gap-1">
+                          <Button
+                            variant="success"
+                            size="sm"
+                            onClick={() => lid && setDetailLicenseId(lid)}
+                            className="d-flex align-items-center justify-content-center text-light py-1 px-1"
+                            title="View"
+                            style={{ fontSize: "11px" }}
+                          >
+                            <span className='me-2'>View</span> <SquareArrowRightExit size={15} />
+                          </Button>
+                          {canEdit && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => dispatch(openEditModal({ ...l, id: lid }))} disabled={busy}
+                              className="d-flex  rounded-1 align-items-center justify-content-center text-light py-1 px-2"
+                              title="Edit"
+                              style={{ fontSize: "11px", width: "55px" }}
+                            >
+                              Edit <Pencil size={13} />
+                            </Button>
+                          )}
+                        </div>
                       </td>
                       <td>
-                        <span className="lc-license-id" title={lid}>{lid || '—'}</span>
+                        <div className="d-flex align-items-center gap-2">
+                          <span className="lc-license-id" title={lid}>
+                            {lid ? `${lid.substring(0, 8)}..` : '—'}
+                          </span>
+
+                          {lid && (
+                            copyId === lid ? (
+                              <Check
+                                size={14}
+                                className="text-success"
+                                title="Copied"
+                              />
+                            ) : (
+                              <Copy
+                                size={14}
+                                className="cursor-pointer text-secondary"
+                                title="Copy License ID"
+                                onClick={() => handleClickCopy(lid)}
+                              />
+                            )
+                          )}
+                        </div>
                       </td>
                       <td className="lc-clickable" >
                         <div className="lc-user-email">{l.user_email || '—'}</div>
                         {l.user_full_name && <div className="lc-user-name">{l.user_full_name}</div>}
                       </td>
-                      <td>
+                      {/* <td>
                         <div className="lc-device-cell">
                           <span>{PLATFORM_ICONS[l.device_platform] || '📱'}</span>
                           <span className="lc-device-name">{l.device_name || '—'}</span>
                         </div>
-                      </td>
+                      </td> */}
                       <td>
                         <span className={`lc-plan-pill ${planClass(l.plan_type)}`}>
-                          {l.plan_name || l.plan_type || '—'}
+                          {l.plan_type || '—'}
                         </span>
                       </td>
+                      <td className="lc-nowrap lc-muted">{fmtDate(l.created_at)}</td>
                       <td>
                         <span className={`lc-status-pill ${statusClass(l.status)}`}>
                           {l.status || '—'}
                         </span>
                       </td>
-                      <td className="lc-nowrap">
+                      {/* <td className="lc-nowrap">
                         {l.expiry_display || fmtDate(l.expires_at)}
                         {l.is_expiring_soon && <span className="lc-expiring-badge">Soon</span>}
-                      </td>
+                      </td> */}
                       <td>
                         {days != null
                           ? <span className={`lc-days ${days <= 7 ? 'danger' : days <= 30 ? 'warn' : 'ok'}`}>{days}d</span>
                           : '—'}
                       </td>
-                      <td className="lc-center">
+                      {/* <td className="lc-center">
                         <span className={`lc-bool-pill ${l.auto_renew ? 'yes' : 'no'}`}>
                           {l.auto_renew ? <CheckIcon /> : <XIcon />}
                         </span>
@@ -607,19 +651,9 @@ export default function LicensePage() {
                         <span className={`lc-bool-pill ${l.reminder_sent ? 'yes' : 'no'}`}>
                           {l.reminder_sent ? <CheckIcon /> : <XIcon />}
                         </span>
-                      </td>
-                      <td className="lc-nowrap lc-muted">{fmtDate(l.created_at)}</td>
-                      {canEdit && (
-                        <td>
-                          <div className="lc-action-btns">
-                            {l.status !== 'revoked' && (
-                              <button className="lc-action-btn edit" onClick={() => dispatch(openEditModal({ ...l, id: lid }))} disabled={busy} title="Edit">
-                                <EditIcon />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      )}
+                      </td> */}
+
+
                     </tr>
                   );
                 }) : (

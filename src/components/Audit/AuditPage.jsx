@@ -6,6 +6,7 @@ import {
 } from '../../store/slices/auditSlice';
 import { apiFetchAuditLogs } from '../../services/api';
 import './AuditPage.css';
+import {Offcanvas} from "react-bootstrap"
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 const SearchIcon = () => (
@@ -432,126 +433,136 @@ function StateBlock({ label, data, compareObj }) {
 }
 
 // ─── Detail Drawer ────────────────────────────────────────────────────────────
+
+
 function DetailDrawer({ onClose }) {
   const { selectedLog: log, detailLoading, detailError } = useSelector(s => s.audit);
   const sev = log ? (SEV[log.severity] || SEV.info) : SEV.info;
 
   return (
-    <div className="al-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="al-drawer">
-        {/* Drawer header */}
-        <div className="al-drawer-head" style={{ '--dh': sev.color, '--dg': sev.glow }}>
-          <div className="al-drawer-head-glow" />
-          <div className="al-drawer-head-top">
-            <div className="al-drawer-head-label">
-              <span className="al-drawer-head-icon"><LogIcon /></span>
-              Audit Log Detail
-            </div>
-            <button className="al-drawer-close" onClick={onClose}><CloseIcon /></button>
+    <Offcanvas
+      show={true}
+      onHide={onClose}
+      placement="end"
+      className="al-drawer"
+      backdropClassName="al-overlay"
+      backdrop={true}
+      scroll={false}
+      
+    >
+      {/* Drawer header */}
+      <div className="al-drawer-head" style={{ '--dh': sev.color, '--dg': sev.glow }}>
+        <div className="al-drawer-head-glow" />
+        <div className="al-drawer-head-top">
+          <div className="al-drawer-head-label">
+            <span className="al-drawer-head-icon"><LogIcon /></span>
+            Audit Log Detail
           </div>
-          {log && !detailLoading && (
-            <div className="al-drawer-head-summary">
-              <ActionCell action={log.action} />
-              <SeverityBadge severity={log.severity} size="md" />
-            </div>
-          )}
+          <button className="al-drawer-close" onClick={onClose}><CloseIcon /></button>
         </div>
-
-        <div className="al-drawer-body">
-          {detailLoading && (
-            <div className="al-drawer-loading">
-              <div className="al-spin-lg" />
-              <span>Loading details…</span>
-            </div>
-          )}
-          {detailError && (
-            <div className="al-drawer-err">
-              <span>⚠</span> {detailError}
-            </div>
-          )}
-          {log && !detailLoading && (
-            <>
-              {/* Timestamp banner */}
-              <div className="al-drawer-ts">
-                <ClockIcon />
-                {fmtDate(log.created_at)}
-              </div>
-
-              {/* Section: Identity */}
-              <div className="al-drawer-section">
-                <div className="al-drawer-sect-title">Actor</div>
-                <div className="al-drawer-actor-row">
-                  <ActorAvatar email={log.actor_email} name={log.actor_full_name} />
-                  <div>
-                    <div className="al-drawer-actor-name">{log.actor_full_name || log.actor_email || 'System'}</div>
-                    {log.actor_full_name && <div className="al-drawer-actor-email">{log.actor_email}</div>}
-                    {log.actor_role && <span className="al-drawer-role-chip">{log.actor_role}</span>}
-                  </div>
-                </div>
-              </div>
-
-              {/* Section: Event details */}
-              <div className="al-drawer-section">
-                <div className="al-drawer-sect-title">Event</div>
-                <div className="al-drawer-grid">
-                  <div className="al-drawer-field">
-                    <span className="al-drawer-field-lbl">Entity Type</span>
-                    <EntityBadge type={log.entity_type} />
-                  </div>
-                  <div className="al-drawer-field">
-                    <span className="al-drawer-field-lbl">Entity ID</span>
-                    <span className="al-drawer-field-val al-mono">{log.entity_id || '—'}</span>
-                  </div>
-                  <div className="al-drawer-field">
-                    <span className="al-drawer-field-lbl">IP Address</span>
-                    <span className="al-drawer-field-val al-mono">{log.ip_address || '—'}</span>
-                  </div>
-                  <div className="al-drawer-field">
-                    <span className="al-drawer-field-lbl">Log ID</span>
-                    <span className="al-drawer-field-val al-mono al-dim">{log.id || '—'}</span>
-                  </div>
-                  {log.session_jti && (
-                    <div className="al-drawer-field al-drawer-field-full">
-                      <span className="al-drawer-field-lbl">Session JTI</span>
-                      <span className="al-drawer-field-val al-mono al-dim">{log.session_jti}</span>
-                    </div>
-                  )}
-                  {log.notes && (
-                    <div className="al-drawer-field al-drawer-field-full">
-                      <span className="al-drawer-field-lbl">Notes</span>
-                      <span className="al-drawer-field-val">{log.notes}</span>
-                    </div>
-                  )}
-                  {log.user_agent && (
-                    <div className="al-drawer-field al-drawer-field-full">
-                      <span className="al-drawer-field-lbl">User Agent</span>
-                      <span className="al-drawer-field-val al-ua">{log.user_agent}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Section: State diff */}
-              {(log.before_state || log.after_state) && (() => {
-                const beforeObj = parseJson(log.before_state);
-                const afterObj  = parseJson(log.after_state);
-                return (
-                  <div className="al-drawer-section">
-                    <div className="al-drawer-sect-title">State Snapshot</div>
-                    <div className="al-state-cols">
-                      <StateBlock label="Before" data={log.before_state} compareObj={afterObj}  />
-                      <StateBlock label="After"  data={log.after_state}  compareObj={beforeObj} />
-                    </div>
-                  </div>
-                );
-              })()}
-            </>
-          )}
-        </div>
+        {log && !detailLoading && (
+          <div className="al-drawer-head-summary">
+            <ActionCell action={log.action} />
+            <SeverityBadge severity={log.severity} size="md" />
+          </div>
+        )}
       </div>
-    </div>
+
+      <div className="al-drawer-body">
+        {detailLoading && (
+          <div className="al-drawer-loading">
+            <div className="al-spin-lg" />
+            <span>Loading details…</span>
+          </div>
+        )}
+        {detailError && (
+          <div className="al-drawer-err">
+            <span>⚠</span> {detailError}
+          </div>
+        )}
+        {log && !detailLoading && (
+          <>
+            {/* Timestamp banner */}
+            <div className="al-drawer-ts">
+              <ClockIcon />
+              {fmtDate(log.created_at)}
+            </div>
+
+            {/* Section: Identity */}
+            <div className="al-drawer-section">
+              <div className="al-drawer-sect-title">Actor</div>
+              <div className="al-drawer-actor-row">
+                <ActorAvatar email={log.actor_email} name={log.actor_full_name} />
+                <div>
+                  <div className="al-drawer-actor-name">{log.actor_full_name || log.actor_email || 'System'}</div>
+                  {log.actor_full_name && <div className="al-drawer-actor-email">{log.actor_email}</div>}
+                  {log.actor_role && <span className="al-drawer-role-chip">{log.actor_role}</span>}
+                </div>
+              </div>
+            </div>
+
+            {/* Section: Event details */}
+            <div className="al-drawer-section">
+              <div className="al-drawer-sect-title">Event</div>
+              <div className="al-drawer-grid">
+                <div className="al-drawer-field">
+                  <span className="al-drawer-field-lbl">Entity Type</span>
+                  <EntityBadge type={log.entity_type} />
+                </div>
+                <div className="al-drawer-field">
+                  <span className="al-drawer-field-lbl">Entity ID</span>
+                  <span className="al-drawer-field-val al-mono">{log.entity_id || '—'}</span>
+                </div>
+                <div className="al-drawer-field">
+                  <span className="al-drawer-field-lbl">IP Address</span>
+                  <span className="al-drawer-field-val al-mono">{log.ip_address || '—'}</span>
+                </div>
+                <div className="al-drawer-field">
+                  <span className="al-drawer-field-lbl">Log ID</span>
+                  <span className="al-drawer-field-val al-mono al-dim">{log.id || '—'}</span>
+                </div>
+                {log.session_jti && (
+                  <div className="al-drawer-field al-drawer-field-full">
+                    <span className="al-drawer-field-lbl">Session JTI</span>
+                    <span className="al-drawer-field-val al-mono al-dim">{log.session_jti}</span>
+                  </div>
+                )}
+                {log.notes && (
+                  <div className="al-drawer-field al-drawer-field-full">
+                    <span className="al-drawer-field-lbl">Notes</span>
+                    <span className="al-drawer-field-val">{log.notes}</span>
+                  </div>
+                )}
+                {log.user_agent && (
+                  <div className="al-drawer-field al-drawer-field-full">
+                    <span className="al-drawer-field-lbl">User Agent</span>
+                    <span className="al-drawer-field-val al-ua">{log.user_agent}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Section: State diff */}
+            {(log.before_state || log.after_state) && (() => {
+              const beforeObj = parseJson(log.before_state);
+              const afterObj  = parseJson(log.after_state);
+              return (
+                <div className="al-drawer-section">
+                  <div className="al-drawer-sect-title">State Snapshot</div>
+                  <div className="al-state-cols">
+                    <StateBlock label="Before" data={log.before_state} compareObj={afterObj}  />
+                    <StateBlock label="After"  data={log.after_state}  compareObj={beforeObj} />
+                  </div>
+                </div>
+              );
+            })()}
+          </>
+        )}
+      </div>
+    </Offcanvas>
   );
 }
+
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function AuditPage() {

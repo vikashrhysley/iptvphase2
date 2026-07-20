@@ -50,11 +50,11 @@
   }
 }
 
-html, body {
+/* html, body {
   margin: 0;
-  overflow-x: hidden;   /* no page-level horizontal scroll; wide tables scroll in their own wrap */
+  overflow-x: hidden; 
   max-width: 100%;
-}
+} */
 
 #root {
   width: 100%;
