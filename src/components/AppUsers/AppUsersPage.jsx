@@ -589,14 +589,11 @@ export default function AppUsersPage() {
               <thead>
                 <tr>
                   <th>Action</th>
-                  <th {...thProps('full_name')}>
-                    Name <SortIcon field="full_name" sortBy={filters.sort_by} sortOrder={filters.sort_order} />
-                  </th>
                   <th {...thProps('email')}>
                     Email <SortIcon field="email" sortBy={filters.sort_by} sortOrder={filters.sort_order} />
                   </th>
-                  <th>Phone</th>
-                  <th>Country</th>
+                  <th>MAC</th>
+                  <th>Device ID</th>
                   <th>Status</th>
                   <th>Email Verified</th>
                   <th>Trial Used</th>
@@ -628,14 +625,9 @@ export default function AppUsersPage() {
                           <SquareArrowRightExit size={15} />
                         </Button>
                       </td>
-                      <td className="su-name su-clickable" >{u.full_name || '—'}</td>
                       <td className="su-email su-clickable" >{u.email || '—'}</td>
-                      <td className="su-phone">{u.phone_number || '—'}</td>
-                      <td>
-                        {u.country_code
-                          ? <span className="su-country">{u.country_code}</span>
-                          : '—'}
-                      </td>
+                      <td className="su-mac">{u.virtual_mac || '—'}</td>
+                      <td className="su-device-id">{u.virtual_device_id || '—'}</td>
                       <td>
                         <span className={`su-status-pill ${statusClass(u.status)}`}>
                           {u.status || '—'}

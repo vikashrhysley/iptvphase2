@@ -216,9 +216,9 @@ const LIVE_SECTIONS = [
         totalPath: 'total_users_ever.existing_users.verified_users.count',
         bars: [
           { label: 'Present Users', path: 'total_users_ever.existing_users.verified_users.activated_users.presently_using.count' },
-          { label: 'Stopped Users', path: 'total_users_ever.existing_users.verified_users.activated_users.stopped_using.count', tone: 'warn' },
           { label: 'Blocked Users', path: 'total_users_ever.existing_users.verified_users.activated_users.presently_using.by_account_state.blocked_users', tone: 'bad' },
           { label: 'Enabled Users', path: 'total_users_ever.existing_users.verified_users.activated_users.presently_using.by_account_state.enabled_users', tone: 'good' },
+          { label: 'Stopped Users', path: 'total_users_ever.existing_users.verified_users.activated_users.stopped_using.count', tone: 'warn' },
         ],
       },
       {
@@ -247,29 +247,37 @@ const LIVE_SECTIONS = [
     ],
     groups: [
       {
-        label: 'Lifecycle Funnel',
+        label: 'Total Licenses Ever',
+        // Part-to-whole: existing + deleted sum to the lifetime total.
+        totalPath: 'total_licenses_ever.count',
         bars: [
-          { label: 'Ever Issued', path: 'total_licenses_ever.count' },
-          { label: 'Still Existing', path: 'total_licenses_ever.existing_licenses.count' },
-          { label: 'Presently Held', path: 'total_licenses_ever.existing_licenses.presently_held.count', tone: 'good' },
+          { label: 'Existing Licenses', path: 'total_licenses_ever.existing_licenses.count', tone: 'good' },
+          { label: 'Deleted Licenses', path: 'total_licenses_ever.deleted_licenses', tone: 'muted' },
         ],
       },
       {
-        label: 'Held Licenses',
+        label: 'Existing Licenses',
+        // Header shows the existing-licenses count; working + blocked + stopped sum to it.
+        totalPath: 'total_licenses_ever.existing_licenses.count',
         bars: [
-          { label: 'Working', path: 'total_licenses_ever.existing_licenses.presently_held.by_state.working_licenses', tone: 'good' },
-          { label: 'Blocked', path: 'total_licenses_ever.existing_licenses.presently_held.by_state.blocked_licenses', tone: 'bad' },
-          { label: 'Trial', path: 'total_licenses_ever.existing_licenses.presently_held.by_plan.trial_licenses' },
-          { label: 'Paid', path: 'total_licenses_ever.existing_licenses.presently_held.by_plan.paid_licenses' },
+          { label: 'Working Licenses', path: 'total_licenses_ever.existing_licenses.presently_held.by_state.working_licenses', tone: 'good' },
+          { label: 'Blocked Licenses', path: 'total_licenses_ever.existing_licenses.presently_held.by_state.blocked_licenses', tone: 'bad' },
+          { label: 'Stopped Working', path: 'total_licenses_ever.existing_licenses.stopped_working.count', tone: 'warn' },
         ],
       },
       {
         label: 'Stopped Working',
         bars: [
-          { label: 'Stopped (Total)', path: 'total_licenses_ever.existing_licenses.stopped_working.count', tone: 'warn' },
-          { label: 'Plan Expired', path: 'total_licenses_ever.existing_licenses.stopped_working.plan_expired_licenses', tone: 'warn' },
+          { label: 'Plan Expired Licenses', path: 'total_licenses_ever.existing_licenses.stopped_working.plan_expired_licenses', tone: 'warn' },
           { label: 'Payment Failed', path: 'total_licenses_ever.existing_licenses.stopped_working.payment_failed_licenses', tone: 'bad' },
-          { label: 'Deleted', path: 'total_licenses_ever.deleted_licenses', tone: 'muted' },
+        ],
+      },
+      {
+        label: 'Expiring Soon',
+        bars: [
+          { label: 'Expiring 48h', path: 'expiring_soon.expiring_48h', tone: 'bad' },
+          { label: 'Expiring 7d', path: 'expiring_soon.expiring_7d', tone: 'warn' },
+          { label: 'Expiring 30d', path: 'expiring_soon.expiring_30d', tone: 'warn' },
         ],
       },
     ],
@@ -403,7 +411,7 @@ const LIVE_SECTIONS = [
 
 // Resolves every configured path against the API payload once, so the render layer
 // only deals with plain numbers and never re-walks the response.
-const buildLiveSections = (stats, overview) => (
+export const buildLiveSections = (stats, overview) => (
   LIVE_SECTIONS.map(section => {
     const source = getNestedValue(stats, section.source)
       || (section.fallbackSource && getNestedValue(stats, section.fallbackSource))
@@ -685,7 +693,7 @@ function MetricBar({ label, value, max, tone }) {
 }
 
 // A full-width Live Stats row: hero figure and chips on the left, bar charts on the right.
-function MetricSectionCard({ section }) {
+export function MetricSectionCard({ section }) {
   const { label, accent, hero, chips, groups } = section;
 
   return (
@@ -717,7 +725,7 @@ function MetricSectionCard({ section }) {
             <div className="ls-group-head">
               <span className="ls-group-label">{group.label}</span>
               <span className="ls-group-scale">
-                {group.total != null ? group.total.toLocaleString() : `peak ${group.max.toLocaleString()}`}
+                {(group.total != null ? group.total : group.max).toLocaleString()}
               </span>
             </div>
 

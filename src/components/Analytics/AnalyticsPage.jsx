@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchRevenueAnalytics, setRevenueFilters, clearRevenueFilters, fetchUserAnalytics, setUsersFilters, clearUsersFilters, fetchDeviceAnalytics, fetchLicenseAnalytics, fetchFunnelAnalytics, setFunnelFilters, clearFunnelFilters, fetchChurnAnalytics, setChurnFilters, clearChurnFilters, fetchRiskAnalytics, setRiskFilters, clearRiskFilters, fetchSecurityAnalytics, setSecurityFilters, clearSecurityFilters, fetchGeoAnalytics, setGeoLimit, fetchSystemAnalytics } from '../../store/slices/analyticsSlice';
 import SecurityEventsPage from '../Security/SecurityEventsPage';
+import { buildLiveSections, MetricSectionCard } from '../Dashboard/DashboardTable';
+import '../Dashboard/DashboardTable.css';
 import './AnalyticsPage.css';
 
 /* ── Export helpers ─────────────────────────────────────── */
@@ -183,13 +185,6 @@ const STATUS_COLORS = {
   inactive:  { color: '#64748b', glow: 'rgba(100,116,139,0.5)' },
   blocked:   { color: '#ef4444', glow: 'rgba(239,68,68,0.5)' },
   revoked:   { color: '#a78bfa', glow: 'rgba(167,139,250,0.5)' },
-};
-
-const PLAN_COLORS = {
-  trial:  { color: '#00d4ff', glow: 'rgba(0,212,255,0.5)' },
-  paid:   { color: '#10b981', glow: 'rgba(16,185,129,0.5)' },
-  annual: { color: '#a78bfa', glow: 'rgba(167,139,250,0.5)' },
-  grace:  { color: '#f59e0b', glow: 'rgba(245,158,11,0.5)' },
 };
 
 // Convert a { key: value } breakdown object into colored chart segments
@@ -872,6 +867,9 @@ function DeviceAnalytics() {
 }
 
 /* ── Licenses tab ───────────────────────────────────────── */
+// Reuses the Live Stats Licenses card (same component + section config from
+// DashboardTable), fed by /admin/analytics/licenses. The API layer reshapes that
+// response into the dashboard "licenses" block, so buildLiveSections reads it directly.
 function LicenseAnalytics() {
   const dispatch = useDispatch();
   const { licenses, licensesLoading, licensesError } = useSelector(s => s.analytics);
@@ -880,54 +878,20 @@ function LicenseAnalytics() {
     dispatch(fetchLicenseAnalytics());
   }, [dispatch]);
 
-  if (licensesLoading) return <div className="an-loading">Loading license analytics…</div>;
-  if (licensesError)   return <div className="an-error">{licensesError}</div>;
-  if (!licenses)       return <div className="an-empty">No data available.</div>;
+  const licensesSection = useMemo(
+    () => buildLiveSections({ licenses }, null).find(sec => sec.key === 'licenses'),
+    [licenses]
+  );
 
-  const total = licenses.total_licenses ?? 0;
-  const planSegments = toSegments(licenses.by_plan_type, PLAN_COLORS);
-
-  const licenseMetrics = [
-    { label: 'Total',   value: total,                          color: '#00d4ff' },
-    { label: 'Active',  value: licenses.active_licenses  ?? 0, color: '#10b981' },
-    { label: 'Expired', value: licenses.expired_licenses ?? 0, color: '#ef4444' },
-    { label: 'Revoked', value: licenses.revoked_licenses ?? 0, color: '#f59e0b' },
-  ];
+  if (licensesLoading && !licenses) return <div className="an-loading">Loading license analytics…</div>;
+  if (licensesError)                return <div className="an-error">{licensesError}</div>;
+  if (!licenses)                    return <div className="an-empty">No data available.</div>;
 
   return (
     <div className="an-section">
-      <div className="an-license-row">
-        <div className="an-stat-card an-license-card" style={{ '--asc': '#00d4ff' }}>
-          <div className="an-stat-accent" />
-          <div className="an-stat-label">Licenses</div>
-          <div className="an-license-grid">
-            {licenseMetrics.map(m => (
-              <div className="an-license-item" key={m.label} style={{ '--lic': m.color }}>
-                <span className="an-license-value">{m.value.toLocaleString()}</span>
-                <span className="an-license-label">{m.label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="an-stat-card" style={{ '--asc': '#fbbf24' }}>
-          <div className="an-stat-accent" />
-          <div className="an-stat-label">Expiry Overview</div>
-          <div className="an-stat-split">
-            <div className="an-stat-split-item">
-              <span className="an-stat-split-value">{(licenses.expiring_7d ?? 0).toLocaleString()}</span>
-              <span className="an-stat-split-label">Expiring 7 days</span>
-            </div>
-            <div className="an-stat-split-divider" />
-            <div className="an-stat-split-item">
-              <span className="an-stat-split-value">{(licenses.expiring_30d ?? 0).toLocaleString()}</span>
-              <span className="an-stat-split-label">Expiring 30 days</span>
-            </div>
-          </div>
-        </div>
+      <div className="ls-stack">
+        <MetricSectionCard section={licensesSection} />
       </div>
-
-      <BreakdownBars title="By Plan Type" segments={planSegments} />
     </div>
   );
 }

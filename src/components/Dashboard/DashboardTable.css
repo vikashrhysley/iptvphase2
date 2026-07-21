@@ -400,8 +400,8 @@
 }
 
 .ls-group-label {
-  font-size: 0.7rem;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-secondary);
@@ -409,10 +409,11 @@
 
 /* Bars are scaled inside their own group, so the scale max is stated rather than assumed */
 .ls-group-scale {
-  font-size: 0.66rem;
+  font-size: 0.7rem;
   color: var(--text-muted);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+  font-weight: 800;
 }
 
 .ls-bar-row {

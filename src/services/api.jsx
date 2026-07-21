@@ -303,8 +303,10 @@ export const apiFetchDeviceAnalytics = async (accessToken) => {
 };
 
 // GET /admin/analytics/licenses
-// Response shape: { data: { total_licenses, active_licenses, ... }, by_plan_type: {...} }
-// by_plan_type is a sibling of data, so merge it into the returned object.
+// Response: { data: { count, existing_licenses:{…}, deleted_licenses }, expiring_soon: {…} }.
+// `data` is exactly the dashboard's `total_licenses_ever` object and `expiring_soon` is a
+// top-level sibling, so reshape into the dashboard "licenses" block. That lets the shared
+// Live Stats licenses card (same section config) render this endpoint unchanged.
 export const apiFetchLicenseAnalytics = async (accessToken) => {
   if (!accessToken) throw new Error('Unauthorized');
   const res = await request(`${BASE}/admin/analytics/licenses`, {
@@ -312,7 +314,10 @@ export const apiFetchLicenseAnalytics = async (accessToken) => {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   const data = res.data || res;
-  return { ...data, by_plan_type: res.by_plan_type ?? data.by_plan_type ?? {} };
+  return {
+    total_licenses_ever: data,
+    expiring_soon: res.expiring_soon ?? data.expiring_soon ?? {},
+  };
 };
 
 // GET /admin/analytics/conversion-funnel

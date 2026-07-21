@@ -400,6 +400,19 @@
 }
 
 
+/* MAC / virtual device id — monospace identifiers */
+.su-mac,
+.su-device-id {
+  font-family: ui-monospace, 'SFMono-Regular', 'Consolas', monospace;
+  font-size: .78rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.su-device-id {
+  white-space: nowrap;
+}
+
+
 .su-num {
   text-align: center;
   font-variant-numeric: tabular-nums;

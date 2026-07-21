@@ -25,7 +25,6 @@ const CheckIcon = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="no
 const XIcon = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>;
 const LicenseStatIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>;
 const LayersIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 2 7 12 12 22 7 12 2" /><polyline points="2 17 12 22 22 17" /><polyline points="2 12 12 17 22 12" /></svg>;
-const TagIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" /><circle cx="7.5" cy="7.5" r="1.5" fill="currentColor" /></svg>;
 const ClockIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>;
 const DownloadIcon = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>;
 const ExcelIcon = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="8" y1="13" x2="16" y2="13" /><line x1="8" y1="17" x2="16" y2="17" /></svg>;
@@ -46,12 +45,6 @@ const STATUS_META = {
   revoked: { label: 'Revoked', color: '#94a3b8' },
   suspended: { label: 'Suspended', color: '#fbbf24' },
   grace: { label: 'Grace', color: '#7c3aed' },
-};
-
-const PLAN_META = {
-  trial: { label: 'Trial', color: '#a78bfa' },
-  paid: { label: 'Paid', color: '#00d4ff' },
-  grace: { label: 'Grace', color: '#f59e0b' },
 };
 
 /* Extract the license ID regardless of which field name the API uses */
@@ -364,9 +357,41 @@ export default function LicensePage() {
   const S = stats || {};
   const ST = S.stats || {};
   const EX = S.expiring || {};
-  const BP = S.by_plan || {};
-  const ovTotal = ST.total_licenses || 1;
-  const ovPct = (n) => Math.min(100, Math.round(((n ?? 0) / ovTotal) * 100));
+
+  // License Overview — lifetime breakdown from the updated stats response.
+  // `total_licenses_ever` may arrive as a nested object ({ count, existing_licenses:{count}, deleted_licenses })
+  // or as flat scalars; read both shapes and fall back to the old flat keys so nothing crashes if a key differs.
+  // Response shape: stats: { count: 91, existing_licenses: { count }, deleted_licenses: { count } }.
+  // asCount unwraps a { count } object or passes a flat number through; each field keeps a
+  // couple of fallbacks so a minor backend rename still resolves rather than showing 0.
+  const asCount = (v) => (v && typeof v === 'object' ? v.count : v);
+  const TLE = ST.total_licenses_ever ?? S.total_licenses_ever ?? {};
+  const totalLicensesEver = asCount(ST.count) ?? asCount(TLE) ?? asCount(ST.total_licenses) ?? 0;
+  const existingLicenses  = asCount(ST.existing_licenses ?? TLE.existing_licenses) ?? 0;
+  const deletedLicenses   = asCount(ST.deleted_licenses ?? TLE.deleted_licenses) ?? 0;
+
+  // Existing Licenses breakdown. These fields (working_licenses, blocked_licenses,
+  // stopped_working) may sit directly under stats or nested inside existing_licenses,
+  // so search the stats object by key rather than assuming a fixed path.
+  const deepFind = (obj, key) => {
+    if (!obj || typeof obj !== 'object') return undefined;
+    if (Object.prototype.hasOwnProperty.call(obj, key)) return obj[key];
+    for (const v of Object.values(obj)) {
+      const found = deepFind(v, key);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  };
+  const workingLicenses = asCount(deepFind(ST, 'working_licenses')) ?? 0;
+  const blockedLicenses = asCount(deepFind(ST, 'blocked_licenses')) ?? 0;
+  const stoppedWorking  = asCount(deepFind(ST, 'stopped_working')) ?? 0;
+  const existingTotal   = workingLicenses + blockedLicenses + stoppedWorking;
+  const existingPct = (n) => Math.min(100, Math.round(((n ?? 0) / (existingTotal || 1)) * 100));
+
+  // Stopped Working breakdown — plan_expired + payment_failed sum to the stopped count.
+  const planExpiredLicenses  = asCount(deepFind(ST, 'plan_expired_licenses')) ?? 0;
+  const paymentFailedLicenses = asCount(deepFind(ST, 'payment_failed_licenses')) ?? 0;
+  const stoppedPct = (n) => Math.min(100, Math.round(((n ?? 0) / (stoppedWorking || 1)) * 100));
 
   const handleClickCopy = (lid) => {
     navigator.clipboard.writeText(lid);
@@ -397,70 +422,94 @@ export default function LicensePage() {
             {/* Card 1 · License Overview */}
             <div className="lc-ov-card">
               <div className="lc-ov-top">
-                <span className="lc-ov-label">License Overview</span>
+                <span className="lc-ov-label">Total License Ever</span>
                 <span className="lc-ov-icon cyan"><LicenseStatIcon /></span>
               </div>
-              <div className="lc-ov-big">{(ST.total_licenses ?? 0).toLocaleString()}</div>
-              <div className="lc-ov-sub">Total Licenses</div>
+              <div className="lc-ov-big">{totalLicensesEver.toLocaleString()}</div>
               <div className="lc-seg-bar">
-                <div className="lc-seg" style={{ flex: ST.active_count || 0, background: '#34d399' }} />
-                <div className="lc-seg" style={{ flex: ST.expired_count || 0, background: '#f87171' }} />
-                <div className="lc-seg" style={{ flex: ST.revoked_count || 0, background: '#94a3b8' }} />
+                <div className="lc-seg" style={{ flex: existingLicenses || 0, background: '#34d399' }} />
+                <div className="lc-seg" style={{ flex: deletedLicenses || 0, background: '#94a3b8' }} />
               </div>
               <div className="lc-ov-chips">
                 {[
-                  { key: 'active_count', label: 'Active', color: '#34d399' },
-                  { key: 'expired_count', label: 'Expired', color: '#f87171' },
-                  { key: 'revoked_count', label: 'Revoked', color: '#94a3b8' },
-                ].map(({ key, label, color }) => (
-                  <div className="lc-ov-chip" key={key} style={{ '--cc': color }}>
+                  { value: existingLicenses, label: 'Existing Licenses', color: '#34d399' },
+                  { value: deletedLicenses, label: 'Deleted Licenses', color: '#94a3b8' },
+                ].map(({ value, label, color }) => (
+                  <div className="lc-ov-chip" key={label} style={{ '--cc': color }}>
                     <span className="lc-ov-dot" />
                     <span className="lc-ov-chip-label">{label}</span>
-                    <strong className="lc-ov-chip-val">{(ST[key] ?? 0).toLocaleString()}</strong>
-                    <span className="lc-ov-chip-pct">{ovPct(ST[key])}%</span>
+                    <strong className="lc-ov-chip-val">{(value ?? 0).toLocaleString()}</strong>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Card 2 · Plan Breakdown */}
+            {/* Card · Existing Licenses */}
             <div className="lc-ov-card">
               <div className="lc-ov-top">
-                <span className="lc-ov-label">Plan Breakdown</span>
-                <span className="lc-ov-icon green"><TagIcon /></span>
+                <span className="lc-ov-label">Existing Licenses</span>
+                <span className="lc-ov-icon green"><LicenseStatIcon /></span>
               </div>
+              <div className="lc-ov-big">{existingTotal.toLocaleString()}</div>
               <div className="lc-seg-bar">
-                {Object.entries(BP).map(([k, v]) => (
-                  <div key={k} className="lc-seg" style={{ flex: v || 0, background: PLAN_META[k]?.color || '#475569' }} />
-                ))}
+                <div className="lc-seg" style={{ flex: workingLicenses || 0, background: '#34d399' }} />
+                <div className="lc-seg" style={{ flex: blockedLicenses || 0, background: '#f87171' }} />
+                <div className="lc-seg" style={{ flex: stoppedWorking || 0, background: '#fbbf24' }} />
               </div>
               <div className="lc-ov-chips">
-                {Object.entries(BP).map(([k, v]) => {
-                  // Map plan key → backend plan_filter: trial = free, monthly/annual = paid
-                  const pf = k === 'trial' ? 'free' : 'paid';
-                  return (
-                    <div
-                      className={`lc-ov-chip clickable${filters.plan_filter === pf ? ' selected' : ''}`}
-                      key={k}
-                      style={{ '--cc': PLAN_META[k]?.color || '#475569' }}
-                      onClick={() => dispatch(setLicenseFilters({ plan_filter: pf === filters.plan_filter ? '' : pf, page: 1 }))}
-                    >
-                      <span className="lc-ov-dot" />
-                      <span className="lc-ov-chip-label">{PLAN_META[k]?.label || k}</span>
-                      <strong className="lc-ov-chip-val">{(v ?? 0).toLocaleString()}</strong>
-                      <span className="lc-ov-chip-pct">{ovPct(v)}%</span>
-                    </div>
-                  );
-                })}
+                {[
+                  { value: workingLicenses, label: 'Working Licenses', color: '#34d399' },
+                  { value: blockedLicenses, label: 'Blocked Licenses', color: '#f87171' },
+                  { value: stoppedWorking, label: 'Stopped Working', color: '#fbbf24' },
+                ].map(({ value, label, color }) => (
+                  <div className="lc-ov-chip" key={label} style={{ '--cc': color }}>
+                    <span className="lc-ov-dot" />
+                    <span className="lc-ov-chip-label">{label}</span>
+                    <strong className="lc-ov-chip-val">{(value ?? 0).toLocaleString()}</strong>
+                    <span className="lc-ov-chip-pct">{existingPct(value)}%</span>
+                  </div>
+                ))}
               </div>
             </div>
+
+            {/* Card · Stopped Working */}
+            <div className="lc-ov-card">
+              <div className="lc-ov-top">
+                <span className="lc-ov-label">Stopped Working</span>
+                <span className="lc-ov-icon amber"><ClockIcon /></span>
+              </div>
+              <div className="lc-ov-big">{stoppedWorking.toLocaleString()}</div>
+              <div className="lc-seg-bar">
+                <div className="lc-seg" style={{ flex: planExpiredLicenses || 0, background: '#fbbf24' }} />
+                <div className="lc-seg" style={{ flex: paymentFailedLicenses || 0, background: '#f87171' }} />
+              </div>
+              <div className="lc-ov-chips">
+                {[
+                  { value: planExpiredLicenses, label: 'Plan Expired Licenses', color: '#fbbf24' },
+                  { value: paymentFailedLicenses, label: 'Payment Failed Licenses', color: '#f87171' },
+                ].map(({ value, label, color }) => (
+                  <div className="lc-ov-chip" key={label} style={{ '--cc': color }}>
+                    <span className="lc-ov-dot" />
+                    <span className="lc-ov-chip-label">{label}</span>
+                    <strong className="lc-ov-chip-val">{(value ?? 0).toLocaleString()}</strong>
+                    <span className="lc-ov-chip-pct">{stoppedPct(value)}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* Card 3 · Expiring & Renewals */}
             <div className="lc-ov-card">
               <div className="lc-ov-top">
-                <span className="lc-ov-label">Expiring & Renewals</span>
+                <span className="lc-ov-label">Expiring Licenses</span>
                 <span className="lc-ov-icon amber"><ClockIcon /></span>
               </div>
               <div className="lc-exp-row">
+                <div className="lc-exp-item">
+                  <div className="lc-exp-val warn">{(EX.expiring_48h ?? 0).toLocaleString()}</div>
+                  <div className="lc-exp-label">Next 48 Hours</div>
+                </div>
+                <div className="lc-exp-divider" />
                 <div className="lc-exp-item">
                   <div className="lc-exp-val warn">{(EX.expiring_7d ?? 0).toLocaleString()}</div>
                   <div className="lc-exp-label">Next 7 Days</div>
