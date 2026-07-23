@@ -2,6 +2,10 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { logoutUser } from '../../store/slices/authSlice';
+import { useTheme } from '../../context/ThemeContext';
+import logoDark from '../../assets/vodeonai-logo-trimmed-dark.png';
+import logoLight from '../../assets/vodeonai-logo-trimmed-light.png';
+import logoMark from '../../assets/logo.png';
 import './Sidebar.css';
 
 const HomeIcon = () => (
@@ -249,6 +253,9 @@ export default function Sidebar({
 }) {
   const dispatch = useDispatch();
   const { user, loading: logoutLoading } = useSelector(s => s.auth);
+  // Wordmark comes in two cuts — light artwork for the dark theme, dark artwork for light.
+  const { theme } = useTheme();
+  const vodeonaiLogo = theme === 'dark' ? logoDark : logoLight;
   // Restore open submenu on page refresh based on which page is active
   const [openSubmenu, setOpenSubmenu] = useState(() => {
     const pagesWithSubmenu = new Set(['home', 'analytics', 'infra', 'monitoring']);
@@ -276,22 +283,11 @@ export default function Sidebar({
       {mobileOpen && <div className="sidebar-backdrop" onClick={onMobileClose} />}
       <aside className={`sidebar${effectiveCollapsed ? ' collapsed' : ''}${mobileOpen ? ' mobile-open' : ''}`}>
         <div className="sidebar-header">
-          {!effectiveCollapsed && (
-            <a className="sidebar-brand" href="#!">
-              <div className="sidebar-brand-icon">
-                <svg width="18" height="18" viewBox="0 0 28 28" fill="none">
-                  <path d="M6 4h10a6 6 0 0 1 0 12H6V4z" fill="white" opacity="0.95" />
-                  <path d="M6 16h5l7 8H11L6 16z" fill="white" opacity="0.85" />
-                  <rect x="6" y="4" width="2.5" height="20" fill="white" />
-                </svg>
-              </div>
-              <div className="sidebar-brand-text">
-                <span className="sidebar-brand-name">Rhysley</span>
-                <span className="sidebar-brand-tag">GROUP</span>
-              </div>
-            </a>
-          )}
-          {effectiveCollapsed && <div style={{ flex: 1 }} />}
+          <a className="sidebar-brand" href="#!">
+            {effectiveCollapsed
+              ? <img className="sidebar-brand-mark" src={logoMark} alt="Vodeon.ai" />
+              : <img className="sidebar-brand-logo" src={vodeonaiLogo} alt="Vodeon.ai" />}
+          </a>
           <button
             className="sidebar-toggle"
             onClick={mobileOpen ? onMobileClose : onToggle}

@@ -358,21 +358,11 @@ export default function LicensePage() {
   const ST = S.stats || {};
   const EX = S.expiring || {};
 
-  // License Overview — lifetime breakdown from the updated stats response.
-  // `total_licenses_ever` may arrive as a nested object ({ count, existing_licenses:{count}, deleted_licenses })
-  // or as flat scalars; read both shapes and fall back to the old flat keys so nothing crashes if a key differs.
-  // Response shape: stats: { count: 91, existing_licenses: { count }, deleted_licenses: { count } }.
-  // asCount unwraps a { count } object or passes a flat number through; each field keeps a
-  // couple of fallbacks so a minor backend rename still resolves rather than showing 0.
+  // Stats fields are read by key name at any depth rather than by a fixed path, so the
+  // cards keep working as the backend reshapes the response (the `existing_licenses`
+  // wrapper was removed and `deleted_licenses` moved inside `stopped_working`).
+  // asCount unwraps a { count } object or passes a flat number straight through.
   const asCount = (v) => (v && typeof v === 'object' ? v.count : v);
-  const TLE = ST.total_licenses_ever ?? S.total_licenses_ever ?? {};
-  const totalLicensesEver = asCount(ST.count) ?? asCount(TLE) ?? asCount(ST.total_licenses) ?? 0;
-  const existingLicenses  = asCount(ST.existing_licenses ?? TLE.existing_licenses) ?? 0;
-  const deletedLicenses   = asCount(ST.deleted_licenses ?? TLE.deleted_licenses) ?? 0;
-
-  // Existing Licenses breakdown. These fields (working_licenses, blocked_licenses,
-  // stopped_working) may sit directly under stats or nested inside existing_licenses,
-  // so search the stats object by key rather than assuming a fixed path.
   const deepFind = (obj, key) => {
     if (!obj || typeof obj !== 'object') return undefined;
     if (Object.prototype.hasOwnProperty.call(obj, key)) return obj[key];
@@ -382,15 +372,22 @@ export default function LicensePage() {
     }
     return undefined;
   };
+
+  // Total License Ever = present licenses + stopped working
+  const totalLicensesEver = asCount(ST.count) ?? asCount(deepFind(ST, 'total_licenses_ever')) ?? 0;
+  const presentLicenses   = asCount(deepFind(ST, 'presently_held')) ?? 0;
+  const stoppedWorking    = asCount(deepFind(ST, 'stopped_working')) ?? 0;
+  const everPct = (n) => Math.min(100, Math.round(((n ?? 0) / (totalLicensesEver || 1)) * 100));
+
+  // Present Licenses breakdown — working + blocked sum to the present count.
   const workingLicenses = asCount(deepFind(ST, 'working_licenses')) ?? 0;
   const blockedLicenses = asCount(deepFind(ST, 'blocked_licenses')) ?? 0;
-  const stoppedWorking  = asCount(deepFind(ST, 'stopped_working')) ?? 0;
-  const existingTotal   = workingLicenses + blockedLicenses + stoppedWorking;
-  const existingPct = (n) => Math.min(100, Math.round(((n ?? 0) / (existingTotal || 1)) * 100));
+  const presentPct = (n) => Math.min(100, Math.round(((n ?? 0) / (presentLicenses || 1)) * 100));
 
-  // Stopped Working breakdown — plan_expired + payment_failed sum to the stopped count.
-  const planExpiredLicenses  = asCount(deepFind(ST, 'plan_expired_licenses')) ?? 0;
+  // Stopped Working breakdown — plan expired + payment failed + deleted sum to the stopped count.
+  const planExpiredLicenses   = asCount(deepFind(ST, 'plan_expired_licenses')) ?? 0;
   const paymentFailedLicenses = asCount(deepFind(ST, 'payment_failed_licenses')) ?? 0;
+  const deletedLicenses       = asCount(deepFind(ST, 'deleted_licenses')) ?? 0;
   const stoppedPct = (n) => Math.min(100, Math.round(((n ?? 0) / (stoppedWorking || 1)) * 100));
 
   const handleClickCopy = (lid) => {
@@ -427,46 +424,45 @@ export default function LicensePage() {
               </div>
               <div className="lc-ov-big">{totalLicensesEver.toLocaleString()}</div>
               <div className="lc-seg-bar">
-                <div className="lc-seg" style={{ flex: existingLicenses || 0, background: '#34d399' }} />
-                <div className="lc-seg" style={{ flex: deletedLicenses || 0, background: '#94a3b8' }} />
-              </div>
-              <div className="lc-ov-chips">
-                {[
-                  { value: existingLicenses, label: 'Existing Licenses', color: '#34d399' },
-                  { value: deletedLicenses, label: 'Deleted Licenses', color: '#94a3b8' },
-                ].map(({ value, label, color }) => (
-                  <div className="lc-ov-chip" key={label} style={{ '--cc': color }}>
-                    <span className="lc-ov-dot" />
-                    <span className="lc-ov-chip-label">{label}</span>
-                    <strong className="lc-ov-chip-val">{(value ?? 0).toLocaleString()}</strong>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Card · Existing Licenses */}
-            <div className="lc-ov-card">
-              <div className="lc-ov-top">
-                <span className="lc-ov-label">Existing Licenses</span>
-                <span className="lc-ov-icon green"><LicenseStatIcon /></span>
-              </div>
-              <div className="lc-ov-big">{existingTotal.toLocaleString()}</div>
-              <div className="lc-seg-bar">
-                <div className="lc-seg" style={{ flex: workingLicenses || 0, background: '#34d399' }} />
-                <div className="lc-seg" style={{ flex: blockedLicenses || 0, background: '#f87171' }} />
+                <div className="lc-seg" style={{ flex: presentLicenses || 0, background: '#34d399' }} />
                 <div className="lc-seg" style={{ flex: stoppedWorking || 0, background: '#fbbf24' }} />
               </div>
               <div className="lc-ov-chips">
                 {[
-                  { value: workingLicenses, label: 'Working Licenses', color: '#34d399' },
-                  { value: blockedLicenses, label: 'Blocked Licenses', color: '#f87171' },
+                  { value: presentLicenses, label: 'Present Licenses', color: '#34d399' },
                   { value: stoppedWorking, label: 'Stopped Working', color: '#fbbf24' },
                 ].map(({ value, label, color }) => (
                   <div className="lc-ov-chip" key={label} style={{ '--cc': color }}>
                     <span className="lc-ov-dot" />
                     <span className="lc-ov-chip-label">{label}</span>
                     <strong className="lc-ov-chip-val">{(value ?? 0).toLocaleString()}</strong>
-                    <span className="lc-ov-chip-pct">{existingPct(value)}%</span>
+                    <span className="lc-ov-chip-pct">{everPct(value)}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Card · Present Licenses */}
+            <div className="lc-ov-card">
+              <div className="lc-ov-top">
+                <span className="lc-ov-label">Present Licenses</span>
+                <span className="lc-ov-icon green"><LicenseStatIcon /></span>
+              </div>
+              <div className="lc-ov-big">{presentLicenses.toLocaleString()}</div>
+              <div className="lc-seg-bar">
+                <div className="lc-seg" style={{ flex: workingLicenses || 0, background: '#34d399' }} />
+                <div className="lc-seg" style={{ flex: blockedLicenses || 0, background: '#f87171' }} />
+              </div>
+              <div className="lc-ov-chips">
+                {[
+                  { value: workingLicenses, label: 'Working Licenses', color: '#34d399' },
+                  { value: blockedLicenses, label: 'Blocked Licenses', color: '#f87171' },
+                ].map(({ value, label, color }) => (
+                  <div className="lc-ov-chip" key={label} style={{ '--cc': color }}>
+                    <span className="lc-ov-dot" />
+                    <span className="lc-ov-chip-label">{label}</span>
+                    <strong className="lc-ov-chip-val">{(value ?? 0).toLocaleString()}</strong>
+                    <span className="lc-ov-chip-pct">{presentPct(value)}%</span>
                   </div>
                 ))}
               </div>
@@ -482,11 +478,13 @@ export default function LicensePage() {
               <div className="lc-seg-bar">
                 <div className="lc-seg" style={{ flex: planExpiredLicenses || 0, background: '#fbbf24' }} />
                 <div className="lc-seg" style={{ flex: paymentFailedLicenses || 0, background: '#f87171' }} />
+                <div className="lc-seg" style={{ flex: deletedLicenses || 0, background: '#94a3b8' }} />
               </div>
               <div className="lc-ov-chips">
                 {[
                   { value: planExpiredLicenses, label: 'Plan Expired Licenses', color: '#fbbf24' },
                   { value: paymentFailedLicenses, label: 'Payment Failed Licenses', color: '#f87171' },
+                  { value: deletedLicenses, label: 'Deleted Licenses', color: '#94a3b8' },
                 ].map(({ value, label, color }) => (
                   <div className="lc-ov-chip" key={label} style={{ '--cc': color }}>
                     <span className="lc-ov-dot" />

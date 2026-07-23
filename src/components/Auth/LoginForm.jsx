@@ -4,6 +4,9 @@ import { useDispatch, useSelector } from 'react-redux';
 import {
   loginStep1, fetch2FASetup, confirm2FASetup, verifyTOTP, clearError,
 } from '../../store/slices/authSlice';
+import { useTheme } from '../../context/ThemeContext';
+import logoDark from '../../assets/vodeonai-logo-trimmed-dark.png';
+import logoLight from '../../assets/vodeonai-logo-trimmed-light.png';
 import './LoginForm.css';
 
 // ── Icons ────────────────────────────────────────────────
@@ -250,23 +253,16 @@ function OTPVerifyStep() {
 // ── Root ─────────────────────────────────────────────────
 export default function LoginForm() {
   const { step } = useSelector(s => s.auth);
+  // Wordmark comes in two cuts — light artwork for the dark theme, dark artwork for light.
+  const { theme } = useTheme();
+  const vodeonaiLogo = theme === 'dark' ? logoDark : logoLight;
   return (
     <div className="login-page">
       <div className="login-glow-bottom" />
       <div className="login-card">
         <div className="login-logo">
-          <div className="login-logo-icon">
-            {/* Corporate R monogram */}
-            <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-              <path d="M6 4h10a6 6 0 0 1 0 12H6V4z" fill="white" opacity="0.95"/>
-              <path d="M6 16h5l7 8H11L6 16z" fill="white" opacity="0.85"/>
-              <rect x="6" y="4" width="2.5" height="20" fill="white"/>
-            </svg>
-          </div>
-          <div className="login-logo-lockup">
-            <div className="login-logo-name">Rhysley</div>
-            <div className="login-logo-sub">GROUP</div>
-          </div>
+          <img className="login-logo-img" src={vodeonaiLogo} alt="Vodeon.ai" />
+          <div className="login-portal-name"><span>Licensing Portal</span></div>
         </div>
         {step === 1 && <CredentialsStep />}
         {step === 2 && <QRSetupStep />}

@@ -186,49 +186,47 @@ const LIVE_SECTIONS = [
     source: 'app_users',
     hero: { label: 'Total Users Ever', path: 'total_users_ever.count' },
     chips: [
-      { label: 'Signups 24h', path: 'growth.new_signups_24h' },
-      { label: 'Signups 7d', path: 'growth.new_signups_7d' },
+      { label: 'Signup 24h', path: 'growth.new_signups_24h' },
+      { label: 'Signup 7d', path: 'growth.new_signups_7d' },
     ],
     groups: [
       {
         label: 'Total Traffic Till Date',
-        // Part-to-whole: the header states the total and the bars are its parts,
-        // so the total needs no bar of its own.
+        // Part-to-whole: activated + never-activated sum to the lifetime total.
         totalPath: 'total_users_ever.count',
         bars: [
-          { label: 'Existing Users', path: 'total_users_ever.existing_users.count', tone: 'good' },
-          { label: 'Deleted Users', path: 'total_users_ever.deleted_users', tone: 'muted' },
+          { label: 'Activated Users', path: 'total_users_ever.verified_users.activated_users.count', tone: 'good' },
+          { label: 'Never Activated Users', path: 'total_users_ever.verified_users.never_activated_users', tone: 'warn' },
         ],
       },
       {
-        label: 'Funnel Drop-off (Existing Users)',
-        // Part-to-whole again: unverified + verified sum exactly to the existing-user count.
-        totalPath: 'total_users_ever.existing_users.count',
+        label: 'Activated Users',
+        // Part-to-whole: enabled + blocked make up the presently-using users, and adding
+        // stopped gives the activated total.
+        totalPath: 'total_users_ever.verified_users.activated_users.count',
         bars: [
-          { label: 'Unverified Users', path: 'total_users_ever.existing_users.unverified_users', tone: 'warn' },
-          { label: 'Verified Users', path: 'total_users_ever.existing_users.verified_users.count', tone: 'good' },
-        ],
-      },
-      {
-        label: 'Verified Users',
-        // NOTE: unlike the other totalPath groups, these bars are NOT disjoint parts —
-        // Enabled + Blocked is a breakdown *of* Present Users, so they double-count.
-        totalPath: 'total_users_ever.existing_users.verified_users.count',
-        bars: [
-          { label: 'Present Users', path: 'total_users_ever.existing_users.verified_users.activated_users.presently_using.count' },
-          { label: 'Blocked Users', path: 'total_users_ever.existing_users.verified_users.activated_users.presently_using.by_account_state.blocked_users', tone: 'bad' },
-          { label: 'Enabled Users', path: 'total_users_ever.existing_users.verified_users.activated_users.presently_using.by_account_state.enabled_users', tone: 'good' },
-          { label: 'Stopped Users', path: 'total_users_ever.existing_users.verified_users.activated_users.stopped_using.count', tone: 'warn' },
+          { label: 'Enabled Users', path: 'total_users_ever.verified_users.activated_users.presently_using.by_account_state.enabled_users', tone: 'good' },
+          { label: 'Blocked Users', path: 'total_users_ever.verified_users.activated_users.presently_using.by_account_state.blocked_users', tone: 'bad' },
+          { label: 'Stopped Users', path: 'total_users_ever.verified_users.activated_users.stopped_using.count', tone: 'warn' },
         ],
       },
       {
         label: 'Stopped Working',
         // Part-to-whole: plan-expired + payment-failed are the only two reasons, and
         // they sum to the stopped count.
-        totalPath: 'total_users_ever.existing_users.verified_users.activated_users.stopped_using.count',
+        totalPath: 'total_users_ever.verified_users.activated_users.stopped_using.count',
         bars: [
-          { label: 'Plan Expired', path: 'total_users_ever.existing_users.verified_users.activated_users.stopped_using.plan_expired_users', tone: 'warn' },
-          { label: 'Payment Failed', path: 'total_users_ever.existing_users.verified_users.activated_users.stopped_using.payment_failed_users', tone: 'bad' },
+          { label: 'Plan Expired', path: 'total_users_ever.verified_users.activated_users.stopped_using.plan_expired_users', tone: 'warn' },
+          { label: 'Payment Failed', path: 'total_users_ever.verified_users.activated_users.stopped_using.payment_failed_users', tone: 'bad' },
+          { label: 'Deleted Users', path: 'total_users_ever.deleted_users', tone: 'muted' },
+        ],
+      },
+      {
+        label: 'Growth',
+        // 24h is a subset of 7d, so these overlap — no total, the header shows the peak.
+        bars: [
+          { label: 'New Signup 24h', path: 'growth.new_signups_24h', tone: 'good' },
+          { label: 'New Signup 7d', path: 'growth.new_signups_7d', tone: 'good' },
         ],
       },
     ],
@@ -248,32 +246,33 @@ const LIVE_SECTIONS = [
     groups: [
       {
         label: 'Total Licenses Ever',
-        // Part-to-whole: existing + deleted sum to the lifetime total.
+        // Part-to-whole: presently held + stopped working sum to the lifetime total.
         totalPath: 'total_licenses_ever.count',
         bars: [
-          { label: 'Existing Licenses', path: 'total_licenses_ever.existing_licenses.count', tone: 'good' },
-          { label: 'Deleted Licenses', path: 'total_licenses_ever.deleted_licenses', tone: 'muted' },
+          { label: 'Present Licenses', path: 'total_licenses_ever.presently_held.count', tone: 'good' },
+          { label: 'Stopped Working', path: 'total_licenses_ever.stopped_working.count', tone: 'warn' },
         ],
       },
       {
-        label: 'Existing Licenses',
-        // Header shows the existing-licenses count; working + blocked + stopped sum to it.
-        totalPath: 'total_licenses_ever.existing_licenses.count',
+        label: 'Present Licenses',
+        // Header shows the present-licenses count; working + blocked sum to it.
+        totalPath: 'total_licenses_ever.presently_held.count',
         bars: [
-          { label: 'Working Licenses', path: 'total_licenses_ever.existing_licenses.presently_held.by_state.working_licenses', tone: 'good' },
-          { label: 'Blocked Licenses', path: 'total_licenses_ever.existing_licenses.presently_held.by_state.blocked_licenses', tone: 'bad' },
-          { label: 'Stopped Working', path: 'total_licenses_ever.existing_licenses.stopped_working.count', tone: 'warn' },
+          { label: 'Working Licenses', path: 'total_licenses_ever.presently_held.by_state.working_licenses', tone: 'good' },
+          { label: 'Blocked Licenses', path: 'total_licenses_ever.presently_held.by_state.blocked_licenses', tone: 'bad' },
         ],
       },
       {
         label: 'Stopped Working',
+        totalPath: 'total_licenses_ever.stopped_working.count',
         bars: [
-          { label: 'Plan Expired Licenses', path: 'total_licenses_ever.existing_licenses.stopped_working.plan_expired_licenses', tone: 'warn' },
-          { label: 'Payment Failed', path: 'total_licenses_ever.existing_licenses.stopped_working.payment_failed_licenses', tone: 'bad' },
+          { label: 'Plan Expired Licenses', path: 'total_licenses_ever.stopped_working.plan_expired_licenses', tone: 'warn' },
+          { label: 'Payment Failed', path: 'total_licenses_ever.stopped_working.payment_failed_licenses', tone: 'bad' },
+          { label: 'Deleted Licenses', path: 'total_licenses_ever.stopped_working.deleted_licenses', tone: 'muted' },
         ],
       },
       {
-        label: 'Expiring Soon',
+        label: 'Licenses Expiring Soon',
         bars: [
           { label: 'Expiring 48h', path: 'expiring_soon.expiring_48h', tone: 'bad' },
           { label: 'Expiring 7d', path: 'expiring_soon.expiring_7d', tone: 'warn' },

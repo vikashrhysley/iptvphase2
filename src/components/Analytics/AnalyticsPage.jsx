@@ -586,55 +586,32 @@ function RevenueAnalytics() {
 }
 
 /* ── Engagement rings (DAU/WAU/MAU) ────────────────────────── */
-function EngagementRings({ total, metrics }) {
-  const SIZE = 200;
-  const CENTER = SIZE / 2;
-  const STROKE = 14;
-
+// DAU / WAU / MAU are nested subsets of the same population, so they belong on one
+// shared baseline where bar length is directly comparable. (Concentric rings encode
+// the same percentage as different arc lengths per radius, and collapse into
+// unreadable slivers once the ratios are small.)
+function EngagementBars({ total, metrics }) {
   return (
-    <div className="an-rings-wrap">
-      <div className="an-rings">
-        <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="an-rings-svg">
-          {metrics.map((m, i) => {
-            const c = 2 * Math.PI * m.r;
-            const pct = total > 0 ? Math.min(m.value / total, 1) : 0;
-            const offset = c * (1 - pct);
-            return (
-              <g key={m.key}>
-                <circle cx={CENTER} cy={CENTER} r={m.r} className="an-ring-track" strokeWidth={STROKE} />
-                <circle
-                  cx={CENTER} cy={CENTER} r={m.r}
-                  className="an-ring-fill"
-                  strokeWidth={STROKE}
-                  transform={`rotate(-90 ${CENTER} ${CENTER})`}
-                  style={{
-                    stroke: m.color,
-                    filter: `drop-shadow(0 0 6px ${m.glow})`,
-                    '--circ': c,
-                    '--ring-offset': offset,
-                    animationDelay: `${i * 0.15}s`,
-                  }}
-                />
-              </g>
-            );
-          })}
-        </svg>
-        <div className="an-rings-center">
-          <span className="an-rings-total">{total.toLocaleString()}</span>
-          <span className="an-rings-total-label">Total Users</span>
-        </div>
+    <div className="an-eng">
+      <div className="an-eng-total">
+        <span className="an-eng-total-value">{total.toLocaleString()}</span>
+        <span className="an-eng-total-label">Total Users Ever</span>
       </div>
 
-      <div className="an-rings-legend">
+      <div className="an-eng-bars">
         {metrics.map(m => {
-          const pct = total > 0 ? ((m.value / total) * 100).toFixed(1) : '0.0';
+          const pct = total > 0 ? Math.min((m.value / total) * 100, 100) : 0;
           return (
-            <div className="an-rings-legend-item" key={m.key}>
-              <span className="an-rings-dot" style={{ background: m.color, boxShadow: `0 0 8px ${m.glow}` }} />
-              <div className="an-rings-legend-text">
-                <span className="an-rings-legend-label">{m.label}</span>
-                <span className="an-rings-legend-value">{m.value.toLocaleString()} <em>· {pct}% of total</em></span>
+            <div className="an-eng-row" key={m.key} title={`${m.label}: ${m.value.toLocaleString()}`}>
+              <span className="an-eng-label">{m.label}</span>
+              <div className="an-eng-track">
+                <div
+                  className="an-eng-fill"
+                  style={{ width: `${pct}%`, background: m.color, boxShadow: `0 0 8px ${m.glow}` }}
+                />
               </div>
+              <strong className="an-eng-value">{m.value.toLocaleString()}</strong>
+              <span className="an-eng-pct">{pct.toFixed(1)}%</span>
             </div>
           );
         })}
@@ -717,7 +694,9 @@ function UserAnalytics() {
 
   const hasFilters = !!(usersFilters.start_date || usersFilters.end_date);
 
-  const total = users?.total_users ?? 0;
+  // `total_users_ever` may arrive as a plain number or as a { count } object.
+  const totalEver = users?.total_users_ever;
+  const total = (totalEver && typeof totalEver === 'object' ? totalEver.count : totalEver) ?? 0;
   const retention = users?.retention_rate_pct ?? 0;
   const retentionColor = retention >= 50 ? '#10b981' : retention >= 25 ? '#fbbf24' : '#ef4444';
 
@@ -765,7 +744,7 @@ function UserAnalytics() {
           <div className="an-stats-row an-stats-row-3">
             <div className="an-stat-card" style={{ '--asc': '#00d4ff' }}>
               <div className="an-stat-accent" />
-              <div className="an-stat-label">Total Users</div>
+              <div className="an-stat-label">Total Users Ever</div>
               <div className="an-stat-value">{total.toLocaleString()}</div>
             </div>
             <div className="an-stat-card" style={{ '--asc': '#10b981' }}>
@@ -785,7 +764,7 @@ function UserAnalytics() {
               <span className="an-card-title">Active Users — DAU / WAU / MAU</span>
             </div>
 
-            <EngagementRings total={total} metrics={engagement} />
+            <EngagementBars total={total} metrics={engagement} />
 
             <p className="an-note">DAU / WAU / MAU are computed from device heartbeat activity as an active-device proxy.</p>
           </div>
