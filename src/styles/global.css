@@ -32,7 +32,7 @@
   --shadow-glow: 0 0 24px rgba(0, 212, 255, 0.2);
 
   --sidebar-width: 240px;
-  --sidebar-collapsed: 64px;
+  --sidebar-collapsed: 88px; /* fits the logo mark + collapse toggle side by side */
   --header-height: 60px;
 
   --radius-sm: 6px;

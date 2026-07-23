@@ -46,56 +46,34 @@
   min-width: 0;
 }
 
-.sidebar-brand-icon {
-  width: 34px;
-  height: 34px;
-  background: linear-gradient(145deg, #0f4c8a 0%, #0a2d5c 100%);
-  border-radius: 9px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* Full Vodeon.ai wordmark — swapped per theme in Sidebar.jsx. */
+.sidebar-brand-logo {
+  display: block;
+  height: 45px;
+  width: auto;
+  max-width: 100%;
+  border-radius: 8px;
   flex-shrink: 0;
-  box-shadow:
-    0 3px 10px rgba(15,76,138,0.4),
-    inset 0 1px 0 rgba(255,255,255,0.15);
-  border: 1px solid rgba(255,255,255,0.1);
 }
 
-.sidebar-brand-text {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  overflow: hidden;
-  white-space: nowrap;
-  transition: opacity var(--transition-base), max-width var(--transition-slow);
-  max-width: 160px;
+/* Icon-only mark shown when the sidebar is collapsed. The red/white artwork reads
+   on both themes, so it needs no per-theme variant. */
+.sidebar-brand-mark {
+  display: block;
+  height: 26px;
+  width: auto;
+  flex-shrink: 0;
 }
 
-.sidebar.collapsed .sidebar-brand-text {
-  opacity: 0;
-  max-width: 0;
+/* Mark on the left, toggle on the right — the collapsed rail is widened via
+   --sidebar-collapsed so both fit side by side without clipping. */
+.sidebar.collapsed .sidebar-header {
+  padding: 0 12px;
 }
 
-.sidebar-brand-name {
-  font-family: var(--font-display);
-  font-size: 1rem;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  color: var(--text-primary);
-  line-height: 1;
+.sidebar.collapsed .sidebar-brand {
+  overflow: visible;
 }
-
-.sidebar-brand-tag {
-  font-family: var(--font-body);
-  font-size: 0.58rem;
-  font-weight: 600;
-  letter-spacing: 0.2em;
-  color: var(--accent-primary);
-  line-height: 1;
-}
-
-[data-theme="light"] .sidebar-brand-name { color: #0f172a; }
-[data-theme="light"] .sidebar-brand-tag  { color: #0284c7; }
 
 .sidebar-toggle {
   width: 28px;
@@ -117,8 +95,29 @@
   border-color: var(--border-accent);
 }
 
+/* Header lays the mark and toggle out itself when collapsed — no auto-centring */
 .sidebar.collapsed .sidebar-toggle {
-  margin: 0 auto;
+  margin: 0;
+}
+
+/* Collapsed rail: centre each icon on the rail. The label is already hidden, but the
+   left padding and caret would still pull the icon off-axis. */
+.sidebar.collapsed .nav-item {
+  justify-content: center;
+  gap: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.sidebar.collapsed .nav-caret {
+  display: none;
+}
+
+/* Avatar + logout can't sit side by side in the narrow rail — stack and centre them */
+.sidebar.collapsed .sidebar-footer {
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 8px;
 }
 
 .sidebar-nav {
@@ -254,6 +253,9 @@
   opacity: 0;
   width: 0;
   overflow: hidden;
+  /* .nav-label is flex:1 when expanded — without this it keeps growing at width:0
+     and pushes the icon left of the rail's centre line. */
+  flex: 0 0 0;
 }
 
 /* Tooltip when collapsed */
@@ -320,6 +322,11 @@
 .sidebar.collapsed .user-info {
   opacity: 0;
   width: 0;
+  /* same flex:1 trap as .nav-label — in the stacked footer it would grow vertically
+     and open a gap between the avatar and the logout button */
+  flex: 0 0 0;
+  height: 0;
+  overflow: hidden;
 }
 
 .user-name {
@@ -418,5 +425,34 @@
 
   .sidebar.mobile-open {
     transform: translateX(0);
+  }
+
+  /* Below 1024 the sidebar is a full-width drawer — the rule above forces it back to
+     --sidebar-width even when `.collapsed` is set. Undo the narrow-rail child styles
+     so it never renders half-collapsed (full width, but centred icons and no labels). */
+  .sidebar.collapsed .nav-item {
+    justify-content: flex-start;
+    gap: 10px;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .sidebar.collapsed .nav-label {
+    opacity: 1;
+    width: auto;
+    flex: 1;
+  }
+
+  .sidebar.collapsed .sidebar-footer {
+    flex-direction: row;
+    gap: 10px;
+    padding: 14px 16px;
+  }
+
+  .sidebar.collapsed .user-info {
+    opacity: 1;
+    width: auto;
+    height: auto;
+    flex: 1;
   }
 }

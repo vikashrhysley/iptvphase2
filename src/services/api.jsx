@@ -303,10 +303,11 @@ export const apiFetchDeviceAnalytics = async (accessToken) => {
 };
 
 // GET /admin/analytics/licenses
-// Response: { data: { count, existing_licenses:{…}, deleted_licenses }, expiring_soon: {…} }.
+// Response: { data: { count, presently_held:{…}, stopped_working:{…} }, expiring_soon: {…} }.
 // `data` is exactly the dashboard's `total_licenses_ever` object and `expiring_soon` is a
 // top-level sibling, so reshape into the dashboard "licenses" block. That lets the shared
-// Live Stats licenses card (same section config) render this endpoint unchanged.
+// Live Stats licenses card (same section config) render this endpoint unchanged — which
+// also means both endpoints must keep returning the same shape.
 export const apiFetchLicenseAnalytics = async (accessToken) => {
   if (!accessToken) throw new Error('Unauthorized');
   const res = await request(`${BASE}/admin/analytics/licenses`, {

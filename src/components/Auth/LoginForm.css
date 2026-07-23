@@ -68,53 +68,65 @@
 
 .login-logo {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14px;
+  gap: 12px;
   margin-bottom: 26px;
 }
 
-.login-logo-icon {
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(145deg, #0f4c8a 0%, #0a2d5c 100%);
-  border-radius: 12px;
+/* Portal name lockup — gradient ink flanked by hairlines, picking up the same
+   cyan→purple accents as the login page glows. */
+.login-portal-name {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  box-shadow:
-    0 4px 16px rgba(15, 76, 138, 0.45),
-    inset 0 1px 0 rgba(255,255,255,0.15);
-  border: 1px solid rgba(255,255,255,0.1);
+  gap: 14px;
+  width: 100%;
+  line-height: 1;
 }
 
-.login-logo-lockup {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
+.login-portal-name::before,
+.login-portal-name::after {
+  content: '';
+  flex: 1 1 auto;
+  max-width: 58px;
+  height: 1px;
 }
 
-.login-logo-name {
+.login-portal-name::before {
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent-primary) 60%, transparent));
+}
+
+.login-portal-name::after {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent-secondary) 60%, transparent), transparent);
+}
+
+.login-portal-name span {
   font-family: var(--font-display);
-  font-size: 1.35rem;
+  font-size: 0.88rem;
   font-weight: 800;
-  letter-spacing: -0.01em;
-  color: var(--text-primary);
-  line-height: 1;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  /* letter-spacing trails after the last glyph — nudge back to stay optically centred */
+  text-indent: 0.24em;
+  background: linear-gradient(95deg, var(--accent-primary), var(--accent-secondary));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--accent-primary) 28%, transparent));
 }
 
-.login-logo-sub {
-  font-family: var(--font-body);
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.22em;
-  color: var(--accent-primary);
-  line-height: 1;
+/* Vodeon.ai wordmark — light-on-black artwork, so it keeps its own black tile
+   to stay legible against the light theme's white card. */
+.login-logo-img {
+  display: block;
+  height: 70px;
+  width: auto;
+  max-width: 100%;
 }
-
-[data-theme="light"] .login-logo-name { color: #0f172a; }
-[data-theme="light"] .login-logo-sub  { color: #0284c7; }
 
 .login-heading {
   font-family: var(--font-display);
