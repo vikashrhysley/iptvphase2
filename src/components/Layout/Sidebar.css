@@ -60,7 +60,7 @@
    on both themes, so it needs no per-theme variant. */
 .sidebar-brand-mark {
   display: block;
-  height: 26px;
+  height: 16px;
   width: auto;
   flex-shrink: 0;
 }
@@ -69,6 +69,7 @@
    --sidebar-collapsed so both fit side by side without clipping. */
 .sidebar.collapsed .sidebar-header {
   padding: 0 12px;
+  padding-right: 6px;
 }
 
 .sidebar.collapsed .sidebar-brand {
@@ -76,8 +77,8 @@
 }
 
 .sidebar-toggle {
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   background: var(--bg-raised);
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
