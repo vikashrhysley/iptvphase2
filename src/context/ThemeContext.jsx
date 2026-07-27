@@ -11,8 +11,14 @@ export function ThemeProvider({ children }) {
   });
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
+    const root = document.documentElement;
+    // Enable the cross-fade transition only for the duration of a theme switch, so the
+    // universal transition rule isn't live on every element during normal interaction.
+    root.classList.add('theme-transition');
+    root.setAttribute('data-theme', theme);
     localStorage.setItem(THEME_KEY, theme);
+    const t = setTimeout(() => root.classList.remove('theme-transition'), 260);
+    return () => clearTimeout(t);
   }, [theme]);
 
   const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');

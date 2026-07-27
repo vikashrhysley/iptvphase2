@@ -1,11 +1,6 @@
 // src/components/Layout/Header.js
-import { useSelector, useDispatch } from 'react-redux';
-import {
-  fetchDashboardOverview,
-  fetchDashboardRevenue,
-  fetchDashboardStats,
-} from '../../store/slices/dashboardSlice';
-import { fetchHeartbeatStats } from '../../store/slices/heartbeatSlice';
+import { useEffect, useRef, useState } from 'react';
+import { useSelector } from 'react-redux';
 import { useTheme } from '../../context/ThemeContext';
 import './Header.css';
 
@@ -29,10 +24,10 @@ const PAGE_TITLES = {
   rbac:            'RBAC',
 };
 
-const RefreshIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-    <polyline points="1 4 1 10 7 10" />
-    <path d="M3.51 15a9 9 0 1 0 .49-4.95" />
+const BellIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
   </svg>
 );
 
@@ -66,8 +61,21 @@ const MenuIcon = () => (
 
 export default function Header({ activePage, dashboardTab, analyticsTab, sidebarCollapsed, onMenuToggle }) {
   const { user }   = useSelector(s => s.auth);
-  const dispatch   = useDispatch();
   const { theme, toggleTheme } = useTheme();
+
+  // Notifications — no feed wired yet, so this shows an empty state. `notifications`
+  // is ready to be populated from a real source (audit/security events) later.
+  const [notifOpen, setNotifOpen] = useState(false);
+  const notifRef = useRef(null);
+  const notifications = [];
+  const unreadCount = notifications.length;
+
+  useEffect(() => {
+    if (!notifOpen) return;
+    const onClick = (e) => { if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false); };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [notifOpen]);
 
   const left = sidebarCollapsed ? 'var(--sidebar-collapsed)' : 'var(--sidebar-width)';
   const breadcrumb = activePage === 'home'
@@ -75,20 +83,6 @@ export default function Header({ activePage, dashboardTab, analyticsTab, sidebar
     : activePage === 'analytics'
     ? `/${analyticsTab === 'revenue' ? ' Revenue' : analyticsTab === 'users' ? ' Users' : analyticsTab === 'devices' ? ' Devices' : analyticsTab === 'licenses' ? ' Licenses' : analyticsTab === 'funnel' ? ' Funnel' : analyticsTab === 'churn' ? ' Churn' : ' Overview'}`
     : '';
-
-  const handleRefresh = () => {
-    if (activePage === 'heartbeat') {
-      dispatch(fetchHeartbeatStats());
-      return;
-    }
-    if (activePage === 'home') {
-      dispatch(fetchDashboardStats());
-      dispatch(fetchDashboardOverview());
-      dispatch(fetchDashboardRevenue());
-      return;
-    }
-    dispatch(fetchDashboardStats());
-  };
 
   return (
     <header className="app-header" style={{ left }}>
@@ -118,9 +112,43 @@ export default function Header({ activePage, dashboardTab, analyticsTab, sidebar
           </span>
         </button>
 
-        <button className="refresh-btn" onClick={handleRefresh} title="Refresh data">
-          <RefreshIcon />
-        </button>
+        {/* Notifications */}
+        <div className="notif-wrap" ref={notifRef}>
+          <button
+            className="notif-btn"
+            onClick={() => setNotifOpen(o => !o)}
+            title="Notifications"
+            aria-label="Notifications"
+            aria-expanded={notifOpen}
+          >
+            <BellIcon />
+            {unreadCount > 0 && <span className="notif-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>}
+          </button>
+
+          {notifOpen && (
+            <div className="notif-panel" role="menu">
+              <div className="notif-panel-head">
+                <span>Notifications</span>
+                {unreadCount > 0 && <span className="notif-count">{unreadCount}</span>}
+              </div>
+              <div className="notif-panel-body">
+                {notifications.length === 0 ? (
+                  <div className="notif-empty">
+                    <BellIcon />
+                    <span>You're all caught up</span>
+                  </div>
+                ) : (
+                  notifications.map((n, i) => (
+                    <div className="notif-item" key={i}>
+                      <span className="notif-item-title">{n.title}</span>
+                      <span className="notif-item-time">{n.time}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );

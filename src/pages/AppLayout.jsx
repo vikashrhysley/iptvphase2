@@ -1,5 +1,5 @@
 // src/pages/AppLayout.js
-import React, { Suspense, useState } from 'react';
+import React, { Suspense, useState, useEffect } from 'react';
 import Sidebar from '../components/Layout/Sidebar';
 import Header from '../components/Layout/Header';
 
@@ -89,10 +89,52 @@ export default function AppLayout() {
 
   const mainLeft = collapsed ? 'var(--sidebar-collapsed)' : 'var(--sidebar-width)';
 
-  const handleNavigate = (page) => {
+  const applyPage = (page) => {
     setActivePage(page);
     sessionStorage.setItem('activePage', page);
     setMobileNavOpen(false);
+  };
+
+  // ── Browser back/forward integration ──────────────────────────────
+  // Navigation is state-based (activePage), so without this the URL never changes and
+  // the back button leaves the app entirely (blank tab). We build a history stack whose
+  // base is Home behind a "root" guard: back walks through visited pages down to Home,
+  // and pressing back AT Home bounces back to Home instead of exiting the app.
+  // The URL is kept clean (no #/page hash) — every entry keeps the current pathname.
+  useEffect(() => {
+    const url = window.location.pathname + window.location.search; // clean URL, strips any hash
+    // StrictMode/logout remounts must not rebuild the stack twice.
+    if (!window.__appHistoryInit) {
+      window.__appHistoryInit = true;
+      const initial = activePage;
+      window.history.replaceState({ root: true }, '', url);       // guard = "outside the app"
+      window.history.pushState({ appPage: 'home' }, '', url);     // Home is always the base
+      if (initial && initial !== 'home') {
+        window.history.pushState({ appPage: initial }, '', url);
+      }
+    }
+    const onPopState = (e) => {
+      const st = e.state;
+      if (!st || st.root) {
+        // Reached the guard — re-push Home so back can't leave the app. pushState here
+        // also clears any forward entries, so Forward can't land on a stale page either.
+        window.history.pushState({ appPage: 'home' }, '', window.location.pathname);
+        applyPage('home');
+      } else if (st.appPage) {
+        applyPage(st.appPage);
+      }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+    // Run once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleNavigate = (page) => {
+    if (page === activePage) return;
+    applyPage(page);
+    // Add a history entry (clean URL) so the browser back button returns here.
+    window.history.pushState({ appPage: page }, '', window.location.pathname);
   };
 
   const handleDashboardTabChange = (tab) => {
