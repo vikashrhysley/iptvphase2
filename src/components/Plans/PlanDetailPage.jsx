@@ -19,10 +19,16 @@ const EditIcon = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="non
 
 const planClass = (p) => {
   const v = (p || '').toLowerCase();
-  if (v.includes('trial')) return 'pp-type-trial';
-  if (v.includes('life')) return 'pp-type-lifetime';
-  if (v.includes('premium') || v.includes('pro')) return 'pp-type-premium';
-  return 'pp-type-default';
+  if (v === 'free' || v.includes('trial')) return 'pp-type-trial';
+  return 'pp-type-premium';
+};
+
+// plan_type is 'free' | 'paid' on the wire; shown as Trial / Paid.
+const planTypeLabel = (type) => {
+  const v = String(type || '').toLowerCase();
+  if (v === 'free') return 'Trial';
+  if (v === 'paid') return 'Paid';
+  return type ? type.charAt(0).toUpperCase() + type.slice(1) : '—';
 };
 
 /* ── Detail Field ───────────────────────────────────────── */
@@ -47,17 +53,19 @@ function EditPlanModal({ plan, onClose }) {
       ? (plan.amount_cents / 100).toFixed(2)
       : '';
 
+  // plan_type / plan_code / billing_cycle are immutable — shown read-only, never edited.
+  const isTrial = plan.plan_type === 'free';
+
   const [form, setForm] = useState({
     name: plan.name || '',
     description: plan.description || '',
     amount: initAmount,
     currency: plan.currency || 'USD',
-    trial_days: plan.trial_days != null ? String(plan.trial_days) : '',
+    duration_days: plan.duration_days != null ? String(plan.duration_days) : '',
     max_devices: plan.max_devices ?? 1,
     max_concurrent_streams: plan.max_concurrent_streams ?? 1,
     hd: !!features.hd,
     fourk: !!features['4k'],
-    device_limit_policy: plan.device_limit_policy || 'hard_block',
     requires_payment_method: plan.requires_payment_method ?? true,
     authorization_type: plan.authorization_type || 'setup_intent',
     requires_phone_verify: plan.requires_phone_verify ?? true,
@@ -76,20 +84,21 @@ function EditPlanModal({ plan, onClose }) {
     e.preventDefault();
     if (!form.reason.trim()) { setLocalError('Reason is required for the audit log.'); return; }
     const fieldError = validateAmount(form.amount)
-      || validateInteger(form.trial_days, 'Trial days', 365)
+      || validateInteger(form.duration_days, 'Duration (days)', 365)
       || validateInteger(form.max_devices, 'Max devices', 100)
       || validateInteger(form.max_concurrent_streams, 'Max concurrent streams', 10);
     if (fieldError) { setLocalError(fieldError); return; }
 
+    // NOTE: plan_type / plan_code / billing_cycle are immutable and device_limit_policy is
+    // not a backend field — none are sent.
     const payload = { reason: form.reason.trim() };
     if (form.name.trim() !== (plan.name || '')) payload.name = form.name.trim();
     if (form.description.trim() !== (plan.description || '')) payload.description = form.description.trim();
     if (form.amount !== '' && Number(form.amount) !== Number(initAmount)) payload.amount = Number(form.amount);
     if (form.currency.trim().toUpperCase() !== (plan.currency || '')) payload.currency = form.currency.trim().toUpperCase();
-    if (form.trial_days !== '' && Number(form.trial_days) !== plan.trial_days) payload.trial_days = Number(form.trial_days);
+    if (form.duration_days !== '' && Number(form.duration_days) !== plan.duration_days) payload.duration_days = Number(form.duration_days);
     if (Number(form.max_devices) !== plan.max_devices) payload.max_devices = Number(form.max_devices);
     if (Number(form.max_concurrent_streams) !== plan.max_concurrent_streams) payload.max_concurrent_streams = Number(form.max_concurrent_streams);
-    if (form.device_limit_policy !== plan.device_limit_policy) payload.device_limit_policy = form.device_limit_policy;
     if (form.requires_payment_method !== (plan.requires_payment_method ?? true)) payload.requires_payment_method = form.requires_payment_method;
     if (form.authorization_type !== (plan.authorization_type || 'setup_intent')) payload.authorization_type = form.authorization_type;
     if (form.requires_phone_verify !== (plan.requires_phone_verify ?? true)) payload.requires_phone_verify = form.requires_phone_verify;
@@ -114,6 +123,20 @@ function EditPlanModal({ plan, onClose }) {
         <p className="pdp-modal-sub">plan_code and plan_type are immutable and cannot be changed.</p>
 
         <div className="pdp-edit-grid">
+          {/* Immutable identifiers — read-only */}
+          <label className="pdp-edit-field">
+            <span>Plan Type</span>
+            <input value={planTypeLabel(plan.plan_type)} disabled readOnly />
+          </label>
+          <label className="pdp-edit-field">
+            <span>Plan Code</span>
+            <input value={plan.plan_code || '—'} disabled readOnly />
+          </label>
+          <label className="pdp-edit-field">
+            <span>Billing Cycle</span>
+            <input value={plan.billing_cycle || '—'} disabled readOnly />
+          </label>
+
           {/* Name */}
           <label className="pdp-edit-field pdp-edit-full">
             <span>Name</span>
@@ -136,11 +159,11 @@ function EditPlanModal({ plan, onClose }) {
               placeholder="USD" maxLength={3} disabled={updateLoading} />
           </label>
 
-          {/* Trial days */}
+          {/* Duration (days) */}
           <label className="pdp-edit-field">
-            <span>Trial Days</span>
-            <input type="number" min={0} max={365} value={form.trial_days}
-              onChange={(e) => isIntegerInputAllowed(e.target.value, 365) && set('trial_days', e.target.value)}
+            <span>Duration (days)</span>
+            <input type="number" min={0} max={365} value={form.duration_days}
+              onChange={(e) => isIntegerInputAllowed(e.target.value, 365) && set('duration_days', e.target.value)}
               onKeyDown={blockIntegerKeys} placeholder="7" disabled={updateLoading} />
           </label>
 
@@ -158,15 +181,6 @@ function EditPlanModal({ plan, onClose }) {
             <input type="number" min={0} max={10} value={form.max_concurrent_streams}
               onChange={(e) => isIntegerInputAllowed(e.target.value, 10) && set('max_concurrent_streams', e.target.value)}
               onKeyDown={blockIntegerKeys} disabled={updateLoading} />
-          </label>
-
-          {/* Device limit policy */}
-          <label className="pdp-edit-field">
-            <span>Device Limit Policy</span>
-            <select value={form.device_limit_policy} onChange={(e) => set('device_limit_policy', e.target.value)} disabled={updateLoading}>
-              <option value="hard_block">Hard Block</option>
-              <option value="prompt_only">Prompt Only</option>
-            </select>
           </label>
 
           {/* Authorization type */}
@@ -207,10 +221,11 @@ function EditPlanModal({ plan, onClose }) {
                 onChange={(e) => set('fourk', e.target.checked)} disabled={updateLoading} />
               4K
             </label>
-            <label className="pdp-check-label">
-              <input type="checkbox" checked={form.is_default}
-                onChange={(e) => set('is_default', e.target.checked)} disabled={updateLoading} />
-              Set as Default for this Plan Type
+            {/* Default: editable for Paid; for a Trial it is always the default — shown locked. */}
+            <label className="pdp-check-label" title={isTrial ? 'The trial plan is always the default free plan.' : undefined}>
+              <input type="checkbox" checked={isTrial ? true : form.is_default}
+                onChange={(e) => set('is_default', e.target.checked)} disabled={updateLoading || isTrial} />
+              {isTrial ? 'Default Trial Plan' : 'Set as Default Paid Plan'}
             </label>
           </div>
 
@@ -356,7 +371,7 @@ export default function PlanDetailPage({ planId, onBack }) {
       {plan && !detailLoading && !detailError && (
         <>
           <div className="pdp-summary">
-            <span className={`pp-type-pill ${planClass(plan.plan_type)}`}>{plan.plan_type || '—'}</span>
+            <span className={`pp-type-pill ${planClass(plan.plan_type)}`}>{planTypeLabel(plan.plan_type)}</span>
             {plan.is_default && <span className="pp-badge default">Default</span>}
             <span className={`pp-badge ${plan.is_active ? 'active' : 'inactive'}`}>{plan.is_active ? 'Active' : 'Inactive'}</span>
             <span className="pdp-summary-name">{plan.name || '—'}</span>
@@ -368,12 +383,12 @@ export default function PlanDetailPage({ planId, onBack }) {
               <div className="pdp-grid">
                 <InfoField label="Plan ID" value={plan.id} mono full />
                 <InfoField label="Plan Code" value={plan.plan_code} mono />
-                <InfoField label="Plan Type" value={plan.plan_type} />
+                <InfoField label="Plan Type" value={planTypeLabel(plan.plan_type)} />
                 <InfoField label="Billing Cycle" value={plan.billing_cycle} />
                 <InfoField label="Amount" value={plan.amount_display != null ? `${plan.amount_display} ${plan.currency || ''}`.trim() : null} />
                 <InfoField label="Amount (cents)" value={plan.amount_cents} mono />
                 <InfoField label="Currency" value={plan.currency} />
-                <InfoField label="Trial Days" value={plan.trial_days ?? 0} />
+                <InfoField label="Duration (days)" value={plan.duration_days ?? 0} />
                 <InfoField label="Created At" value={fmtDateTime(plan.created_at)} />
               </div>
             </div>
@@ -383,7 +398,6 @@ export default function PlanDetailPage({ planId, onBack }) {
               <div className="pdp-grid">
                 <InfoField label="Max Devices" value={plan.max_devices ?? '—'} />
                 <InfoField label="Max Concurrent Streams" value={plan.max_concurrent_streams ?? '—'} />
-                <InfoField label="Device Limit Policy" value={plan.device_limit_policy} />
                 <InfoField label="Requires Payment Method" value={plan.requires_payment_method ? 'Yes' : 'No'} />
                 <InfoField label="HD" value={
                   <span className={`pp-feature-chip ${features.hd ? 'on' : 'off'}`}>{features.hd ? <CheckIcon /> : <XIcon />} HD</span>

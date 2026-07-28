@@ -1,5 +1,5 @@
 // src/services/api.js
-// Real API — https://iptvapp.studyineurope.xyz/api/v1
+// Real API — https://iptvqa.studyineurope.xyz/api/v1
 
 const ORIGIN = import.meta.env.VITE_API_ORIGIN || '';
 const BASE = `${ORIGIN}/api/v1`;
@@ -1058,6 +1058,9 @@ export const apiFetchAppUsers = async (accessToken, params = {}) => {
     query.set('search', params.search);
   }
   if (params.status)       query.set('status', params.status);
+  if (params.plan_type)    query.set('plan_type', params.plan_type);
+  // Backend filters on the plan's `state` field, so the query key is plan_state.
+  if (params.plan_status)  query.set('plan_state', params.plan_status);
   if (params.device_status) query.set('device_status', params.device_status);
   if (params.country_code) query.set('country_code', params.country_code);
   if (params.trial_used !== undefined && params.trial_used !== '')

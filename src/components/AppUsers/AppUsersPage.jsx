@@ -174,6 +174,13 @@ const relativeTime = (iso) => {
   return `${val} ${unit}${val !== 1 ? 's' : ''} ago`;
 };
 
+// Plan type collapses to free / paid: 'free' stays free, any other non-empty plan
+// (monthly, annual, premium, …) is shown as paid; missing plan shows a dash.
+const planTypeLabel = (type) => {
+  if (type == null || type === '') return '—';
+  return String(type).toLowerCase() === 'free' ? 'Free' : 'Paid';
+};
+
 const statusClass = (s) => {
   if (s === 'active') return 'active';
   if (s === 'blocked') return 'blocked';
@@ -270,14 +277,15 @@ export default function AppUsersPage() {
     const p = {};
     if (filters.search) p.search = filters.search;
     if (filters.status !== 'all') p.status = filters.status;
-    if (filters.trial_used !== 'all') p.trial_used = filters.trial_used === 'yes';
+    if (filters.plan_type && filters.plan_type !== 'all') p.plan_type = filters.plan_type;
+    if (filters.plan_status && filters.plan_status !== 'all') p.plan_status = filters.plan_status;
     if (filters.sort_by) p.sort_by = filters.sort_by;
     if (filters.sort_order) p.sort_order = filters.sort_order;
     p.page = filters.page;
     p.page_size = filters.page_size;
     dispatch(fetchAppUsers(p));
-  }, [dispatch, filters.search, filters.status,
-    filters.trial_used, filters.sort_by, filters.sort_order, filters.page, filters.page_size]);
+  }, [dispatch, filters.search, filters.status, filters.plan_type, filters.plan_status,
+    filters.sort_by, filters.sort_order, filters.page, filters.page_size]);
 
   /* All hooks above — conditional render AFTER */
   if (detailUserId) {
@@ -534,44 +542,34 @@ export default function AppUsersPage() {
 
         <div className="su-toolbar-filters">
           <div className="su-filter">
-            <label>Status</label>
+            <label>Account Status</label>
             <select className="su-select" value={filters.status}
               onChange={(e) => dispatch(setFilters({ status: e.target.value, page: 1 }))}>
               <option value="all">All</option>
               <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
               <option value="blocked">Blocked</option>
-              <option value="suspended">Suspended</option>
             </select>
           </div>
 
           <div className="su-filter">
-            <label>Trial Used</label>
-            <select className="su-select" value={filters.trial_used}
-              onChange={(e) => dispatch(setFilters({ trial_used: e.target.value, page: 1 }))}>
+            <label>Plan Type</label>
+            <select className="su-select" value={filters.plan_type || 'all'}
+              onChange={(e) => dispatch(setFilters({ plan_type: e.target.value, page: 1 }))}>
               <option value="all">All</option>
-              <option value="yes">Yes</option>
-              <option value="no">No</option>
+              <option value="free">Free</option>
+              <option value="paid">Paid</option>
             </select>
           </div>
 
           <div className="su-filter">
-            <label>Sort By</label>
-            <select className="su-select" value={filters.sort_by}
-              onChange={(e) => dispatch(setFilters({ sort_by: e.target.value, page: 1 }))}>
-              <option value="created_at">Registered</option>
-              <option value="last_login_at">Last Login</option>
-              <option value="email">Email</option>
-              <option value="full_name">Name</option>
-            </select>
-          </div>
-
-          <div className="su-filter">
-            <label>Order</label>
-            <select className="su-select" value={filters.sort_order}
-              onChange={(e) => dispatch(setFilters({ sort_order: e.target.value, page: 1 }))}>
-              <option value="desc">Desc</option>
-              <option value="asc">Asc</option>
+            <label>Plan Status</label>
+            <select className="su-select" value={filters.plan_status || 'all'}
+              onChange={(e) => dispatch(setFilters({ plan_status: e.target.value, page: 1 }))}>
+              <option value="all">All</option>
+              <option value="active">Active</option>
+              <option value="expired">Expired</option>
+              <option value="payment_hold">Payment Hold</option>
+              <option value="revoked">Revoked</option>
             </select>
           </div>
         </div>
@@ -592,20 +590,17 @@ export default function AppUsersPage() {
                   <th {...thProps('email')}>
                     Email <SortIcon field="email" sortBy={filters.sort_by} sortOrder={filters.sort_order} />
                   </th>
-                  <th>MAC</th>
-                  <th>Device ID</th>
-                  <th>Status</th>
-                  <th>Email Verified</th>
-                  <th>Trial Used</th>
+                  <th>User Status</th>
+                  <th>Plan Type</th>
+                  <th>Plan Name</th>
                   <th {...thProps('active_device_count')}>
-                    Active Devices <SortIcon field="active_device_count" sortBy={filters.sort_by} sortOrder={filters.sort_order} />
+                    Device Active/Max <SortIcon field="active_device_count" sortBy={filters.sort_by} sortOrder={filters.sort_order} />
                   </th>
-                  <th>Subscriptions</th>
                   <th {...thProps('last_login_at')}>
                     Last Login <SortIcon field="last_login_at" sortBy={filters.sort_by} sortOrder={filters.sort_order} />
                   </th>
                   <th {...thProps('created_at')}>
-                    Registered <SortIcon field="created_at" sortBy={filters.sort_by} sortOrder={filters.sort_order} />
+                    Created <SortIcon field="created_at" sortBy={filters.sort_by} sortOrder={filters.sort_order} />
                   </th>
                 </tr>
               </thead>
@@ -625,18 +620,29 @@ export default function AppUsersPage() {
                           <SquareArrowRightExit size={15} />
                         </Button>
                       </td>
-                      <td className="su-email su-clickable" >{u.email || '—'}</td>
-                      <td className="su-mac">{u.virtual_mac || '—'}</td>
-                      <td className="su-device-id">{u.virtual_device_id || '—'}</td>
+                      <td className="su-email su-clickable">
+                        <div className="su-email-cell">
+                          <span className="su-email-addr">{u.email || '—'}</span>
+                          <BoolPill value={u.email_verified} yesLabel="Verified" noLabel="Unverified" />
+                        </div>
+                      </td>
                       <td>
                         <span className={`su-status-pill ${statusClass(u.status)}`}>
                           {u.status || '—'}
                         </span>
                       </td>
-                      <td><BoolPill value={u.email_verified} yesLabel="Verified" noLabel="No" /></td>
-                      <td><BoolPill value={u.trial_used} yesLabel="Yes" noLabel="No" /></td>
-                      <td className="su-num">{u.active_device_count ?? '—'}</td>
-                      <td className="su-num">{u.active_subscriptions_count ?? '—'}</td>
+                      <td>{planTypeLabel(u.plan?.type)}</td>
+                      <td>
+                        <div className="su-plan-cell">
+                          <span>{u.plan?.name || '—'}</span>
+                          {u.plan?.state && u.plan.state !== 'none' && (
+                            <span className={`su-plan-state ${statusClass(u.plan.state)}`}>{u.plan.state}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="su-num">
+                        {u.devices?.active ?? '—'}{u.devices?.max != null ? ` / ${u.devices.max}` : ''}
+                      </td>
                       <td>
                         <div>{relativeTime(u.last_login_at)}</div>
                         {u.last_login_at && u.last_login_at !== 'null' && (
@@ -650,7 +656,7 @@ export default function AppUsersPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={11} className="su-empty">No subscribers found.</td>
+                    <td colSpan={8} className="su-empty">No subscribers found.</td>
                   </tr>
                 )}
               </tbody>

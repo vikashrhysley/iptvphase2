@@ -192,41 +192,41 @@ const LIVE_SECTIONS = [
     groups: [
       {
         label: 'Total Traffic Till Date',
-        // Part-to-whole: activated + never-activated sum to the lifetime total.
+        // Part-to-whole: verified + never-verified sum to the lifetime total.
         totalPath: 'total_users_ever.count',
         bars: [
-          { label: 'Activated Users', path: 'total_users_ever.verified_users.activated_users.count', tone: 'good' },
-          { label: 'Never Activated Users', path: 'total_users_ever.verified_users.never_activated_users', tone: 'warn' },
+          { label: 'Verified Users', path: 'total_users_ever.verified_users.count', tone: 'good' },
+          { label: 'Never Verified', path: 'total_users_ever.never_verified', tone: 'warn' },
         ],
       },
       {
-        label: 'Activated Users',
+        label: 'Verified Users',
+        // Part-to-whole: issued-a-plan + not-issued-a-plan sum to the verified total.
+        totalPath: 'total_users_ever.verified_users.count',
+        bars: [
+          { label: 'Issued A Plan', path: 'total_users_ever.verified_users.issued_a_plan', tone: 'good' },
+          { label: 'Not Issued A Plan', path: 'total_users_ever.verified_users.not_issued_a_plan', tone: 'warn' },
+        ],
+      },
+      {
+        label: 'Issued A Plan',
         // Part-to-whole: enabled + blocked make up the presently-using users, and adding
-        // stopped gives the activated total.
-        totalPath: 'total_users_ever.verified_users.activated_users.count',
+        // stopped gives the issued-a-plan total.
+        totalPath: 'total_users_ever.verified_users.issued_a_plan.count',
         bars: [
-          { label: 'Enabled Users', path: 'total_users_ever.verified_users.activated_users.presently_using.by_account_state.enabled_users', tone: 'good' },
-          { label: 'Blocked Users', path: 'total_users_ever.verified_users.activated_users.presently_using.by_account_state.blocked_users', tone: 'bad' },
-          { label: 'Stopped Users', path: 'total_users_ever.verified_users.activated_users.stopped_using.count', tone: 'warn' },
+          { label: 'Enabled Users', path: 'total_users_ever.verified_users.issued_a_plan.presently_using.by_account_state.enabled_users', tone: 'good' },
+          { label: 'Blocked Users', path: 'total_users_ever.verified_users.issued_a_plan.presently_using.by_account_state.blocked_users', tone: 'bad' },
+          { label: 'Stopped Users', path: 'total_users_ever.verified_users.issued_a_plan.stopped_using.count', tone: 'warn' },
         ],
       },
       {
-        label: 'Stopped Working',
-        // Part-to-whole: plan-expired + payment-failed are the only two reasons, and
-        // they sum to the stopped count.
-        totalPath: 'total_users_ever.verified_users.activated_users.stopped_using.count',
+        label: 'Stopped Using',
+        // Part-to-whole: plan-expired + payment-failed + deleted sum to the stopped count.
+        totalPath: 'total_users_ever.verified_users.issued_a_plan.stopped_using.count',
         bars: [
-          { label: 'Plan Expired', path: 'total_users_ever.verified_users.activated_users.stopped_using.plan_expired_users', tone: 'warn' },
-          { label: 'Payment Failed', path: 'total_users_ever.verified_users.activated_users.stopped_using.payment_failed_users', tone: 'bad' },
-          { label: 'Deleted Users', path: 'total_users_ever.deleted_users', tone: 'muted' },
-        ],
-      },
-      {
-        label: 'Growth',
-        // 24h is a subset of 7d, so these overlap — no total, the header shows the peak.
-        bars: [
-          { label: 'New Signup 24h', path: 'growth.new_signups_24h', tone: 'good' },
-          { label: 'New Signup 7d', path: 'growth.new_signups_7d', tone: 'good' },
+          { label: 'Plan Expired', path: 'total_users_ever.verified_users.issued_a_plan.stopped_using.plan_expired_users', tone: 'warn' },
+          { label: 'Payment Failed', path: 'total_users_ever.verified_users.issued_a_plan.stopped_using.payment_failed_users', tone: 'bad' },
+          { label: 'Deleted Users', path: 'total_users_ever.verified_users.issued_a_plan.stopped_using.deleted_users', tone: 'muted' },
         ],
       },
     ],
@@ -268,7 +268,7 @@ const LIVE_SECTIONS = [
         bars: [
           { label: 'Plan Expired Licenses', path: 'total_licenses_ever.stopped_working.plan_expired_licenses', tone: 'warn' },
           { label: 'Payment Failed', path: 'total_licenses_ever.stopped_working.payment_failed_licenses', tone: 'bad' },
-          { label: 'Deleted Licenses', path: 'total_licenses_ever.stopped_working.deleted_licenses', tone: 'muted' },
+          { label: 'Deleted Licenses', path: 'total_licenses_ever.deleted_licenses', tone: 'muted' },
         ],
       },
       {
@@ -508,9 +508,24 @@ const flattenStats = (value, prefix = '') => {
   });
 };
 
-const getNestedValue = (source, path) => (
-  path.split('.').reduce((value, key) => value?.[key], source)
-);
+// Some backends nest the user/license tree under an `existing_users` / `existing_licenses`
+// wrapper and some flatten it away. Config paths are written without the wrapper; when a
+// segment isn't found directly, auto-descend through a wrapper that does contain it, so the
+// same paths resolve against both the nested and flattened shapes.
+const OPTIONAL_WRAPPERS = ['existing_users', 'existing_licenses'];
+
+const getNestedValue = (source, path) => {
+  let value = source;
+  for (const key of path.split('.')) {
+    if (value == null) return undefined;
+    if (value[key] === undefined) {
+      const wrapper = OPTIONAL_WRAPPERS.find(w => value[w] && value[w][key] !== undefined);
+      if (wrapper) value = value[wrapper];
+    }
+    value = value?.[key];
+  }
+  return value;
+};
 
 const firstPresent = (...values) => (
   values.find(value => value !== undefined && value !== null && value !== '')
