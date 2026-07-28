@@ -394,6 +394,21 @@
   color: var(--text-secondary);
 }
 
+/* Email + verification stacked in one cell */
+.su-email-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.su-email-addr {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
 
 .su-phone {
   color: var(--text-muted);
@@ -417,6 +432,37 @@
   text-align: center;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
+}
+
+.su-capitalize {
+  text-transform: capitalize;
+}
+
+/* Plan name + its state stacked in one cell */
+.su-plan-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.su-plan-state {
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: capitalize;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-success) 14%, transparent);
+  color: var(--accent-success);
+}
+.su-plan-state.blocked,
+.su-plan-state.suspended {
+  background: color-mix(in srgb, var(--accent-danger) 14%, transparent);
+  color: var(--accent-danger);
+}
+.su-plan-state.inactive,
+.su-plan-state.unknown {
+  background: color-mix(in srgb, var(--text-muted) 18%, transparent);
+  color: var(--text-muted);
 }
 
 

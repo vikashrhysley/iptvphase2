@@ -748,14 +748,6 @@ export default function AuditPage() {
         </div>
       </div>
 
-      {/* ── Stat cards ── */}
-      <div className="al-stats">
-        <StatCard icon={<ActivityIcon />} label="Total Logs"      value={serverTotal} color="#60a5fa" glow="rgba(96,165,250,0.15)" />
-        <StatCard icon={<AlertTriIcon />} label="Critical Events" value={criticalCount}        color="#f87171" glow="rgba(248,113,113,0.15)" />
-        <StatCard icon={<AlertTriIcon />} label="Warnings"        value={warningCount}         color="#fbbf24" glow="rgba(251,191,36,0.15)"  />
-        <StatCard icon={<InfoIcon />}     label="Info Events"     value={infoCount}            color="#38bdf8" glow="rgba(56,189,248,0.15)"  />
-      </div>
-
       {/* ── Filters ── */}
       <div className="al-filters">
         <div className="al-filter-group">
@@ -813,6 +805,14 @@ export default function AuditPage() {
             ✕ Clear Filters
           </button>
         )}
+      </div>
+
+      {/* ── Stat cards ── */}
+      <div className="al-stats">
+        <StatCard icon={<ActivityIcon />} label="Total Logs"      value={serverTotal} color="#60a5fa" glow="rgba(96,165,250,0.15)" />
+        <StatCard icon={<AlertTriIcon />} label="Critical Events" value={criticalCount}        color="#f87171" glow="rgba(248,113,113,0.15)" />
+        <StatCard icon={<AlertTriIcon />} label="Warnings"        value={warningCount}         color="#fbbf24" glow="rgba(251,191,36,0.15)"  />
+        <StatCard icon={<InfoIcon />}     label="Info Events"     value={infoCount}            color="#38bdf8" glow="rgba(56,189,248,0.15)"  />
       </div>
 
       {/* ── Table ── */}

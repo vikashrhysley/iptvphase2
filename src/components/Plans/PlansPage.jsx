@@ -20,34 +20,40 @@ const fmtDate = (iso) => {
   try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch { return '—'; }
 };
 
-// Display name for a raw plan_type value: 'trial' -> 'Trial', 'monthly' -> 'Monthly'.
-const planTypeLabel = (type) => (
-  type ? type.charAt(0).toUpperCase() + type.slice(1) : '—'
-);
+// plan_type is strictly 'free' | 'paid' on the wire. Display mapping is UI-only:
+// free -> "Trial" (the single default trial plan), paid -> "Paid".
+const planTypeLabel = (type) => {
+  const v = String(type || '').toLowerCase();
+  if (v === 'free') return 'Trial';
+  if (v === 'paid') return 'Paid';
+  return type ? type.charAt(0).toUpperCase() + type.slice(1) : '—';
+};
 
 const planClass = (p) => {
   const v = (p || '').toLowerCase();
-  if (v.includes('trial'))   return 'pp-type-trial';
-  if (v.includes('life'))    return 'pp-type-lifetime';
-  if (v.includes('premium') || v.includes('pro')) return 'pp-type-premium';
-  return 'pp-type-default';
+  if (v === 'free' || v.includes('trial')) return 'pp-type-trial';
+  return 'pp-type-premium';
 };
 
 /* ── Create Plan Modal ──────────────────────────────────── */
+// plan_type defaults to 'paid' — the trial is a one-time setup and its option is
+// disabled once an active trial exists.
 const EMPTY_FORM = {
-  name: '', plan_code: '', description: '', plan_type: 'monthly',
-  billing_cycle: 'monthly', amount: '', currency: 'USD', trial_days: '',
+  name: '', plan_code: '', description: '', plan_type: 'paid',
+  billing_cycle: 'monthly', amount: '', currency: 'USD', duration_days: '',
   max_devices: 1, max_concurrent_streams: 1,
   hd: false, fourk: false,
-  device_limit_policy: 'hard_block', requires_payment_method: true,
+  requires_payment_method: true,
   authorization_type: 'setup_intent', requires_phone_verify: true, is_default: false,
 };
 
-function CreatePlanModal({ onClose }) {
+function CreatePlanModal({ onClose, hasActiveTrial }) {
   const dispatch = useDispatch();
   const { createLoading, createError, createSuccess } = useSelector((s) => s.plans);
   const [form, setForm] = useState(EMPTY_FORM);
   const [localError, setLocalError] = useState('');
+
+  const isTrial = form.plan_type === 'free';
 
   const set = (key, val) => {
     setForm((p) => ({ ...p, [key]: val }));
@@ -57,34 +63,55 @@ function CreatePlanModal({ onClose }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.name.trim())      { setLocalError('Name is required.'); return; }
     if (!form.plan_code.trim()) { setLocalError('Plan code is required.'); return; }
     if (!/^[a-z0-9_]+$/.test(form.plan_code.trim())) { setLocalError('Plan code must be lowercase letters, numbers and underscores only.'); return; }
-    if (form.amount === '') { setLocalError('Amount is required.'); return; }
-    const fieldError = validateAmount(form.amount)
-      || validateInteger(form.trial_days, 'Trial days', 365)
-      || validateInteger(form.max_devices, 'Max devices', 100)
-      || validateInteger(form.max_concurrent_streams, 'Max concurrent streams', 10);
-    if (fieldError) { setLocalError(fieldError); return; }
 
+    const durationError = validateInteger(form.duration_days, 'Duration (days)', 365);
+    const limitsError = validateInteger(form.max_devices, 'Max devices', 100)
+      || validateInteger(form.max_concurrent_streams, 'Max concurrent streams', 10);
+    if (limitsError) { setLocalError(limitsError); return; }
+
+    // Fields shared by both plan types.
     const payload = {
-      name:                    form.name.trim(),
-      plan_code:               form.plan_code.trim(),
-      plan_type:               form.plan_type,
-      billing_cycle:           form.billing_cycle,
-      amount:                  Number(form.amount),
-      requires_payment_method: form.requires_payment_method,
-      authorization_type:      form.authorization_type,
-      requires_phone_verify:   form.requires_phone_verify,
-      max_devices:             Number(form.max_devices),
-      max_concurrent_streams:  Number(form.max_concurrent_streams),
-      device_limit_policy:     form.device_limit_policy,
-      is_default:              form.is_default,
-      features:                { hd: form.hd, '4k': form.fourk },
+      plan_code:              form.plan_code.trim(),
+      plan_type:              form.plan_type,
+      requires_phone_verify:  form.requires_phone_verify,
+      max_devices:            Number(form.max_devices),
+      max_concurrent_streams: Number(form.max_concurrent_streams),
+      features:               { hd: form.hd, '4k': form.fourk },
+      // NOTE: device_limit_policy is intentionally NOT sent — it is not a backend field.
     };
     if (form.description.trim()) payload.description = form.description.trim();
-    if (form.currency.trim())    payload.currency     = form.currency.trim().toUpperCase();
-    if (form.trial_days !== '')  payload.trial_days   = Number(form.trial_days);
+    if (form.currency.trim())    payload.currency   = form.currency.trim().toUpperCase();
+
+    if (isTrial) {
+      // Trial: the backend force-shapes these regardless, so mirror them explicitly.
+      if (form.duration_days === '') { setLocalError('Duration is required for a Trial.'); return; }
+      if (durationError) { setLocalError(durationError); return; }
+      if (Number(form.duration_days) < 1) { setLocalError('A Trial must last at least 1 day.'); return; }
+      const n = Number(form.duration_days);
+      payload.name = `Trial (${n} day${n === 1 ? '' : 's'})`;
+      payload.amount = 0;
+      payload.billing_cycle = 'once';
+      payload.duration_days = n;
+      payload.requires_payment_method = false;
+      payload.is_default = true;
+    } else {
+      // Paid plan.
+      if (!form.name.trim()) { setLocalError('Name is required.'); return; }
+      if (form.amount === '') { setLocalError('Amount is required.'); return; }
+      const amountError = validateAmount(form.amount);
+      if (amountError) { setLocalError(amountError); return; }
+      if (Number(form.amount) <= 0) { setLocalError('A paid plan amount must be greater than 0.'); return; }
+      if (durationError) { setLocalError(durationError); return; }
+      payload.name = form.name.trim();
+      payload.amount = Number(form.amount);
+      payload.billing_cycle = form.billing_cycle;
+      payload.requires_payment_method = form.requires_payment_method;
+      payload.authorization_type = form.authorization_type;
+      payload.is_default = form.is_default;
+      if (form.duration_days !== '') payload.duration_days = Number(form.duration_days);
+    }
 
     dispatch(clearCreateState());
     dispatch(createPlan(payload));
@@ -100,11 +127,16 @@ function CreatePlanModal({ onClose }) {
         <p className="pp-modal-sub">Plan code is immutable after creation and must be globally unique.</p>
 
         <div className="pp-modal-grid">
-          {/* Name */}
-          <label className="pp-modal-field pp-field-full">
-            <span>Name <span className="pp-required">*</span></span>
-            <input value={form.name} onChange={(e) => set('name', e.target.value)}
-              placeholder="Monthly Basic" disabled={createLoading} />
+          {/* Plan type — strictly Trial (free) / Paid (paid) */}
+          <label className="pp-modal-field">
+            <span>Plan Type <span className="pp-required">*</span></span>
+            <select value={form.plan_type} onChange={(e) => set('plan_type', e.target.value)} disabled={createLoading}>
+              <option value="free" disabled={hasActiveTrial}
+                title={hasActiveTrial ? 'A trial plan already exists — deactivate it first.' : undefined}>
+                Trial{hasActiveTrial ? ' (already exists)' : ''}
+              </option>
+              <option value="paid">Paid</option>
+            </select>
           </label>
 
           {/* Plan code */}
@@ -114,6 +146,18 @@ function CreatePlanModal({ onClose }) {
               placeholder="monthly_basic" disabled={createLoading} />
           </label>
 
+          {/* Name — free text for Paid; auto-generated & locked for Trial */}
+          <label className="pp-modal-field pp-field-full">
+            <span>Name {!isTrial && <span className="pp-required">*</span>}</span>
+            {isTrial ? (
+              <input value={form.duration_days ? `Trial (${form.duration_days} day${Number(form.duration_days) === 1 ? '' : 's'})` : 'Trial'}
+                disabled readOnly title="Auto-generated from the duration" />
+            ) : (
+              <input value={form.name} onChange={(e) => set('name', e.target.value)}
+                placeholder="Monthly Basic" disabled={createLoading} />
+            )}
+          </label>
+
           {/* Currency */}
           <label className="pp-modal-field">
             <span>Currency</span>
@@ -121,41 +165,39 @@ function CreatePlanModal({ onClose }) {
               placeholder="USD" maxLength={3} disabled={createLoading} />
           </label>
 
-          {/* Plan type */}
+          {/* Billing cycle — Paid only (Trial is forced to 'once') */}
+          {!isTrial && (
+            <label className="pp-modal-field">
+              <span>Billing Cycle <span className="pp-required">*</span></span>
+              <select value={form.billing_cycle === 'once' ? 'monthly' : form.billing_cycle}
+                onChange={(e) => set('billing_cycle', e.target.value)} disabled={createLoading}>
+                <option value="monthly">Monthly</option>
+                <option value="annual">Annual</option>
+              </select>
+            </label>
+          )}
+
+          {/* Amount — forced 0 & locked for Trial */}
           <label className="pp-modal-field">
-            <span>Plan Type <span className="pp-required">*</span></span>
-            <select value={form.plan_type} onChange={(e) => set('plan_type', e.target.value)} disabled={createLoading}>
-              <option value="trial">Trial</option>
-              <option value="monthly">Monthly</option>
-              <option value="annual">Annual</option>
-            </select>
+            <span>Amount ($) {!isTrial && <span className="pp-required">*</span>}</span>
+            {isTrial ? (
+              <input value="0.00" disabled readOnly title="Trial plans are free" />
+            ) : (
+              <input type="number" min={0} max={AMOUNT_MAX} step="0.01" value={form.amount}
+                onChange={(e) => isAmountInputAllowed(e.target.value) && set('amount', e.target.value)}
+                onKeyDown={blockNonNumericKeys} placeholder="9.99" disabled={createLoading} />
+            )}
           </label>
 
-          {/* Billing cycle */}
-          <label className="pp-modal-field">
-            <span>Billing Cycle <span className="pp-required">*</span></span>
-            <select value={form.billing_cycle} onChange={(e) => set('billing_cycle', e.target.value)} disabled={createLoading}>
-              <option value="once">Once</option>
-              <option value="monthly">Monthly</option>
-              <option value="annual">Annual</option>
-            </select>
-          </label>
-
-          {/* Amount */}
-          <label className="pp-modal-field">
-            <span>Amount ($) <span className="pp-required">*</span></span>
-            <input type="number" min={0} max={AMOUNT_MAX} step="0.01" value={form.amount}
-              onChange={(e) => isAmountInputAllowed(e.target.value) && set('amount', e.target.value)}
-              onKeyDown={blockNonNumericKeys} placeholder="9.99" disabled={createLoading} />
-          </label>
-
-          {/* Trial days */}
-          <label className="pp-modal-field">
-            <span>Trial Days</span>
-            <input type="number" min={0} max={365} value={form.trial_days}
-              onChange={(e) => isIntegerInputAllowed(e.target.value, 365) && set('trial_days', e.target.value)}
-              onKeyDown={blockIntegerKeys} placeholder="7" disabled={createLoading} />
-          </label>
+          {/* Duration (days) — required for Trial, optional for Paid */}
+          {isTrial && (
+            <label className="pp-modal-field">
+              <span>Duration (days) <span className="pp-required">*</span></span>
+              <input type="number" min={1} max={365} value={form.duration_days}
+                onChange={(e) => isIntegerInputAllowed(e.target.value, 365) && set('duration_days', e.target.value)}
+                onKeyDown={blockIntegerKeys} placeholder="7" disabled={createLoading} />
+            </label>
+          )}
 
           {/* Max devices */}
           <label className="pp-modal-field">
@@ -173,23 +215,16 @@ function CreatePlanModal({ onClose }) {
               onKeyDown={blockIntegerKeys} disabled={createLoading} />
           </label>
 
-          {/* Device limit policy */}
-          <label className="pp-modal-field">
-            <span>Device Limit Policy</span>
-            <select value={form.device_limit_policy} onChange={(e) => set('device_limit_policy', e.target.value)} disabled={createLoading}>
-              <option value="hard_block">Hard Block</option>
-              <option value="prompt_only">Prompt Only</option>
-            </select>
-          </label>
-
-          {/* Authorization type */}
-          <label className="pp-modal-field">
-            <span>Authorization Type</span>
-            <select value={form.authorization_type} onChange={(e) => set('authorization_type', e.target.value)} disabled={createLoading}>
-              <option value="setup_intent">Setup Intent</option>
-              <option value="auth_hold">Auth Hold</option>
-            </select>
-          </label>
+          {/* Authorization type — Paid only (no payment on a Trial) */}
+          {!isTrial && (
+            <label className="pp-modal-field">
+              <span>Authorization Type</span>
+              <select value={form.authorization_type} onChange={(e) => set('authorization_type', e.target.value)} disabled={createLoading}>
+                <option value="setup_intent">Setup Intent</option>
+                <option value="auth_hold">Auth Hold</option>
+              </select>
+            </label>
+          )}
 
           {/* Description */}
           <label className="pp-modal-field pp-field-full">
@@ -200,11 +235,14 @@ function CreatePlanModal({ onClose }) {
 
           {/* Checkboxes row */}
           <div className="pp-modal-checks pp-field-full">
-            <label className="pp-check-label">
-              <input type="checkbox" checked={form.requires_payment_method}
-                onChange={(e) => set('requires_payment_method', e.target.checked)} disabled={createLoading} />
-              Requires Payment Method
-            </label>
+            {/* Requires payment method — Paid only (Trial forces false) */}
+            {!isTrial && (
+              <label className="pp-check-label">
+                <input type="checkbox" checked={form.requires_payment_method}
+                  onChange={(e) => set('requires_payment_method', e.target.checked)} disabled={createLoading} />
+                Requires Payment Method
+              </label>
+            )}
             <label className="pp-check-label">
               <input type="checkbox" checked={form.requires_phone_verify}
                 onChange={(e) => set('requires_phone_verify', e.target.checked)} disabled={createLoading} />
@@ -220,11 +258,14 @@ function CreatePlanModal({ onClose }) {
                 onChange={(e) => set('fourk', e.target.checked)} disabled={createLoading} />
               4K
             </label>
-            <label className="pp-check-label">
-              <input type="checkbox" checked={form.is_default}
-                onChange={(e) => set('is_default', e.target.checked)} disabled={createLoading} />
-              Set as Default for this Plan Type
-            </label>
+            {/* Default toggle — Paid only (a Trial is always the default free plan) */}
+            {!isTrial && (
+              <label className="pp-check-label">
+                <input type="checkbox" checked={form.is_default}
+                  onChange={(e) => set('is_default', e.target.checked)} disabled={createLoading} />
+                Set as Default Paid Plan
+              </label>
+            )}
           </div>
         </div>
 
@@ -258,7 +299,7 @@ function PlanCard({ plan, onClick }) {
   return (
     <div className={`pp-card${!plan.is_active ? ' inactive' : ''}`} onClick={onClick} role="button" tabIndex={0}>
       <div className="pp-card-top">
-        <span className={`pp-type-pill ${planClass(plan.plan_type)}`}>{plan.plan_type || '—'}</span>
+        <span className={`pp-type-pill ${planClass(plan.plan_type)}`}>{planTypeLabel(plan.plan_type)}</span>
         <div className="pp-badges">
           {plan.is_default && <span className="pp-badge default">Default</span>}
           <span className={`pp-badge ${plan.is_active ? 'active' : 'inactive'}`}>{plan.is_active ? 'Active' : 'Inactive'}</span>
@@ -287,8 +328,7 @@ function PlanCard({ plan, onClick }) {
       <div className="pp-limits">
         <div className="pp-limit-row"><span>Max Devices</span><strong>{plan.max_devices ?? '—'}</strong></div>
         <div className="pp-limit-row"><span>Max Streams</span><strong>{plan.max_concurrent_streams ?? '—'}</strong></div>
-        <div className="pp-limit-row"><span>Trial Days</span><strong>{plan.trial_days ?? 0}</strong></div>
-        <div className="pp-limit-row"><span>Device Policy</span><strong>{plan.device_limit_policy || '—'}</strong></div>
+        <div className="pp-limit-row"><span>Duration (days)</span><strong>{plan.duration_days ?? 0}</strong></div>
         <div className="pp-limit-row"><span>Payment Required</span><strong>{plan.requires_payment_method ? 'Yes' : 'No'}</strong></div>
       </div>
 
@@ -309,10 +349,9 @@ export default function PlansPage() {
   const [planType,     setPlanType]     = useState('all');
   const [status,       setStatus]       = useState('all');
 
-  // Options come from the data rather than a hardcoded list, so a plan type added
-  // server-side shows up here without a code change.
-  const planTypes = useMemo(
-    () => [...new Set(plans.map(p => p.plan_type).filter(Boolean))].sort(),
+  // Active trial gate: only one active free/trial plan may exist at a time.
+  const hasActiveTrial = useMemo(
+    () => plans.some(p => p.is_active && p.plan_type === 'free'),
     [plans]
   );
 
@@ -341,7 +380,7 @@ export default function PlansPage() {
 
   return (
     <>
-    {showCreate && <CreatePlanModal onClose={handleCloseCreate} />}
+    {showCreate && <CreatePlanModal onClose={handleCloseCreate} hasActiveTrial={hasActiveTrial} />}
     <div className="pp-page">
       {/* ── Header ── */}
       <div className="pp-header">
@@ -404,9 +443,8 @@ export default function PlansPage() {
             <label htmlFor="pp-plan-type">Plan Type</label>
             <select id="pp-plan-type" className="pp-select" value={planType} onChange={(e) => setPlanType(e.target.value)}>
               <option value="all">All</option>
-              {planTypes.map(type => (
-                <option key={type} value={type}>{planTypeLabel(type)}</option>
-              ))}
+              <option value="free">Trial</option>
+              <option value="paid">Paid</option>
             </select>
           </div>
 
