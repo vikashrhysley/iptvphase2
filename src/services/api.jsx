@@ -1,5 +1,5 @@
 // src/services/api.js
-// Real API — https://iptvqa.studyineurope.xyz/api/v1
+// Real API — https://iptvapp.studyineurope.xyz/api/v1
 
 const ORIGIN = import.meta.env.VITE_API_ORIGIN || '';
 const BASE = `${ORIGIN}/api/v1`;
@@ -656,6 +656,16 @@ export const apiFetchLicenseStats = async (accessToken) => {
     method: 'GET', headers: { Authorization: `Bearer ${accessToken}` },
   });
   return res.data || res;
+};
+
+// GET /admin/licenses/{id}/history — change history for one license
+export const apiFetchLicenseHistory = async (accessToken, licenseId) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/licenses/${licenseId}/history`, {
+    method: 'GET', headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const raw = res.data ?? res;
+  return Array.isArray(raw) ? raw : (raw.history ?? raw.items ?? []);
 };
 
 // GET /admin/licenses/expiring — licenses expiring within N days
@@ -1382,7 +1392,8 @@ export const apiFetchSubscriptionHistory = async (accessToken, id) => {
     method: 'GET',
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  return res.data || res;
+  const raw = res.data ?? res;
+  return Array.isArray(raw) ? raw : (raw.history ?? raw.items ?? []);
 };
 
 // PATCH /admin/subscriptions/{id} - partial update (admin+)
@@ -1420,6 +1431,42 @@ export const apiExtendTrial = async (accessToken, id, extendDays, reason) => {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify({ extend_days: extendDays, reason }),
+  });
+  return res.data || res;
+};
+
+// POST /admin/subscriptions/{id}/extend - push the term forward by extend_days (1–3650).
+// An expired subscription comes back to active. Body: { extend_days, reason }.
+export const apiExtendSubscription = async (accessToken, id, extendDays, reason) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/subscriptions/${id}/extend`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ extend_days: extendDays, reason }),
+  });
+  return res.data || res;
+};
+
+// POST /admin/subscriptions/{id}/devicelimit - set the per-user device count (absolute
+// value, 1–50). Backend refuses (409) to drop below live device usage. Body: { max_devices, reason }.
+export const apiSetSubscriptionDeviceLimit = async (accessToken, id, maxDevices, reason) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/subscriptions/${id}/devicelimit`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ max_devices: maxDevices, reason }),
+  });
+  return res.data || res;
+};
+
+// POST /admin/subscriptions/{id}/activate - un-cancel a subscription (cancelled → active).
+// Only valid from cancelled (otherwise 409). Body: { reason }.
+export const apiActivateSubscription = async (accessToken, id, reason) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/subscriptions/${id}/activate`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ reason }),
   });
   return res.data || res;
 };
@@ -1736,4 +1783,101 @@ export const apiPostRiskOverride = async (accessToken, deviceId, body) => {
     body: JSON.stringify(body),
   });
   return res;
+};
+
+// ─────────────────────────────────────────────────────────
+// NOTIFICATIONS APIs  (per-admin read state; "live" via polling)
+// ─────────────────────────────────────────────────────────
+
+// GET /admin/notifications/ — paginated, filterable list (newest first).
+// is_read in the response is relative to the calling admin.
+export const apiFetchNotifications = async (accessToken, params = {}) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const query = new URLSearchParams();
+  if (params.is_read !== undefined && params.is_read !== '' && params.is_read !== 'all') {
+    query.set('is_read', String(params.is_read));
+  }
+  if (params.priority) query.set('priority', params.priority);
+  if (params.category) query.set('category', params.category);
+  if (params.include_archived) query.set('include_archived', 'true');
+  if (params.date_from) query.set('date_from', params.date_from);
+  if (params.date_to)   query.set('date_to', params.date_to);
+  if (params.page)      query.set('page', String(params.page));
+  if (params.page_size) query.set('page_size', String(params.page_size));
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  const res = await request(`${BASE}/admin/notifications/${qs}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const raw   = res.data ?? res;
+  const items = Array.isArray(raw) ? raw : (raw.data ?? []);
+  const meta  = res.meta ?? raw.meta ?? {};
+  return {
+    items,
+    page:       meta.page       ?? params.page ?? 1,
+    pageSize:   meta.page_size   ?? params.page_size ?? 20,
+    total:      meta.total       ?? items.length,
+    totalPages: meta.total_pages ?? 1,
+  };
+};
+
+// GET /admin/notifications/summary — per-category unread counts for the calling admin.
+// Poll every 30–60s (drives the bell-dropdown breakdown).
+export const apiFetchNotificationSummary = async (accessToken) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/notifications/summary`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const d = res.data ?? res;
+  return {
+    totalUnread: d.total_unread ?? 0,
+    byCategory:  Array.isArray(d.by_category) ? d.by_category : [],
+  };
+};
+
+// GET /admin/notifications/unread-count — total unread for the calling admin.
+// Cheap; poll every 15–20s to drive the bell badge (pause on tab hidden).
+export const apiFetchNotificationUnreadCount = async (accessToken) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/notifications/unread-count`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const d = res.data ?? res;
+  return d.unread_count ?? 0;
+};
+
+// GET /admin/notifications/{id} — full detail (writes a notification.viewed audit row).
+// No trailing slash: a slash here 307-redirects and browsers drop Authorization across
+// the redirect → "Not authenticated". (The collection list keeps its slash and works.)
+export const apiFetchNotificationDetail = async (accessToken, id) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/notifications/${id}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data ?? res;
+};
+
+// PATCH /admin/notifications/{id}/read — mark one read for the calling admin (idempotent).
+export const apiMarkNotificationRead = async (accessToken, id) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/notifications/${id}/read`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data ?? res;
+};
+
+// PATCH /admin/notifications/read-all — bulk-mark the calling admin's unread as read.
+// Optionally scoped to one category.
+export const apiMarkAllNotificationsRead = async (accessToken, category) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const qs = category ? `?category=${encodeURIComponent(category)}` : '';
+  const res = await request(`${BASE}/admin/notifications/read-all${qs}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data ?? res;
 };

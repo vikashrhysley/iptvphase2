@@ -1,6 +1,7 @@
 // src/components/Layout/Header.js
 import { useEffect, useRef, useState } from 'react';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
+import { fetchNotificationSummary, markAllNotificationsRead, setNotificationFilters } from '../../store/slices/notificationsSlice';
 import { useTheme } from '../../context/ThemeContext';
 import './Header.css';
 
@@ -8,8 +9,7 @@ const PAGE_TITLES = {
   home:            'Dashboard',
   analytics:       'Analytics',
   admin_users:     'Admin Users',
-  app_users:       'Subscriber',
-  subscriptions:   'Subscriptions',
+  app_users:       'App Users',
   plans:           'Plans',
   device:          'Device Management',
   heartbeat:       'Heartbeat Monitoring',
@@ -22,6 +22,7 @@ const PAGE_TITLES = {
   profile:         'My Profile',
   audit:           'Audit Logs',
   rbac:            'RBAC',
+  notifications:   'Notifications',
 };
 
 const BellIcon = () => (
@@ -51,6 +52,9 @@ const MoonIcon = () => (
   </svg>
 );
 
+// Notification category → display label (USER → User, SUBSCRIPTION → Subscription…)
+const catLabel = (c) => (c ? c.charAt(0) + c.slice(1).toLowerCase() : c);
+
 const MenuIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
     <line x1="3" y1="6" x2="21" y2="6" />
@@ -59,23 +63,36 @@ const MenuIcon = () => (
   </svg>
 );
 
-export default function Header({ activePage, dashboardTab, analyticsTab, sidebarCollapsed, onMenuToggle }) {
+export default function Header({ activePage, dashboardTab, analyticsTab, sidebarCollapsed, onMenuToggle, onNavigate }) {
   const { user }   = useSelector(s => s.auth);
+  const dispatch   = useDispatch();
   const { theme, toggleTheme } = useTheme();
 
-  // Notifications — no feed wired yet, so this shows an empty state. `notifications`
-  // is ready to be populated from a real source (audit/security events) later.
+  // Notifications — badge + per-category breakdown are driven by the polling in
+  // useNotificationPolling (unread-count + summary). Opening the dropdown refreshes summary.
+  const unreadCount = useSelector(s => s.notifications.unreadCount);
+  const summary     = useSelector(s => s.notifications.summary);
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef(null);
-  const notifications = [];
-  const unreadCount = notifications.length;
 
   useEffect(() => {
-    if (!notifOpen) return;
+    if (!notifOpen) return undefined;
+    dispatch(fetchNotificationSummary());   // freshen on open
     const onClick = (e) => { if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false); };
     document.addEventListener('mousedown', onClick);
     return () => document.removeEventListener('mousedown', onClick);
-  }, [notifOpen]);
+  }, [notifOpen, dispatch]);
+
+  const goToNotifications = (category) => {
+    setNotifOpen(false);
+    // Seed the list filter (clicking a category row → that category's unread).
+    dispatch(setNotificationFilters({
+      category: category || '',
+      is_read: category ? 'false' : 'all',
+      page: 1,
+    }));
+    onNavigate?.('notifications');
+  };
 
   const left = sidebarCollapsed ? 'var(--sidebar-collapsed)' : 'var(--sidebar-width)';
   const breadcrumb = activePage === 'home'
@@ -129,23 +146,37 @@ export default function Header({ activePage, dashboardTab, analyticsTab, sidebar
             <div className="notif-panel" role="menu">
               <div className="notif-panel-head">
                 <span>Notifications</span>
-                {unreadCount > 0 && <span className="notif-count">{unreadCount}</span>}
+                {unreadCount > 0 && (
+                  <button
+                    className="notif-markall"
+                    onClick={() => dispatch(markAllNotificationsRead())}
+                    title="Mark all as read"
+                  >
+                    Mark all read
+                  </button>
+                )}
               </div>
               <div className="notif-panel-body">
-                {notifications.length === 0 ? (
+                {(summary?.byCategory?.length ?? 0) === 0 || summary.totalUnread === 0 ? (
                   <div className="notif-empty">
                     <BellIcon />
                     <span>You're all caught up</span>
                   </div>
                 ) : (
-                  notifications.map((n, i) => (
-                    <div className="notif-item" key={i}>
-                      <span className="notif-item-title">{n.title}</span>
-                      <span className="notif-item-time">{n.time}</span>
-                    </div>
-                  ))
+                  summary.byCategory
+                    .filter(c => (c.unread_count ?? 0) > 0)
+                    .map(c => (
+                      <button className="notif-cat-row" key={c.category} onClick={() => goToNotifications(c.category)}>
+                        <span className={`notif-cat-dot cat-${c.category?.toLowerCase()}`} />
+                        <span className="notif-cat-label">{catLabel(c.category)}</span>
+                        <span className="notif-cat-count">{c.unread_count}</span>
+                      </button>
+                    ))
                 )}
               </div>
+              <button className="notif-viewall" onClick={() => goToNotifications()}>
+                View all notifications
+              </button>
             </div>
           )}
         </div>
