@@ -343,7 +343,12 @@ export default function PlansPage() {
   const { plans, loading, error } = useSelector((s) => s.plans);
   const { user: me } = useSelector((s) => s.auth);
   const isSuperAdmin = me?.role === 'superadmin';
-  const [detailPlanId, setDetailPlanId] = useState(null);
+  // Open a specific plan when navigated here with intent (e.g. from the license popup).
+  const [detailPlanId, setDetailPlanId] = useState(() => {
+    const pending = sessionStorage.getItem('openPlanId');
+    if (pending) { sessionStorage.removeItem('openPlanId'); return pending; }
+    return null;
+  });
   const [showCreate,   setShowCreate]   = useState(false);
   const [search,       setSearch]       = useState('');
   const [planType,     setPlanType]     = useState('all');

@@ -2,6 +2,7 @@
 import React, { Suspense, useState, useEffect } from 'react';
 import Sidebar from '../components/Layout/Sidebar';
 import Header from '../components/Layout/Header';
+import useNotificationPolling from '../hooks/useNotificationPolling';
 
 const DashboardTable     = React.lazy(() => import('../components/Dashboard/DashboardTable'));
 const DevicePage         = React.lazy(() => import('../components/Device/DevicePage'));
@@ -13,7 +14,6 @@ const AdminUsersPage     = React.lazy(() => import('../components/AdminUser/Admi
 const AppUsersPage       = React.lazy(() => import('../components/AppUsers/AppUsersPage'));
 const AuditPage          = React.lazy(() => import('../components/Audit/AuditPage'));
 const RbacPage           = React.lazy(() => import('../components/Rbac/RbacPage'));
-const SubscriptionsPage  = React.lazy(() => import('../components/Subscriptions/SubscriptionsPage'));
 const PlansPage          = React.lazy(() => import('../components/Plans/PlansPage'));
 const AnalyticsPage      = React.lazy(() => import('../components/Analytics/AnalyticsPage'));
 const SecurityEventsPage = React.lazy(() => import('../components/Security/SecurityEventsPage'));
@@ -21,6 +21,7 @@ const HealthPage         = React.lazy(() => import('../components/Health/HealthP
 const RiskPage           = React.lazy(() => import('../components/Risk/RiskPage'));
 const InfraPage          = React.lazy(() => import('../components/Infra/InfraPage'));
 const MonitoringPage     = React.lazy(() => import('../components/Monitoring/MonitoringPage'));
+const NotificationsPage  = React.lazy(() => import('../components/Notifications/NotificationsPage'));
 
 import './AppLayout.css';
 
@@ -87,6 +88,9 @@ export default function AppLayout() {
     () => sessionStorage.getItem('monitoringSection') || null
   );
 
+  // Client-side polling for the notification bell (unread-count + summary), paused on hidden tabs.
+  useNotificationPolling();
+
   const mainLeft = collapsed ? 'var(--sidebar-collapsed)' : 'var(--sidebar-width)';
 
   const applyPage = (page) => {
@@ -127,6 +131,22 @@ export default function AppLayout() {
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
     // Run once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Cross-page navigation intents ─────────────────────────────────
+  // Lets deeply-nested components (e.g. the license popup) jump to another page,
+  // optionally targeting a record (planId → open that plan on the Plans page).
+  useEffect(() => {
+    const onNavIntent = (e) => {
+      const { page, planId } = e.detail || {};
+      if (!page) return;
+      if (planId) sessionStorage.setItem('openPlanId', planId);
+      applyPage(page);
+      window.history.pushState({ appPage: page }, '', window.location.pathname);
+    };
+    window.addEventListener('app:navigate', onNavIntent);
+    return () => window.removeEventListener('app:navigate', onNavIntent);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -173,13 +193,13 @@ export default function AppLayout() {
       case 'app_users':   return <AppUsersPage />;
       case 'audit':       return <AuditPage />;
       case 'rbac':        return <RbacPage />;
-      case 'subscriptions': return <SubscriptionsPage />;
       case 'plans':         return <PlansPage />;
       case 'analytics':        return <AnalyticsPage activeTab={analyticsTab} />;
       case 'security_events':  return <SecurityEventsPage />;
       case 'health':           return <HealthPage />;
       case 'risk':             return <RiskPage />;
       case 'monitoring':       return <MonitoringPage view={monitoringSection} />;
+      case 'notifications':    return <NotificationsPage />;
       case 'infra':            return <InfraPage view={infraSection} />;
       default:        return <DashboardTable />;
 
@@ -210,6 +230,7 @@ export default function AppLayout() {
         analyticsTab={analyticsTab}
         sidebarCollapsed={collapsed}
         onMenuToggle={() => setMobileNavOpen(o => !o)}
+        onNavigate={handleNavigate}
       />
       <main className="app-main" style={{ marginLeft: mainLeft }}>
         <PageErrorBoundary key={activePage}>

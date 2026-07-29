@@ -51,6 +51,12 @@ const AppUsersIcon = () => (
     <path d="M16 3.13a4 4 0 0 1 0 7.75" />
   </svg>
 );
+const NotificationsIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+  </svg>
+);
 
 const LockIconForSidebar = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -118,13 +124,6 @@ const MonitoringIcon = () => (
   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M22 12h-4l-3 8-6-16-3 8H2" />
     <circle cx="12" cy="12" r="10" strokeDasharray="3 3" opacity="0.4" />
-  </svg>
-);
-
-const SubscriptionsIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
-    <line x1="1" y1="10" x2="23" y2="10" />
   </svg>
 );
 
@@ -203,10 +202,10 @@ const NAV_ITEMS = [
   { id: 'analytics', label: 'Analytics', icon: <AnalyticsIcon />, page: 'analytics', subItems: ANALYTICS_SUB_ITEMS },
   { id: 'admin_users', label: 'Admin Users', icon: <LockIconForSidebar />, page: 'admin_users' },
   { id: 'app_users', label: 'App Users', icon: <AppUsersIcon />, page: 'app_users' },
+  { id: 'notifications', label: 'Notifications', icon: <NotificationsIcon />, page: 'notifications' },
   { id: 'license', label: 'Licenses', icon: <LicenseIcon />, page: 'license' },
   { id: 'device', label: 'Devices', icon: <DeviceIcon />, page: 'device' },
   { id: 'heartbeat', label: 'Heartbeats', icon: <HeartbeatIcon />, page: 'heartbeat' },
-  { id: 'subscriptions', label: 'Subscriptions', icon: <SubscriptionsIcon />, page: 'subscriptions' },
   { id: 'plans', label: 'Plans', icon: <PlansIcon />, page: 'plans' },
   { id: 'trial', label: 'System Configuration', icon: <TrialIcon />, page: 'trial' },
   { id: 'security_events', label: 'Security Events', icon: <SecurityEventsIcon />, page: 'security_events' },
