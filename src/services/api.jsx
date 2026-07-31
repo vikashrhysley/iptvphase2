@@ -1049,6 +1049,18 @@ export const apiFetchAppUserDetail = async (accessToken, userId) => {
   return res.data || res;
 };
 
+// GET /admin/app-users/{id}/seats - the user's MAC seats for their current licence
+// (viewer+, read-only). Returns { user_id, license_id, summary, seats } — always every
+// seat, not just claimed ones. Fired in parallel with the detail; never chained.
+export const apiFetchUserSeats = async (accessToken, userId) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/app-users/${userId}/seats`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
 // GET /admin/app-users/stats
 export const apiFetchAppUsersStats = async (accessToken) => {
   if (!accessToken) throw new Error('Unauthorized');
@@ -1447,11 +1459,11 @@ export const apiExtendSubscription = async (accessToken, id, extendDays, reason)
   return res.data || res;
 };
 
-// POST /admin/subscriptions/{id}/devicelimit - set the per-user device count (absolute
+// POST /admin/subscriptions/{id}/device-limit - set the per-user device count (absolute
 // value, 1–50). Backend refuses (409) to drop below live device usage. Body: { max_devices, reason }.
 export const apiSetSubscriptionDeviceLimit = async (accessToken, id, maxDevices, reason) => {
   if (!accessToken) throw new Error('Unauthorized');
-  const res = await request(`${BASE}/admin/subscriptions/${id}/devicelimit`, {
+  const res = await request(`${BASE}/admin/subscriptions/${id}/device-limit`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify({ max_devices: maxDevices, reason }),
