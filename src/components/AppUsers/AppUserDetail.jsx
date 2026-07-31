@@ -4,6 +4,7 @@ import { fetchAppUserDetail, clearSelectedUser, flagUserForReview, clearReviewSt
 import {
   apiFetchLicenseHistory, apiFetchSubscriptionHistory, apiFetchLicenseDetail, apiFetchSubscriptionDetail,
   apiCancelSubscription, apiExtendSubscription, apiSetSubscriptionDeviceLimit, apiActivateSubscription,
+  apiFetchUserSeats,
 } from '../../services/api';
 import UserActivityPage from './UserActivityPage';
 import UserLoginHistory from './UserLoginHistory';
@@ -42,6 +43,25 @@ const FlagIcon = () => (
     <line x1="4" y1="22" x2="4" y2="15" />
   </svg>
 );
+const EditIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+  </svg>
+);
+const LicenseIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <circle cx="12" cy="8" r="5" />
+    <path d="M8.5 12.5 7 22l5-3 5 3-1.5-9.5" />
+  </svg>
+);
+const HistoryIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M3 3v5h5" />
+    <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" />
+    <polyline points="12 7 12 12 15 14" />
+  </svg>
+);
 
 /* ── Helpers ────────────────────────────────────────────── */
 const fmt = (iso) => {
@@ -54,13 +74,24 @@ const fmt = (iso) => {
   } catch { return '—'; }
 };
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// Renders a CALENDAR date without a timezone shift. Backend sends entitlement dates
+// (starts_at, expires_at, current_period_start/end, cancelled_at) as the meaningful
+// calendar day — running `new Date("2027-01-25")` parses it as midnight UTC and then
+// shifts it to the browser's timezone, showing the wrong day (the Mar 17-vs-18 mismatch).
+// So: pure YYYY-MM-DD is rendered straight from its parts; anything with a time is shown
+// as its UTC calendar day. (Use `fmt` for true timestamps where local time-of-day matters.)
 const fmtDate = (iso) => {
   if (!iso || iso === 'null') return '—';
-  try {
-    return new Date(iso).toLocaleDateString('en-US', {
-      year: 'numeric', month: 'short', day: 'numeric',
-    });
-  } catch { return '—'; }
+  const s = String(iso);
+  const dOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (dOnly) return `${MONTHS[Number(dOnly[2]) - 1]} ${Number(dOnly[3])}, ${dOnly[1]}`;
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('en-US', {
+    timeZone: 'UTC', year: 'numeric', month: 'short', day: 'numeric',
+  });
 };
 
 const initials = (name) => {
@@ -224,13 +255,22 @@ function LicenseDetailModal({ items, onClose }) {
           <div className="udd-ent">
             {/* Header: plan + badge + status */}
             <div className="udd-ent-head">
-              <div className="udd-ent-plan">
+              <div className="udd-ent-headfield">
+                <span className="udd-ent-headlabel">Plan Name</span>
                 <span className="udd-ent-plan-name">{lic.plan_name || '—'}</span>
-                <span className={`udd-plan-badge ${String(lic.plan_type).toLowerCase() === 'free' ? 'trial' : 'paid'}`}>
-                  {planTypeLabel(lic.plan_type)}
-                </span>
               </div>
-              <span className={`udd-status-pill ${entStatusClass(lic.status)}`}>{humanizeStatus(lic.status)}</span>
+              <div className="udd-ent-head-right">
+                <div className="udd-ent-headfield">
+                  <span className="udd-ent-headlabel">Plan Type</span>
+                  <span className={`udd-plan-badge ${String(lic.plan_type).toLowerCase() === 'free' ? 'trial' : 'paid'}`}>
+                    {planTypeLabel(lic.plan_type)}
+                  </span>
+                </div>
+                <div className="udd-ent-headfield">
+                  <span className="udd-ent-headlabel">Plan Status</span>
+                  <span className={`udd-status-pill ${entStatusClass(lic.status)}`}>{humanizeStatus(lic.status)}</span>
+                </div>
+              </div>
             </div>
 
             {revoked && (
@@ -406,13 +446,22 @@ function SubscriptionDetailModal({ items, onClose }) {
         ) : (
           <div className="udd-ent">
             <div className="udd-ent-head">
-              <div className="udd-ent-plan">
+              <div className="udd-ent-headfield">
+                <span className="udd-ent-headlabel">Plan Name</span>
                 <span className="udd-ent-plan-name">{sub.plan_name || '—'}</span>
-                <span className={`udd-plan-badge ${String(sub.plan_type).toLowerCase() === 'free' ? 'trial' : 'paid'}`}>
-                  {planTypeLabel(sub.plan_type)}
-                </span>
               </div>
-              <span className={`udd-status-pill ${entStatusClass(sub.status)}`}>{humanizeStatus(sub.status)}</span>
+              <div className="udd-ent-head-right">
+                <div className="udd-ent-headfield">
+                  <span className="udd-ent-headlabel">Plan Type</span>
+                  <span className={`udd-plan-badge ${String(sub.plan_type).toLowerCase() === 'free' ? 'trial' : 'paid'}`}>
+                    {planTypeLabel(sub.plan_type)}
+                  </span>
+                </div>
+                <div className="udd-ent-headfield">
+                  <span className="udd-ent-headlabel">Plan Status</span>
+                  <span className={`udd-status-pill ${entStatusClass(sub.status)}`}>{humanizeStatus(sub.status)}</span>
+                </div>
+              </div>
             </div>
 
             {blocked && (
@@ -707,6 +756,165 @@ function SectionCard({ title, children }) {
   );
 }
 
+/* ── MAC Seats block ────────────────────────────────────── */
+// A seat is the furniture (a mac_slot); a device is who's sitting in it. `assignment`
+// answers "is a device in this seat?", `status` answers "is the seat usable at all?" —
+// they're orthogonal. And `assigned` ≠ "in use": a dark device still holds its seat, so
+// liveness is shown separately from is_logged_in + last_successful_heartbeat_at.
+const SEAT_LIVE_WINDOW_MS = 15 * 60 * 1000; // heartbeat within this = "live"
+
+const formatMac = (mac) => String(mac || '').toUpperCase() || '—';
+
+const seatStatusClass = (s) => {
+  const v = String(s || '').toLowerCase();
+  if (v === 'active') return 'active';
+  if (v === 'pending_ministra') return 'pending';
+  if (v === 'dormant') return 'dormant';
+  return 'unknown';
+};
+const seatStatusLabel = (s) => {
+  if (s === 'pending_ministra') return 'Pending Ministra';
+  if (s === 'active') return 'Active';
+  if (s === 'dormant') return 'Dormant';
+  return humanizeStatus(s);
+};
+
+const compactAge = (ms) => {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(s / 60); if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60); if (h < 24) return `${h}h`;
+  const d = Math.floor(h / 24); return `${d}d`;
+};
+
+// Liveness for an assigned seat's device. Returns null when no device sits in the seat.
+const seatLiveness = (dev) => {
+  if (!dev) return null;
+  const hb = dev.last_successful_heartbeat_at ? new Date(dev.last_successful_heartbeat_at).getTime() : NaN;
+  const recent = !Number.isNaN(hb) && (Date.now() - hb) < SEAT_LIVE_WINDOW_MS;
+  if (dev.is_logged_in && recent) return { tone: 'live', label: '✓ live' };
+  const age = Number.isNaN(hb) ? '' : ` ${compactAge(Date.now() - hb)}`;
+  return { tone: 'dark', label: `⚠ dark${age}` };
+};
+
+function SeatRow({ seat }) {
+  const [open, setOpen] = useState(false);
+  const dev = seat.device;
+  const assigned = seat.assignment === 'assigned';
+  const live = assigned ? seatLiveness(dev) : null;
+  const occupant = assigned ? (dev?.device_name || dev?.platform || 'Device') : 'Not assigned';
+  const deviceHead = dev
+    ? [dev.device_name || `${dev.device_brand || ''} ${dev.device_model || ''}`.trim() || 'Device',
+       [dev.platform, dev.os_version].filter(Boolean).join(' '),
+       dev.app_version ? `app ${dev.app_version}` : '']
+      .filter(Boolean).join(' · ')
+    : '';
+
+  return (
+    <div className={`udd-seat${open ? ' open' : ''}`}>
+      <button type="button" className="udd-seat-row" onClick={() => setOpen((o) => !o)}>
+        <span className="udd-seat-caret">{open ? '▾' : '▸'}</span>
+        <span className="udd-seat-mac">{formatMac(seat.virtual_mac)}</span>
+        <span className="udd-seat-statuscol">
+          <span className={`udd-seat-status ${seatStatusClass(seat.status)}`}>{seatStatusLabel(seat.status)}</span>
+        </span>
+        <span className={`udd-seat-occupant${assigned ? '' : ' muted'}`}>{occupant}</span>
+        <span className="udd-seat-live">
+          {live && <span className={`udd-live ${live.tone}`}>{live.label}</span>}
+        </span>
+      </button>
+
+      {open && (
+        <div className="udd-seat-detail">
+          <div className="udd-seat-fields">
+            <div className="udd-seat-field wide">
+              <span>Virtual Device ID <em>stable identity</em></span>
+              <strong className="udd-seat-mono">{seat.virtual_device_id || '—'}</strong>
+            </div>
+            <div className="udd-seat-field"><span>Registered in Ministra</span><strong>{fmtDate(seat.ministra_registered_at)}</strong></div>
+            <div className="udd-seat-field"><span>Seat First Claimed</span><strong>{fmtDate(seat.assigned_at)}</strong></div>
+            {seat.status === 'dormant' && seat.dormant_reason && (
+              <div className="udd-seat-field wide"><span>Dormant Reason</span><strong>{seat.dormant_reason}</strong></div>
+            )}
+          </div>
+
+          {dev ? (
+            <div className="udd-seat-device">
+              <div className="udd-seat-device-title">Device in this seat</div>
+              <div className="udd-seat-device-head">{deviceHead}</div>
+              <div className="udd-seat-fields">
+                <div className="udd-seat-field wide">
+                  <span>Device ID <em>physical — changes on hardware swap</em></span>
+                  <strong className="udd-seat-mono">{dev.device_id || '—'}</strong>
+                </div>
+                <div className="udd-seat-field"><span>Logged In</span><strong>{dev.is_logged_in ? 'Yes' : 'No'}</strong></div>
+                <div className="udd-seat-field"><span>Last Good Heartbeat</span><strong>{fmt(dev.last_successful_heartbeat_at)}</strong></div>
+                <div className="udd-seat-field"><span>Health</span><strong className="udd-capitalize">{dev.status || '—'}</strong></div>
+                <div className="udd-seat-field"><span>Risk Score</span><strong>{dev.risk_score ?? '—'}</strong></div>
+              </div>
+            </div>
+          ) : (
+            <div className="udd-seat-nodev">No device in this seat.</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Fetches the user's MAC seats in parallel with the detail (its own state, never chained).
+function MacSeatsBlock({ userId }) {
+  const accessToken = useSelector((s) => s.auth.accessToken);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!userId) return undefined;
+    let alive = true;
+    setLoading(true); setError(null);
+    apiFetchUserSeats(accessToken, userId)
+      .then((d) => { if (alive) setData(d); })
+      .catch((err) => { if (alive) setError(err.message || 'Failed to load MAC seats.'); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [accessToken, userId]);
+
+  const summary = data?.summary || {};
+  const seats = Array.isArray(data?.seats) ? data.seats : [];
+  const noLicence = data && data.license_id == null && summary.device_limit == null;
+  const pending = seats.filter((s) => s.status === 'pending_ministra').length;
+
+  return (
+    <div className="udd-card udd-seats">
+      <div className="udd-seats-head">
+        <div className="udd-card-title udd-seats-title">MAC Seats</div>
+        {data && !noLicence && (
+          <div className="udd-seats-summary">
+            <span className="udd-seats-count">
+              {summary.assigned ?? 0} / {summary.device_limit ?? seats.length} assigned
+            </span>
+            {pending > 0 && <span className="udd-seats-warn">⚠ {pending} needs Ministra</span>}
+          </div>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="udd-empty-section">Loading seats…</div>
+      ) : error ? (
+        <div className="udd-modal-error">{error}</div>
+      ) : noLicence ? (
+        <div className="udd-empty-section">No plan — no MAC seats issued.</div>
+      ) : seats.length === 0 ? (
+        <div className="udd-empty-section">No MAC seats.</div>
+      ) : (
+        <div className="udd-seats-list">
+          {seats.map((seat) => <SeatRow key={seat.slot_id} seat={seat} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Flag for Review Modal ──────────────────────────────── */
 const REVIEW_REASONS = [
   { value: 'suspicious_login_pattern', label: 'Suspicious Login Pattern' },
@@ -900,19 +1108,21 @@ export default function AppUserDetail({ userId, onBack }) {
             {/* Right: quick actions */}
             <div className="udd-hero-actions">
               <button className="udd-action-btn" onClick={() => setShowSubscriptions(true)}>
-                View Subscription
+                <EditIcon /> View/Edit Subscription
               </button>
               <button className="udd-action-btn" onClick={() => setShowSubscriptionHistory(true)}>
-                View Subscription History
+                <HistoryIcon /> View Subscription History
               </button>
               <button className="udd-action-btn" onClick={() => setShowLicenses(true)}>
-                View Licenses
+                <LicenseIcon /> View Licenses
               </button>
               <button className="udd-action-btn" onClick={() => setShowLicenseHistory(true)}>
-                View Licenses History
+                <HistoryIcon /> View Licenses History
               </button>
             </div>
           </div>
+          {/* ── MAC Seats (directly under the identity card) ─ */}
+          <MacSeatsBlock userId={u.id} />
           {/* ── Preferences ──────────────────────────────── */}
           {u.preferences && (
             <SectionCard title="Preferences">
