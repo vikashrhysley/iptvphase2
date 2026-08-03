@@ -184,7 +184,7 @@ const LIVE_SECTIONS = [
     label: 'App Users',
     accent: 'var(--accent-secondary)',
     source: 'app_users',
-    hero: { label: 'Total Users Ever', path: 'total_users_ever.count' },
+    hero: { label: 'Verified Users', path: 'total_users_ever.verified_users.count' },
     chips: [
       { label: 'Signup 24h', path: 'growth.new_signups_24h' },
       { label: 'Signup 7d', path: 'growth.new_signups_7d' },
@@ -1011,6 +1011,28 @@ export default function DashboardTable({ activeDashboardTab = 'liveStats' }) {
       dispatch(fetchDashboardOverview());
     }
   }, [activeDashboardTab, dispatch]);
+
+  // Auto-refresh so changes driven from the end-user side appear without a manual reload.
+  // Silent polling (no loading flags) swaps the numbers in place without flicker, and it
+  // pauses while the tab is hidden so backgrounded tabs don't keep hitting the API.
+  useEffect(() => {
+    const REFRESH_MS = 2000;
+    let timer = null;
+    const poll = () => {
+      dispatch(fetchDashboardStats({ silent: true }));
+      dispatch(fetchDashboardRevenue({ silent: true }));
+      dispatch(fetchDashboardOverview({ silent: true }));
+    };
+    const start = () => { if (!timer) timer = setInterval(poll, REFRESH_MS); };
+    const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
+    const onVisibility = () => {
+      if (document.hidden) stop();
+      else { poll(); start(); } // refresh immediately on return, then resume
+    };
+    start();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => { stop(); document.removeEventListener('visibilitychange', onVisibility); };
+  }, [dispatch]);
 
   const liveSections = useMemo(() => buildLiveSections(stats, overview), [stats, overview]);
   const statCards = useMemo(() => sectionsToExportCards(liveSections), [liveSections]);

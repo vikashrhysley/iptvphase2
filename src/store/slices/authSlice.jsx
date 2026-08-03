@@ -62,6 +62,18 @@ export const checkTokenStatus = createAsyncThunk('auth/checkTokenStatus',
           const user = await apiGetProfile(newAccessToken);
           return { nextStep: 'continue', accessToken: newAccessToken, refreshToken: newRefreshToken, user };
         } catch {
+          // The refresh failed — but another flow (another tab, or a mid-flight page reload)
+          // may have already rotated the token successfully. If the stored refresh token has
+          // changed since we started, a valid session exists — restore it rather than logging
+          // the admin out on a race we already won elsewhere.
+          const storedAccess  = localStorage.getItem(LS_ACCESS)  || '';
+          const storedRefresh = localStorage.getItem(LS_REFRESH) || '';
+          if (storedAccess && storedRefresh && storedRefresh !== refreshToken) {
+            try {
+              const user = await apiGetProfile(storedAccess);
+              return { nextStep: 'continue', accessToken: storedAccess, refreshToken: storedRefresh, user };
+            } catch { /* stored token also dead — fall through to logout */ }
+          }
           clearTokens();
           return { nextStep: 'login' };
         }
@@ -92,7 +104,11 @@ export const checkTokenStatus = createAsyncThunk('auth/checkTokenStatus',
       clearTokens();
       return { nextStep: 'login' };
     }
-  }
+  },
+  // Never let the startup check run twice at once (StrictMode double-invoke, duplicate
+  // dispatch). A second concurrent run would kick off a parallel token-status + refresh
+  // and race the first — the classic "repeated refresh logs me out" bug.
+  { condition: (_, { getState }) => !getState().auth.tokenCheckLoading }
 );
 
 // Step 1 — email + password

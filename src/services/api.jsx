@@ -174,12 +174,26 @@ export const apiTokenStatus = async (accessToken, refreshToken) => {
 // 6. Refresh token — POST /auth/refresh (public — refresh token in body)
 //    Body: { refresh_token }
 //    Response: { access_token, refresh_token, expires_in }
+//
+// Single-flight: the backend ROTATES the refresh token (the old one is blacklisted the
+// moment it's used). If two callers refresh with the same token concurrently — e.g. React
+// StrictMode double-invoking the startup check, or a burst of refreshes — the first spends
+// the token and the second gets a 401 for a now-dead token, which used to force a logout.
+// Coalescing concurrent calls into one in-flight request means the token is spent exactly
+// once and every caller receives the same new pair.
+let _refreshInFlight = null;
 export const apiRefreshToken = async (refreshToken) => {
-  const res = await request(`${BASE}/auth/refresh`, {
-    method: 'POST',
-    body: JSON.stringify({ refresh_token: refreshToken }),
-  });
-  return res.data || res;
+  if (_refreshInFlight) return _refreshInFlight;
+  const p = (async () => {
+    const res = await request(`${BASE}/auth/refresh`, {
+      method: 'POST',
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    return res.data || res;
+  })();
+  _refreshInFlight = p;
+  p.finally(() => { if (_refreshInFlight === p) _refreshInFlight = null; });
+  return p;
 };
 
 // 7. Logout — POST /auth/logout
