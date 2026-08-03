@@ -69,7 +69,10 @@ const dashboardSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchDashboardStats.pending, (state) => {
+      // Silent polls (arg.silent) skip the loading/error toggles so the panel doesn't
+      // flicker or blank out — the on-screen numbers stay put until fresh data arrives.
+      .addCase(fetchDashboardStats.pending, (state, action) => {
+        if (action.meta.arg?.silent) return;
         state.loading = true;
         state.error = null;
       })
@@ -79,11 +82,12 @@ const dashboardSlice = createSlice({
       })
       .addCase(fetchDashboardStats.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload;
+        if (!action.meta.arg?.silent) state.error = action.payload;
       });
 
     builder
-      .addCase(fetchDashboardOverview.pending, (state) => {
+      .addCase(fetchDashboardOverview.pending, (state, action) => {
+        if (action.meta.arg?.silent) return;
         state.overviewLoading = true;
         state.overviewError = null;
       })
@@ -93,11 +97,12 @@ const dashboardSlice = createSlice({
       })
       .addCase(fetchDashboardOverview.rejected, (state, action) => {
         state.overviewLoading = false;
-        state.overviewError = action.payload;
+        if (!action.meta.arg?.silent) state.overviewError = action.payload;
       });
 
     builder
-      .addCase(fetchDashboardRevenue.pending, (state) => {
+      .addCase(fetchDashboardRevenue.pending, (state, action) => {
+        if (action.meta.arg?.silent) return;
         state.revenueLoading = true;
         state.revenueError = null;
       })
@@ -107,7 +112,7 @@ const dashboardSlice = createSlice({
       })
       .addCase(fetchDashboardRevenue.rejected, (state, action) => {
         state.revenueLoading = false;
-        state.revenueError = action.payload;
+        if (!action.meta.arg?.silent) state.revenueError = action.payload;
       });
 
   },
