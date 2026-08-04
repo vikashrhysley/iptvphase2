@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchPlanDetail, clearPlanDetail, togglePlanStatus, clearToggleState, updatePlan, clearUpdateState } from '../../store/slices/plansSlice';
-import { fmtDateTime } from '../Subscriptions/subscriptionsHelpers';
 import {
   AMOUNT_MAX, isAmountInputAllowed, isIntegerInputAllowed,
   blockNonNumericKeys, blockIntegerKeys, validateAmount, validateInteger,
@@ -9,6 +8,11 @@ import {
 import './PlansPage.css';
 import './PlanDetailPage.css';
 import toast from "react-hot-toast";
+
+const fmtDateTime = (iso) => {
+  if (!iso) return '—';
+  try { return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch { return '—'; }
+};
 
 /* ── Icons ─────────────────────────────────────────────── */
 const BackIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>;

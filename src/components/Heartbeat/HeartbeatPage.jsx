@@ -171,7 +171,7 @@ const SECTION_CARDS = [
   },
   {
     key: 'status',
-    label: 'Device Status',
+    label: 'Device Status (24Hours)',
     accent: '#10b981',
     type: 'status',
     getData: s => s?.risk_health?.by_status,

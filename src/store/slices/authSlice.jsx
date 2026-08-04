@@ -8,6 +8,18 @@ import {
 // ── localStorage helpers ───────────────────────────────────
 const LS_ACCESS  = 'auth_access_token';
 const LS_REFRESH = 'auth_refresh_token';
+const LS_LAST_CHECK = 'auth_last_check';   // timestamp of the last startup check (burst detector)
+
+// The refresh token ROTATES (using it blacklists the old one). If the user mashes the
+// browser reload button, one load could spend the token and the next load — reading the
+// now-dead token from localStorage — would fail and log them out. We defer the refresh
+// call by this long: a reload during the window tears down the page and cancels the fetch
+// BEFORE the token is spent, so only a settled load (that survives the delay) refreshes.
+const REFRESH_DELAY_MS = 600;
+// Two startup checks closer than this ⇒ the user is reload-spamming; be lenient (don't
+// log out on a transient failure, since the token may just be in flux).
+const BURST_WINDOW_MS = 2500;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const saveTokens = (access, refresh) => {
   if (access)  localStorage.setItem(LS_ACCESS,  access);
@@ -29,14 +41,25 @@ const _hasTokens   = Boolean(_initAccess && _initRefresh);
 // Startup check — reads localStorage tokens, calls POST /auth/token-status,
 // then acts on the next_step directive to restore or discard the session.
 export const checkTokenStatus = createAsyncThunk('auth/checkTokenStatus',
-  async (_, { rejectWithValue }) => {
+  async (_, { getState, rejectWithValue }) => {
     const accessToken  = localStorage.getItem(LS_ACCESS)  || '';
     const refreshToken = localStorage.getItem(LS_REFRESH) || '';
+    const currentUser  = getState().auth.user;
+
+    // Reload-spam detector: two startup checks within the burst window ⇒ the user is
+    // hammering reload. Record this check's time before anything can abort us.
+    const prevCheck = Number(localStorage.getItem(LS_LAST_CHECK) || 0);
+    const isBurst   = Date.now() - prevCheck < BURST_WINDOW_MS;
+    localStorage.setItem(LS_LAST_CHECK, String(Date.now()));
 
     // No tokens — skip API round-trip, go straight to login immediately
     if (!accessToken && !refreshToken) {
       return { nextStep: 'login' };
     }
+
+    // Optimistically keep the current session without spending the rotating token — used
+    // during reload bursts and transient failures so a reload never logs the admin out.
+    const keepSession = { nextStep: 'continue', accessToken, refreshToken, user: currentUser };
 
     try {
       const status   = await apiTokenStatus(accessToken, refreshToken);
@@ -48,32 +71,37 @@ export const checkTokenStatus = createAsyncThunk('auth/checkTokenStatus',
           const user = await apiGetProfile(accessToken);
           return { nextStep: 'continue', accessToken, refreshToken, user };
         } catch {
-          return { nextStep: 'continue', accessToken, refreshToken, user: null };
+          return { nextStep: 'continue', accessToken, refreshToken, user: currentUser };
         }
       }
 
       if (nextStep === 'refresh') {
-        // Access token stale — exchange for new pair, then fetch profile
+        // Access token stale — exchange for a new pair. DEFER the (token-spending) refresh:
+        // if the user reloads within this window the page is torn down and this fetch never
+        // fires, so the rotating refresh token is never spent by a load that's about to die.
+        await sleep(REFRESH_DELAY_MS);
         try {
           const refreshed       = await apiRefreshToken(refreshToken);
           const newAccessToken  = refreshed.access_token  || refreshed.accessToken;
           const newRefreshToken = refreshed.refresh_token || refreshed.refreshToken || refreshToken;
           saveTokens(newAccessToken, newRefreshToken);
-          const user = await apiGetProfile(newAccessToken);
+          let user = currentUser;
+          try { user = await apiGetProfile(newAccessToken); } catch { /* keep prior user */ }
           return { nextStep: 'continue', accessToken: newAccessToken, refreshToken: newRefreshToken, user };
         } catch {
-          // The refresh failed — but another flow (another tab, or a mid-flight page reload)
-          // may have already rotated the token successfully. If the stored refresh token has
-          // changed since we started, a valid session exists — restore it rather than logging
-          // the admin out on a race we already won elsewhere.
+          // Another flow (another tab / a mid-flight reload) may have already rotated the
+          // token. If the stored refresh token changed since we started, restore that session.
           const storedAccess  = localStorage.getItem(LS_ACCESS)  || '';
           const storedRefresh = localStorage.getItem(LS_REFRESH) || '';
           if (storedAccess && storedRefresh && storedRefresh !== refreshToken) {
             try {
               const user = await apiGetProfile(storedAccess);
               return { nextStep: 'continue', accessToken: storedAccess, refreshToken: storedRefresh, user };
-            } catch { /* stored token also dead — fall through to logout */ }
+            } catch { /* stored token also dead — fall through */ }
           }
+          // During a reload burst, keep the session rather than logging out on a token that
+          // may have been spent by an aborted reload — the next settled load sorts it out.
+          if (isBurst) return keepSession;
           clearTokens();
           return { nextStep: 'login' };
         }
@@ -90,17 +118,22 @@ export const checkTokenStatus = createAsyncThunk('auth/checkTokenStatus',
       }
 
       if (nextStep === 'logout') {
-        // Refresh token blacklisted — force logout
+        // Backend says the refresh token is dead. During a reload burst this can be fallout
+        // from an aborted refresh — stay optimistic and let a settled load make the call.
+        if (isBurst) return keepSession;
         try { await apiLogout(accessToken); } catch { /* best-effort */ }
         clearTokens();
         return { nextStep: 'login' };
       }
 
       // 'login' or any unknown directive
+      if (isBurst) return keepSession;
       clearTokens();
       return { nextStep: 'login' };
     } catch {
-      // Network or parse error — fail safe to login
+      // Network/parse error — a transient blip (or an aborting reload) must NOT nuke a valid
+      // session. Keep the tokens and stay optimistically logged in (already at step 4).
+      if (accessToken && refreshToken) return keepSession;
       clearTokens();
       return { nextStep: 'login' };
     }
