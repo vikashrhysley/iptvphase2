@@ -21,7 +21,7 @@ const DEFAULT_RISKY_FILTERS = {
 
 export const fetchHeartbeatStats = createAsyncThunk(
   'heartbeat/fetchStats',
-  async (_, { getState, rejectWithValue }) => {
+  async (_arg, { getState, rejectWithValue }) => {
     try {
       const { accessToken } = getState().auth;
       return await apiFetchHeartbeatStats(accessToken);
@@ -29,8 +29,11 @@ export const fetchHeartbeatStats = createAsyncThunk(
       return rejectWithValue(err.message);
     }
   },
-  { condition: (_, { getState }) => {
+  { condition: (arg, { getState }) => {
     const { statsLoading, stats } = getState().heartbeat;
+    // Silent polls refresh even after stats have loaded (skip only if a fetch is mid-flight);
+    // the initial (non-silent) fetch runs once.
+    if (arg?.silent) return !statsLoading;
     return !statsLoading && !stats;
   }}
 );
@@ -91,7 +94,8 @@ const heartbeatSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchHeartbeatStats.pending, (state) => {
+      .addCase(fetchHeartbeatStats.pending, (state, action) => {
+        if (action.meta.arg?.silent) return; // silent poll: keep current numbers, no flicker
         state.statsLoading = true;
         state.statsError = null;
       })
@@ -101,7 +105,7 @@ const heartbeatSlice = createSlice({
       })
       .addCase(fetchHeartbeatStats.rejected, (state, action) => {
         state.statsLoading = false;
-        state.statsError = action.payload;
+        if (!action.meta.arg?.silent) state.statsError = action.payload;
       });
 
     builder

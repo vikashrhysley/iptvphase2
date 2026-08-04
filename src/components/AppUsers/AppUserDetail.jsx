@@ -887,7 +887,7 @@ function MacSeatsBlock({ userId }) {
   return (
     <div className="udd-card udd-seats">
       <div className="udd-seats-head">
-        <div className="udd-card-title udd-seats-title">MAC Seats</div>
+        <div className="udd-card-title udd-seats-title">Virtual MAC Details</div>
         {data && !noLicence && (
           <div className="udd-seats-summary">
             <span className="udd-seats-count">
@@ -1094,7 +1094,7 @@ export default function AppUserDetail({ userId, onBack }) {
               <div className="udd-avatar">{initials(u.full_name)}</div>
               <div className="udd-hero-body">
                 <div className="udd-hero-email">{u.email}</div>
-                <div className="udd-hero-id" title={u.id}>ID: {u.id}</div>
+                <div className="udd-hero-id" title={u.id}>User ID: {u.id}</div>
                 <div className="udd-hero-badges">
                   <span className={`udd-status-pill ${statusClass(u.status)}`}>{u.status}</span>
                   {u.email_verified && <span className="udd-badge green">Email Verified</span>}

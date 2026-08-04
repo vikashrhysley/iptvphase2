@@ -4,7 +4,7 @@ import {
   fetchNotifications,
   fetchNotificationDetail,
   markNotificationRead,
-  markVisibleNotificationsRead,
+  markAllNotificationsRead,
   fetchNotificationUnreadCount,
   fetchNotificationSummary,
   setNotificationFilters,
@@ -105,10 +105,16 @@ export default function NotificationsPage() {
 
   const closeDetail = () => { setDetailOpen(false); dispatch(clearNotificationDetail()); };
 
-  // "Mark all read" here = mark only the notifications on THIS page, then refresh the
-  // badge/summary from the server so the bell count reflects exactly what was read.
+  // "Mark all read" = one bulk /read-all call (scoped to the active category filter if any),
+  // then refetch the list + badge + summary so the rows and the bell reflect server truth.
+  // Using the bulk endpoint is reliable (one request the reducer zeroes the count on) instead
+  // of firing N per-id PATCHes where a single failure would silently leave everything unread.
   const markPageRead = async () => {
-    try { await dispatch(markVisibleNotificationsRead()).unwrap(); } catch { /* surfaced via error state */ }
+    const category = filters.category || undefined;
+    try {
+      await dispatch(markAllNotificationsRead(category ? { category } : {})).unwrap();
+    } catch { /* surfaced via error state */ }
+    dispatch(fetchNotifications(filters));
     dispatch(fetchNotificationUnreadCount());
     dispatch(fetchNotificationSummary());
   };

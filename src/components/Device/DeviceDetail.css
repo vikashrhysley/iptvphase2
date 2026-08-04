@@ -472,8 +472,9 @@
 }
 .dd-status-option.selected {
   border-color: var(--opt-color);
-  background: rgba(from var(--opt-color) r g b / 0.06);
+  background: color-mix(in srgb, var(--opt-color) 14%, transparent);
   color: var(--opt-color);
+  box-shadow: 0 0 0 1px var(--opt-color) inset;
 }
 .dd-status-option.selected .dd-opt-dot {
   background: var(--opt-color);

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useDispatch, useSelector } from 'react-redux';
+import toast from 'react-hot-toast';
 import { fetchDeviceDetail, clearDeviceDetail, updateDeviceStatus, replaceDevice, clearUpdateState } from '../../store/slices/deviceSlice';
 import DeviceActivity    from './DeviceActivity';
 import DeviceLoginHistory from './DeviceLoginHistory';
@@ -20,11 +22,6 @@ const EditIcon = () => (
 const XIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
     <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-  </svg>
-);
-const CheckIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-    <polyline points="20 6 9 17 4 12"/>
   </svg>
 );
 
@@ -85,15 +82,27 @@ const STATUS_OPTIONS = [
   { value: 'replaced',  label: 'Replaced',  color: '#a78bfa' },
 ];
 
-function UpdateStatusModal({ device, onClose }) {
+export function UpdateStatusModal({ device, onClose }) {
   const dispatch = useDispatch();
   const { updateLoading, updateError, updateSuccess } = useSelector(s => s.devices);
-  const [status, setStatus] = useState(device.status || 'active');
+  // Preselect the device's current status (case-insensitive) so e.g. an active device
+  // opens with "Active" already highlighted. Device health "normal" maps to Active.
+  const rawStatus = String(device.status || 'active').toLowerCase();
+  const currentStatus = rawStatus === 'normal' ? 'active' : rawStatus;
+  const [status, setStatus] = useState(currentStatus);
   const [reason, setReason] = useState('');
 
   const isReplaced   = status === 'replaced';
-  const alreadyThat  = status === device.status;
+  const alreadyThat  = status === currentStatus;
   const deviceId     = device.device_id || device.id;
+
+  // On success: close the popup and surface the result as a toast (no inline message).
+  useEffect(() => {
+    if (!updateSuccess) return;
+    toast.success(isReplaced ? 'Device marked as replaced.' : 'Status updated successfully.');
+    dispatch(clearUpdateState());
+    onClose();
+  }, [updateSuccess]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -105,7 +114,10 @@ function UpdateStatusModal({ device, onClose }) {
     }
   };
 
-  return (
+  // Rendered through a portal to <body> so the fixed overlay is always relative to the
+  // viewport — pages like Device Management use `animation: fadeIn … both` (which animates
+  // transform) on a container, and that would otherwise anchor `position: fixed` to it.
+  return createPortal(
     <div className="dd-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <form className="dd-modal" onSubmit={handleSubmit}>
         <div className="dd-modal-header">
@@ -121,7 +133,7 @@ function UpdateStatusModal({ device, onClose }) {
           <label>New Status</label>
           <div className="dd-status-options">
             {STATUS_OPTIONS.map(opt => {
-              const disabled = opt.value === 'replaced' && device.status === 'replaced';
+              const disabled = opt.value === 'replaced' && currentStatus === 'replaced';
               return (
                 <label
                   key={opt.value}
@@ -163,24 +175,20 @@ function UpdateStatusModal({ device, onClose }) {
         {updateError && (
           <div className="dd-modal-error">{updateError}</div>
         )}
-        {updateSuccess && (
-          <div className="dd-modal-success">
-            <CheckIcon /> {isReplaced ? 'Device marked as replaced.' : 'Status updated successfully.'}
-          </div>
-        )}
 
         <div className="dd-modal-actions">
           <button type="button" className="dd-btn-cancel" onClick={onClose} disabled={updateLoading}>
-            {updateSuccess ? 'Close' : 'Cancel'}
+            Cancel
           </button>
           <button type="submit" className="dd-btn-save"
-            disabled={updateLoading || updateSuccess || alreadyThat}>
+            disabled={updateLoading || alreadyThat}>
             {updateLoading ? <span className="dd-mini-spin" /> : <EditIcon />}
-            {updateLoading ? 'Saving…' : updateSuccess ? 'Saved' : isReplaced ? 'Mark as Replaced' : 'Update Status'}
+            {updateLoading ? 'Saving…' : isReplaced ? 'Mark as Replaced' : 'Update Status'}
           </button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -188,7 +196,6 @@ function UpdateStatusModal({ device, onClose }) {
 export default function DeviceDetail({ deviceId, onBack }) {
   const dispatch = useDispatch();
   const { selectedDevice: d, detailLoading, detailError } = useSelector(s => s.devices);
-  const [showUpdate,       setShowUpdate]       = useState(false);
   const [showActivity,     setShowActivity]     = useState(false);
   const [showLoginHistory, setShowLoginHistory] = useState(false);
 
@@ -221,9 +228,6 @@ export default function DeviceDetail({ deviceId, onBack }) {
             <button className="dd-outline-btn" onClick={() => setShowLoginHistory(true)}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               Login History
-            </button>
-            <button className="dd-update-btn" onClick={() => { dispatch(clearUpdateState()); setShowUpdate(true); }}>
-              <EditIcon /> Update Status
             </button>
           </div>
         )}
@@ -424,13 +428,6 @@ export default function DeviceDetail({ deviceId, onBack }) {
             </SectionCard>
           )}
         </>
-      )}
-
-      {showUpdate && d && (
-        <UpdateStatusModal
-          device={d}
-          onClose={() => { dispatch(clearUpdateState()); setShowUpdate(false); }}
-        />
       )}
     </div>
   );
