@@ -3,10 +3,10 @@ import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchDevices, fetchDeviceStats,
   updateDeviceStatus, revokeDevice,
-  clearToast, setDeviceFilters, clearDeviceFilters, clearDeviceDetail,
+  clearToast, setDeviceFilters, clearDeviceFilters, clearDeviceDetail, clearUpdateState,
 } from '../../store/slices/deviceSlice';
 import { apiFetchAdminDevices } from '../../services/api';
-import DeviceDetail from './DeviceDetail';
+import DeviceDetail, { UpdateStatusModal } from './DeviceDetail';
 import './DevicePage.css';
 
 /* ── Icons ─────────────────────────────────────────────── */
@@ -91,9 +91,7 @@ const TYPE_TABS = [
 const STATUS_FILTERS = [
   { key: 'all',             label: 'All',             status: '',         current_session: false },
   { key: 'active',          label: 'Active',          status: 'active',   current_session: false, color: '#10b981' },
-  { key: 'inactive',        label: 'Inactive',        status: 'inactive', current_session: false, color: '#94a3b8' },
   { key: 'blocked',         label: 'Blocked',         status: 'blocked',  current_session: false, color: '#ef4444' },
-  { key: 'current_session', label: 'Current Session', status: '',         current_session: true,  color: '#00d4ff' },
 ];
 
 /* ── Helpers ────────────────────────────────────────────── */
@@ -158,7 +156,11 @@ function Pagination({ current, totalPages, totalItems, pageSize, onPage }) {
 }
 
 /* ── Device Card ────────────────────────────────────────── */
-function DeviceCard({ device, canEdit, onToggle, onRevoke, actionLoading, onCardClick }) {
+// Device health "normal" is shown to admins as "Active" (and styled green like active).
+const dispStatusKey = (s) => (String(s || '').toLowerCase() === 'normal' ? 'active' : String(s || '').toLowerCase());
+const dispStatusLabel = (s) => { const k = dispStatusKey(s); return k ? k.charAt(0).toUpperCase() + k.slice(1) : '—'; };
+
+function DeviceCard({ device, canEdit, onToggle, onRevoke, actionLoading, onCardClick, onEdit }) {
   const id   = device.device_id || device.id;
   const tc   = TYPE_CONFIG[device.device_type || device.type] || TYPE_CONFIG.phone;
   const busy = actionLoading === id;
@@ -187,9 +189,9 @@ function DeviceCard({ device, canEdit, onToggle, onRevoke, actionLoading, onCard
           <div className="dc-device-name">{name}</div>
           <div className="dc-os">{os}</div>
         </div>
-        <span className={`dc-status ${device.status}`}>
+        <span className={`dc-status ${dispStatusKey(device.status)}`}>
           <span className="dc-status-dot" />
-          {(device.status || '').charAt(0).toUpperCase() + (device.status || '').slice(1)}
+          {dispStatusLabel(device.status)}
         </span>
       </div>
 
@@ -231,17 +233,9 @@ function DeviceCard({ device, canEdit, onToggle, onRevoke, actionLoading, onCard
             {busy ? '…' : '✓ Restore'}
           </button>
         ) : (
-          <>
-            <button
-              className="dc-btn deactivate"
-              disabled
-            >
-              ○ Deactivate
-            </button>
-            <button className="dc-btn revoke" onClick={() => onRevoke(id)} disabled={busy}>
-              {busy ? '…' : '✕ Revoke'}
-            </button>
-          </>
+          <button className="dc-btn edit" onClick={onEdit}>
+            ✎ Edit
+          </button>
         )}
       </div>
     </div>
@@ -249,7 +243,7 @@ function DeviceCard({ device, canEdit, onToggle, onRevoke, actionLoading, onCard
 }
 
 /* ── Device Table Row ───────────────────────────────────── */
-function DeviceTableRow({ device, canEdit, onToggle, onRevoke, actionLoading, onRowClick }) {
+function DeviceTableRow({ device, canEdit, onToggle, onRevoke, actionLoading, onRowClick, onEdit }) {
   const id   = device.device_id || device.id;
   const tc   = TYPE_CONFIG[device.device_type || device.type] || TYPE_CONFIG.phone;
   const busy = actionLoading === id;
@@ -282,9 +276,9 @@ function DeviceTableRow({ device, canEdit, onToggle, onRevoke, actionLoading, on
       <td style={{ fontSize:'0.8rem', color:'var(--text-secondary)' }}>{location}</td>
       <td style={{ fontSize:'0.8rem', color:'var(--text-muted)' }}>{timeAgo(device.last_heartbeat_at || device.lastSeen)}</td>
       <td>
-        <span className={`dc-status ${device.status}`} style={{ fontSize:'0.7rem' }}>
+        <span className={`dc-status ${dispStatusKey(device.status)}`} style={{ fontSize:'0.7rem' }}>
           <span className="dc-status-dot" />
-          {(device.status||'').charAt(0).toUpperCase()+(device.status||'').slice(1)}
+          {dispStatusLabel(device.status)}
         </span>
       </td>
       <td onClick={e => e.stopPropagation()}>
@@ -292,10 +286,7 @@ function DeviceTableRow({ device, canEdit, onToggle, onRevoke, actionLoading, on
           : device.status === 'blocked' || device.status === 'revoked' ? (
             <button className="dc-btn activate" style={{ padding:'5px 12px' }} onClick={() => onToggle(id,'active')} disabled={busy}>{busy?'…':'✓ Restore'}</button>
           ) : (
-            <div style={{ display:'flex', gap:6 }}>
-              <button className={`dc-btn ${device.status==='active'?'deactivate':'activate'}`} style={{ padding:'5px 10px', fontSize:'0.72rem' }} onClick={() => onToggle(id, device.status==='active'?'inactive':'active')} disabled={busy}>{busy?'…':device.status==='active'?'Deactivate':'Activate'}</button>
-              <button className="dc-btn revoke" style={{ padding:'5px 10px', fontSize:'0.72rem' }} onClick={() => onRevoke(id)} disabled={busy}>{busy?'…':'Revoke'}</button>
-            </div>
+            <button className="dc-btn edit" style={{ padding:'5px 12px', fontSize:'0.72rem' }} onClick={onEdit}>✎ Edit</button>
           )}
       </td>
     </tr>
@@ -314,6 +305,7 @@ export default function DevicePage() {
     () => sessionStorage.getItem('deviceDetailId') || null
   );
   const [revokeTarget,  setRevokeTarget] = useState(null);
+  const [editTarget,    setEditTarget]   = useState(null);
   const [exportOpen,    setExportOpen]   = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const [exportError,   setExportError]   = useState(null);
@@ -380,6 +372,28 @@ export default function DevicePage() {
     sessionStorage.removeItem('deviceDetailId');
     setDetailId(null);
   };
+
+  // Re-fetch the current device list (used after an inline status edit so the card/row
+  // reflects the new status without a page reload).
+  const refreshDevices = () => {
+    const p = {};
+    if (filters.search)          p.search          = filters.search;
+    if (filters.status)          p.status          = filters.status;
+    if (filters.device_type)     p.device_type     = filters.device_type;
+    if (filters.platform)        p.platform        = filters.platform;
+    if (filters.plan_type)       p.plan_type       = filters.plan_type;
+    if (filters.has_risk_flag)   p.has_risk_flag   = true;
+    if (filters.heartbeat_stale) p.heartbeat_stale = true;
+    if (filters.current_session) p.current_session = true;
+    p.sort_by    = filters.sort_by;
+    p.sort_order = filters.sort_order;
+    p.page       = filters.page;
+    p.page_size  = filters.page_size;
+    dispatch(fetchDevices(p));
+  };
+
+  const openEdit = (device) => { dispatch(clearUpdateState()); setEditTarget(device); };
+  const closeEdit = () => { setEditTarget(null); refreshDevices(); };
 
   if (detailId) {
     return <DeviceDetail deviceId={detailId} onBack={closeDetail} />;
@@ -720,6 +734,7 @@ export default function DevicePage() {
                 onRevoke={() => handleRevoke(d)}
                 actionLoading={actionLoading}
                 onCardClick={() => openDetail(d.device_id || d.id)}
+                onEdit={() => openEdit(d)}
               />
             ))}
           </div>
@@ -745,7 +760,7 @@ export default function DevicePage() {
                 {devices.map(d => (
                   <DeviceTableRow key={d.device_id || d.id} device={d} canEdit={canEdit}
                     onToggle={handleToggle} onRevoke={() => handleRevoke(d)} actionLoading={actionLoading}
-                    onRowClick={() => openDetail(d.device_id || d.id)} />
+                    onRowClick={() => openDetail(d.device_id || d.id)} onEdit={() => openEdit(d)} />
                 ))}
               </tbody>
             </table>
@@ -762,6 +777,10 @@ export default function DevicePage() {
           onClose={() => setRevokeTarget(null)}
           onConfirm={confirmRevoke}
         />
+      )}
+
+      {editTarget && (
+        <UpdateStatusModal device={editTarget} onClose={closeEdit} />
       )}
     </div>
   );

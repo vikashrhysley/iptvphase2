@@ -171,7 +171,7 @@ const SECTION_CARDS = [
   },
   {
     key: 'status',
-    label: 'Status',
+    label: 'Device Status',
     accent: '#10b981',
     type: 'status',
     getData: s => s?.risk_health?.by_status,
@@ -298,6 +298,24 @@ export default function HeartbeatPage() {
     dispatch(fetchRiskyHeartbeatDevices(DEFAULT_RISKY_FILTERS));
   }, [dispatch]);
 
+  // Auto-refresh the stat sections (Overview / Risk Health / Status / By Country) so
+  // end-user-driven changes appear without a manual reload. Silent = numbers swap in place
+  // with no flicker; paused while the tab is hidden.
+  useEffect(() => {
+    const REFRESH_MS = 2000;
+    let timer = null;
+    const poll = () => dispatch(fetchHeartbeatStats({ silent: true }));
+    const start = () => { if (!timer) timer = setInterval(poll, REFRESH_MS); };
+    const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
+    const onVisibility = () => {
+      if (document.hidden) stop();
+      else { poll(); start(); }
+    };
+    start();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => { stop(); document.removeEventListener('visibilitychange', onVisibility); };
+  }, [dispatch]);
+
   useEffect(() => {
     if (!didMountLogSearch.current) {
       didMountLogSearch.current = true;
@@ -309,12 +327,21 @@ export default function HeartbeatPage() {
         user_email: logSearch,
         status: logStatus,
         page: 1,
-        page_size: 8,
+        // When searching by email, pull a wider window so the client-side email filter
+        // (below) has data to match against — the logs endpoint doesn't filter by email.
+        page_size: logSearch.trim() ? 200 : 8,
       }));
     }, 350);
 
     return () => clearTimeout(timer);
   }, [dispatch, logSearch, logStatus]);
+
+  // The heartbeat logs endpoint ignores the user_email param, so filter by email on the
+  // client over the fetched window. Case-insensitive substring match.
+  const emailTerm = (logFilters.user_email || '').trim().toLowerCase();
+  const visibleLogs = emailTerm
+    ? logs.filter((l) => (l.user_email || '').toLowerCase().includes(emailTerm))
+    : logs;
 
   return (
     <div className="heartbeat-page">
@@ -329,9 +356,6 @@ export default function HeartbeatPage() {
               onExportPDF={() => exportHeartbeatToPDF(logs, risky)}
               onExportExcel={() => exportHeartbeatToExcel(logs, risky)}
             />
-            <button className="hb-refresh" onClick={() => dispatch(fetchHeartbeatStats())} disabled={statsLoading}>
-              {statsLoading ? 'Refreshing...' : 'Refresh'}
-            </button>
           </div>
         </div>
 
@@ -407,7 +431,7 @@ export default function HeartbeatPage() {
             <div className="hb-title">Heartbeat Logs</div>
             <div className="hb-subtitle">Latest heartbeat activity across devices.</div>
           </div>
-          <button className="hb-refresh" onClick={() => dispatch(fetchHeartbeatLogs({ page: 1, page_size: 8 }))} disabled={logsLoading}>
+          <button className="hb-refresh" onClick={() => dispatch(fetchHeartbeatLogs({ user_email: logFilters.user_email, status: logFilters.status, page: 1, page_size: emailTerm ? 200 : 8 }))} disabled={logsLoading}>
             {logsLoading ? 'Loading...' : 'Refresh'}
           </button>
         </div>
@@ -465,7 +489,7 @@ export default function HeartbeatPage() {
               <tbody>
                 {logsLoading ? (
                   <tr><td colSpan="9" className="hb-table-state">Loading heartbeat logs...</td></tr>
-                ) : logs.length ? logs.map(log => (
+                ) : visibleLogs.length ? visibleLogs.map(log => (
                   <tr key={log.id || `${log.user_email}-${log.created_at}`}>
                     <td><span className="hb-date-text">{fmtDateTime(log.created_at)}</span></td>
                     <td><span className="hb-ellipsis" title={log.user_email || ''}>{log.user_email || '—'}</span></td>
@@ -478,16 +502,21 @@ export default function HeartbeatPage() {
                     <td><span className="hb-response">{fmtNum(log.response_ms, 'ms')}</span></td>
                   </tr>
                 )) : (
-                  <tr><td colSpan="9" className="hb-table-state">No heartbeat logs found.</td></tr>
+                  <tr><td colSpan="9" className="hb-table-state">
+                    {emailTerm ? `No heartbeat logs found for "${logFilters.user_email.trim()}".` : 'No heartbeat logs found.'}
+                  </td></tr>
                 )}
               </tbody>
             </table>
-            <Pager
-              page={Number(logFilters.page)}
-              disabled={logsLoading}
-              hasNext={hasNextPage(logs, logsTotal, logFilters)}
-              onPage={page => dispatch(fetchHeartbeatLogs({ ...logFilters, page }))}
-            />
+            {/* Server pager only when not email-searching (search is filtered client-side). */}
+            {!emailTerm && (
+              <Pager
+                page={Number(logFilters.page)}
+                disabled={logsLoading}
+                hasNext={hasNextPage(logs, logsTotal, logFilters)}
+                onPage={page => dispatch(fetchHeartbeatLogs({ ...logFilters, page }))}
+              />
+            )}
           </div>
         )}
       </section>

@@ -186,10 +186,9 @@
   color: var(--text-muted);
   font-family: ui-monospace, 'SFMono-Regular', 'Consolas', monospace;
   margin-top: 3px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 340px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  max-width: 520px;
 }
 .udd-hero-badges {
   display: flex;

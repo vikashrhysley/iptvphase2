@@ -522,6 +522,13 @@
 }
 .dc-btn.revoke:hover:not(:disabled) { background: rgba(239,68,68,0.15); }
 
+.dc-btn.edit {
+  background: var(--accent-glow);
+  border-color: var(--border-accent);
+  color: var(--accent-primary);
+}
+.dc-btn.edit:hover:not(:disabled) { background: var(--accent-primary); color: #001018; }
+
 .dc-btn.disabled-btn {
   background: var(--bg-surface);
   border-color: var(--border-subtle);

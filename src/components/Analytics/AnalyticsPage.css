@@ -66,6 +66,7 @@
 .an-stat-split-divider { width:1px; background:var(--border-subtle); }
 
 .an-stats-row.an-stats-row-3 { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.an-stats-row.an-stats-row-2 { grid-template-columns:repeat(2,minmax(0,1fr)); }
 
 /* ── License summary card (single card, multiple metrics) ── */
 .an-license-row {

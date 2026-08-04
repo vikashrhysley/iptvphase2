@@ -741,12 +741,7 @@ function UserAnalytics() {
         <div className="an-empty">No data available.</div>
       ) : (
         <>
-          <div className="an-stats-row an-stats-row-3">
-            <div className="an-stat-card" style={{ '--asc': '#00d4ff' }}>
-              <div className="an-stat-accent" />
-              <div className="an-stat-label">Total Users Ever</div>
-              <div className="an-stat-value">{total.toLocaleString()}</div>
-            </div>
+          <div className="an-stats-row an-stats-row-2">
             <div className="an-stat-card" style={{ '--asc': '#10b981' }}>
               <div className="an-stat-accent" />
               <div className="an-stat-label">New Users (Period)</div>
