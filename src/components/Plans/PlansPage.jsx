@@ -381,6 +381,7 @@ export default function PlansPage() {
 
   const totalPlans  = plans.length;
   const activePlans = plans.filter(p => p.is_active).length;
+  const inactivePlans = totalPlans - activePlans;
   const totalActiveLicenses = plans.reduce((sum, p) => sum + (p.active_licenses || 0), 0);
 
   return (
@@ -412,6 +413,11 @@ export default function PlansPage() {
             <div className="pp-stat-accent" />
             <div className="pp-stat-value">{activePlans.toLocaleString()}</div>
             <div className="pp-stat-label">Active Plans</div>
+          </div>
+          <div className="pp-stat-card" style={{ '--psc': '#94a3b8' }}>
+            <div className="pp-stat-accent" />
+            <div className="pp-stat-value">{inactivePlans.toLocaleString()}</div>
+            <div className="pp-stat-label">Inactive Plans</div>
           </div>
           <div className="pp-stat-card" style={{ '--psc': '#a78bfa' }}>
             <div className="pp-stat-accent" />

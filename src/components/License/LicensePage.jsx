@@ -621,18 +621,6 @@ export default function LicensePage() {
                           >
                             <span className='me-2'>View</span> <SquareArrowRightExit size={15} />
                           </Button>
-                          {canEdit && (
-                            <Button
-                              variant="primary"
-                              size="sm"
-                              onClick={() => dispatch(openEditModal({ ...l, id: lid }))} disabled={busy}
-                              className="d-flex  rounded-1 align-items-center justify-content-center text-light py-1 px-2"
-                              title="Edit"
-                              style={{ fontSize: "11px", width: "55px" }}
-                            >
-                              Edit <Pencil size={13} />
-                            </Button>
-                          )}
                         </div>
                       </td>
                       <td>

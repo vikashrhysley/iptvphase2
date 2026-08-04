@@ -73,10 +73,9 @@ export const fetchAppUsersStats = createAsyncThunk(
       return rejectWithValue(err.message);
     }
   },
-  { condition: (_, { getState }) => {
-    const { statsLoading, stats } = getState().appUsers;
-    return !statsLoading && !stats;
-  }}
+  // Allow re-fetch (e.g. after a block/unblock/plan mutation) — only guard against
+  // concurrent in-flight requests, not against having data already.
+  { condition: (_, { getState }) => !getState().appUsers.statsLoading }
 );
 
 export const fetchAppUsers = createAsyncThunk(
@@ -156,6 +155,7 @@ const appUsersSlice = createSlice({
       plan_status: 'all',
       device_status: 'all',
       trial_used: 'all',
+      segment: '',
       sort_by: 'created_at',
       sort_order: 'desc',
       page: 1,
@@ -220,6 +220,7 @@ const appUsersSlice = createSlice({
         plan_status: 'all',
         device_status: 'all',
         trial_used: 'all',
+        segment: '',
         sort_by: 'created_at',
         sort_order: 'desc',
         page: 1,

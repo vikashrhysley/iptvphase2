@@ -251,6 +251,50 @@ function Pagination({ current, totalPages, totalItems, pageSize, onPage }) {
 /* ── Main Page ──────────────────────────────────────────── */
 const SORTABLE = ['active_device_count', 'last_login_at', 'created_at', 'email', 'full_name'];
 
+// Worklist segment → human label (for the active-filter chip).
+const SEGMENT_LABELS = {
+  issued_a_plan: 'Issued a plan',
+  presently_using: 'Presently using',
+  on_a_plan: 'Enabled',
+  revoked: 'Blocked (licence)',
+  stopped_using: 'Stopped using',
+  never_had_a_plan: 'Not issued a plan',
+  licensed_no_device: 'Licensed, no device',
+  signed_out: 'Signed out',
+  signed_in: 'Signed in',
+  online_now: 'Online now',
+  idle: 'Idle',
+  expiring_7d: 'Expiring ≤7 days',
+  at_device_limit: 'At device limit',
+  quiet_90d: 'Quiet 90d+ review',
+};
+// Segments whose COUNTER includes deleted accounts the LIST can't show (short by `deleted`).
+const PARTIAL_SEGMENTS = new Set(['issued_a_plan', 'stopped_using']);
+const PLAN_STATE_LABELS = { expired: 'Plan expired', payment_hold: 'Payment failed', cancelled: 'Cancelled' };
+
+// One stat row: label + number. Clickable ones filter the table; `disabled` renders the
+// (deleted) row muted with no interaction; `alert` flags a tripwire (licensed_no_device > 0).
+function StatRow({ label, value, level = 0, onClick, active, disabled, alert }) {
+  const cls = `su-stat-row lvl-${level}${active ? ' active' : ''}${disabled ? ' disabled' : ''}${alert ? ' alert' : ''}`;
+  const body = (
+    <>
+      <span className="su-stat-label">{label}</span>
+      <span className="su-stat-val">{(value ?? 0).toLocaleString()}</span>
+    </>
+  );
+  if (disabled) {
+    return <div className={cls} title="Deleted accounts are hidden from the list by design">{body}</div>;
+  }
+  return (
+    <button type="button" className={cls} onClick={onClick} title="Filter the list by this">{body}</button>
+  );
+}
+
+// A small sub-heading for a grouped cut inside Card 1 (keeps the two 67-cuts from flattening).
+function StatGroup({ children, level = 2 }) {
+  return <div className={`su-stat-grouplabel lvl-${level}`}>{children}</div>;
+}
+
 export default function AppUsersPage() {
   const dispatch = useDispatch();
   const { users, total, page, pageSize, loading, error, filters, stats, statsLoading, statsError } = useSelector((s) => s.appUsers);
@@ -279,18 +323,58 @@ export default function AppUsersPage() {
     if (filters.status !== 'all') p.status = filters.status;
     if (filters.plan_type && filters.plan_type !== 'all') p.plan_type = filters.plan_type;
     if (filters.plan_status && filters.plan_status !== 'all') p.plan_status = filters.plan_status;
+    if (filters.segment) p.segment = filters.segment;
     if (filters.sort_by) p.sort_by = filters.sort_by;
     if (filters.sort_order) p.sort_order = filters.sort_order;
     p.page = filters.page;
     p.page_size = filters.page_size;
     dispatch(fetchAppUsers(p));
-  }, [dispatch, filters.search, filters.status, filters.plan_type, filters.plan_status,
+  }, [dispatch, filters.search, filters.status, filters.plan_type, filters.plan_status, filters.segment,
     filters.sort_by, filters.sort_order, filters.page, filters.page_size]);
 
   /* All hooks above — conditional render AFTER */
   if (detailUserId) {
-    return <AppUserDetail userId={detailUserId} onBack={() => setDetailUserId(null)} />;
+    return (
+      <AppUserDetail
+        userId={detailUserId}
+        onBack={() => { setDetailUserId(null); dispatch(fetchAppUsersStats()); }}
+      />
+    );
   }
+
+  // A stat-tile click resets the filter set to exactly this tile's filter, so the list's
+  // meta.total matches the number shown (the tile→count contract from the guide).
+  const applyStat = (patch) => {
+    setSearchInput('');
+    dispatch(setFilters({
+      status: 'all', plan_type: 'all', plan_status: 'all', segment: '', search: '', page: 1,
+      ...patch,
+    }));
+  };
+  // Whether the current filters equal a given tile's filter (drives the highlight + chip).
+  const isActive = (patch) => {
+    if (patch.segment)     return filters.segment === patch.segment;
+    if (patch.status)      return !filters.segment && filters.status === patch.status;
+    if (patch.plan_type)   return !filters.segment && filters.plan_type === patch.plan_type && filters.plan_status === 'all';
+    if (patch.plan_status) return !filters.segment && filters.plan_status === patch.plan_status && filters.plan_type === 'all';
+    return false;
+  };
+  const clearAllFilters = () => { setSearchInput(''); dispatch(clearFilters()); };
+  const goLiveStats = () => window.dispatchEvent(new CustomEvent('app:navigate', { detail: { page: 'home' } }));
+
+  // Human label for the active worklist filter (shown as a removable chip by the search bar).
+  const activeFilterLabel = (() => {
+    if (filters.segment) return SEGMENT_LABELS[filters.segment] || filters.segment;
+    if (filters.status === 'blocked') return 'Blocked';
+    if (filters.plan_type === 'free') return 'Trial';
+    if (filters.plan_type === 'paid') return 'Paid';
+    if (filters.plan_status && filters.plan_status !== 'all') return PLAN_STATE_LABELS[filters.plan_status] || filters.plan_status;
+    return null;
+  })();
+  // The two partial segments show fewer rows than their tile (deleted excluded) — note it on the chip.
+  const deletedCount = stats?.plan_funnel?.issued_a_plan?.stopped_using?.deleted ?? 0;
+  const chipNote = (PARTIAL_SEGMENTS.has(filters.segment) && deletedCount > 0)
+    ? `${deletedCount} deleted not shown` : null;
 
   const handleSort = (field) => {
     if (!SORTABLE.includes(field)) return;
@@ -321,209 +405,104 @@ export default function AppUsersPage() {
         )}
       </div>
 
-      {/* Stats */}
-      {statsLoading && <div className="su-stats-loading" />}
-      {statsError && <div className="su-stats-error">Failed to load stats: {statsError}</div>}
-      {stats && !statsLoading && (() => {
-        const S = stats.stats || {};
-        const V = stats.verification || {};
-        const L = stats.license || {};
-        const N = stats.new_users || {};
-        const by = S;
-        const total = S.total || 1;
-        const countries = stats.top_countries || [];
-        const maxC = Math.max(...countries.map(c => c.count), 1);
-        const max30d = Math.max(N.new_30d ?? 1, 1);
-        const pct = (n) => Math.min(100, Math.round(((n ?? 0) / total) * 100));
-
-        // SVG ring helper
-        const Ring = ({ value, color, size = 68, sw = 6 }) => {
-          const r = (size - sw) / 2;
-          const circ = 2 * Math.PI * r;
-          const p = pct(value);
-          return (
-            <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-              <circle cx={size / 2} cy={size / 2} r={r} fill="none"
-                style={{ stroke: 'var(--border-subtle)' }} strokeWidth={sw} />
-              <circle cx={size / 2} cy={size / 2} r={r} fill="none"
-                stroke={color} strokeWidth={sw}
-                strokeDasharray={circ}
-                strokeDashoffset={circ * (1 - p / 100)}
-                strokeLinecap="round"
-                transform={`rotate(-90 ${size / 2} ${size / 2})`}
-                style={{ transition: 'stroke-dashoffset 0.9s ease' }}
-              />
-              <text x={size / 2} y={size / 2 + 1} textAnchor="middle" dominantBaseline="middle"
-                fontSize={size < 72 ? '11' : '13'} fontWeight="800" fill={color}>{p}%</text>
-            </svg>
-          );
-        };
+      {/* ── Stat header: context bar + three worklist cards ── */}
+      {statsError ? (
+        <div className="su-stats-error">Failed to load stats: {statsError}</div>
+      ) : statsLoading && !stats ? (
+        <div className="su-stat-skel-wrap">
+          <div className="su-context-bar su-skel" />
+          <div className="su-cards-row-3">
+            <div className="su-statcard su-skel" />
+            <div className="su-statcard su-skel" />
+            <div className="su-statcard su-skel" />
+          </div>
+        </div>
+      ) : stats && (() => {
+        const pf = stats.plan_funnel || {};
+        const ip = pf.issued_a_plan || {};
+        const pu = ip.presently_using || {};
+        const bas = pu.by_account_state || {};
+        const bp = pu.by_plan || {};
+        const su = ip.stopped_using || {};
+        const usage = stats.usage || {};
+        const at = stats.attention || {};
+        const listable = pf.listable ?? 0;
+        const verified = pf.verified_users ?? 0;
+        const deleted = su.deleted ?? 0;
+        const newWeek = stats.new_signups_7d ?? 0;
+        const lndAlert = (at.licensed_no_device ?? 0) > 0;
 
         return (
           <>
-            {/* ── Row 1: 2 cards ── */}
-            <div className="su-cards-row-2">
-
-              {/* Card 1 · Total */}
-              <div className="su-card">
-                <div className="su-card-top">
-                  <span className="su-card-label">Total Subscribers</span>
-                  <span className="su-card-accent cyan" />
-                </div>
-
-                <div className="su-card-big">{total.toLocaleString()}</div>
-
-                <div className="su-seg-bar">
-                  <div className="su-seg c-active" style={{ flex: by.active ?? 0 }} />
-                  <div className="su-seg c-blocked" style={{ flex: by.blocked ?? 0 }} />
-                  <div className="su-seg c-suspended" style={{ flex: by.suspended ?? 0 }} />
-                  <div className="su-seg c-inactive" style={{ flex: by.inactive ?? 0 }} />
-                </div>
-
-                <div className="su-status-chips">
-                  {[
-                    { cls: 'c-active', clr: '#10b981', label: 'Active', val: by.active },
-                    { cls: 'c-blocked', clr: '#ef4444', label: 'Blocked', val: by.blocked },
-                    { cls: 'c-suspended', clr: '#f59e0b', label: 'Suspended', val: by.suspended },
-                    { cls: 'c-inactive', clr: '#64748b', label: 'Inactive', val: by.inactive },
-                  ].map(({ cls, clr, label, val }) => (
-                    <div className="su-chip" key={label} style={{ '--cc': clr }}>
-                      <span className={`su-chip-dot ${cls}`} />
-                      <div className="su-chip-body">
-                        <span className="su-chip-label">{label}</span>
-                        <strong className="su-chip-val">{(val ?? 0).toLocaleString()}</strong>
-                      </div>
-                      <span className="su-chip-pct">{pct(val)}%</span>
-                    </div>
-                  ))}
-                </div>
+            {/* Row 1 — context line (not a card) */}
+            <div className="su-context-bar">
+              <div className="su-ctx-text">
+                <strong>{listable.toLocaleString()}</strong> verified users
+                <span className="su-ctx-sep">·</span>
+                <span className="su-ctx-new">+{newWeek.toLocaleString()} this week</span>
+                {deleted > 0 && <span className="su-ctx-deleted">{deleted.toLocaleString()} deleted</span>}
               </div>
-
-              {/* Card 2 · Verification */}
-              <div className="su-card">
-                <div className="su-card-top">
-                  <span className="su-card-label">Verification</span>
-                  <span className="su-card-accent violet" />
-                </div>
-                <div className="su-rings-row">
-                  {[
-                    { label: 'Email Verified', val: V.email_verified, color: '#7c3aed' },
-                    { label: 'Phone Verified', val: V.phone_verified, color: '#0284c7' },
-                    { label: 'Trial Used', val: L.trial_used, color: '#f59e0b' },
-                  ].map(({ label, val, color }) => (
-                    <div className="su-ring-item" key={label}>
-                      <Ring value={val} color={color} />
-                      <strong className="su-ring-val" style={{ color }}>
-                        {(val ?? 0).toLocaleString()}
-                      </strong>
-                      <span className="su-ring-label">{label}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
+              <button type="button" className="su-ctx-link" onClick={goLiveStats}>
+                View full funnel →
+              </button>
             </div>
 
-            {/* ── Row 2: 3 cards ── */}
+            {/* Row 2 — three cards; every number filters the table below */}
             <div className="su-cards-row-3">
-
-              {/* Card 3 · License */}
-              <div className="su-card">
-                <div className="su-card-top">
-                  <span className="su-card-label">License Coverage</span>
-                  <span className="su-card-accent blue" />
+              {/* Card 1 · Plan Funnel */}
+              <div className="su-statcard su-statcard-funnel">
+                <div className="su-statcard-head">
+                  <span className="su-statcard-title">Plan Funnel</span>
+                  {/* verified_users includes deleted → not clickable */}
+                  <span className="su-statcard-total static" title="Includes deleted accounts — not filterable">{verified.toLocaleString()}</span>
                 </div>
-                <div className="su-rings-row">
-                  {[
-                    { label: 'Licensed', val: L.with_active_license, color: '#00d4ff', size: 80, sw: 7 },
-                    { label: 'w/ Device', val: L.with_active_device, color: '#10b981', size: 80, sw: 7 },
-                  ].map(({ label, val, color, size, sw }) => (
-                    <div className="su-ring-item" key={label}>
-                      <Ring value={val} color={color} size={size} sw={sw} />
-                      <strong className="su-ring-val" style={{ color }}>
-                        {(val ?? 0).toLocaleString()}
-                      </strong>
-                      <span className="su-ring-label">{label}</span>
-                    </div>
-                  ))}
+                <StatRow label="Not issued a plan" value={pf.not_issued_a_plan} onClick={() => applyStat({ segment: 'never_had_a_plan' })} active={isActive({ segment: 'never_had_a_plan' })} />
+                <StatRow label="Issued a plan" value={ip.count} onClick={() => applyStat({ segment: 'issued_a_plan' })} active={isActive({ segment: 'issued_a_plan' })} />
+                <StatRow label="Presently using" value={pu.count} level={1} onClick={() => applyStat({ segment: 'presently_using' })} active={isActive({ segment: 'presently_using' })} />
+                <div className="su-stat-subgroup">
+                  <StatGroup>by account state</StatGroup>
+                  <StatRow label="Enabled" value={bas.enabled} level={3} onClick={() => applyStat({ segment: 'on_a_plan' })} active={isActive({ segment: 'on_a_plan' })} />
+                  <StatRow label="Blocked" value={bas.blocked} level={3} onClick={() => applyStat({ segment: 'revoked' })} active={isActive({ segment: 'revoked' })} />
+                  <StatGroup>by plan</StatGroup>
+                  <StatRow label="Trial" value={bp.trial} level={3} onClick={() => applyStat({ plan_type: 'free' })} active={isActive({ plan_type: 'free' })} />
+                  <StatRow label="Paid" value={bp.paid} level={3} onClick={() => applyStat({ plan_type: 'paid' })} active={isActive({ plan_type: 'paid' })} />
                 </div>
-                <div className="su-no-license">
-                  <span className="su-no-license-dot" />
-                  No License
-                  <strong>{(L.without_license ?? 0).toLocaleString()}</strong>
-                  <span className="su-no-license-pct">{pct(L.without_license)}%</span>
-                </div>
+                <StatRow label="Stopped using" value={su.count} level={1} onClick={() => applyStat({ segment: 'stopped_using' })} active={isActive({ segment: 'stopped_using' })} />
+                <StatRow label="Plan expired" value={su.plan_expired} level={2} onClick={() => applyStat({ plan_status: 'expired' })} active={isActive({ plan_status: 'expired' })} />
+                <StatRow label="Payment failed" value={su.payment_failed} level={2} onClick={() => applyStat({ plan_status: 'payment_hold' })} active={isActive({ plan_status: 'payment_hold' })} />
+                <StatRow label="Cancelled" value={su.cancelled} level={2} onClick={() => applyStat({ plan_status: 'cancelled' })} active={isActive({ plan_status: 'cancelled' })} />
+                <StatRow label="Deleted" value={su.deleted} level={2} disabled />
               </div>
 
-              {/* Card 4 · New Users */}
-              <div className="su-card">
-                <div className="su-card-top">
-                  <span className="su-card-label">New Users</span>
-                  <span className="su-card-accent green" />
+              {/* Card 2 · Usage (this IS presently_using expanded) */}
+              <div className="su-statcard">
+                <div className="su-statcard-head">
+                  <span className="su-statcard-title">Usage</span>
+                  <button type="button" className="su-statcard-total" onClick={() => applyStat({ segment: 'presently_using' })} title="Filter: presently using">
+                    {(usage.total ?? 0).toLocaleString()}
+                  </button>
                 </div>
-                <div className="su-new-hero">
-                  <div>
-                    <div className="su-new-big">{(N.new_24h ?? 0).toLocaleString()}</div>
-                    <div className="su-new-hero-sub">registered today</div>
-                  </div>
-                  <div className="su-new-aside">
-                    <div className="su-new-aside-item">
-                      <strong>{(N.new_7d ?? 0).toLocaleString()}</strong>
-                      <span>7 days</span>
-                    </div>
-                    <div className="su-new-aside-divider" />
-                    <div className="su-new-aside-item">
-                      <strong>{(N.new_30d ?? 0).toLocaleString()}</strong>
-                      <span>30 days</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="su-new-bars">
-                  {[
-                    { label: 'Today', val: N.new_24h, cls: 'today' },
-                    { label: '7 Days', val: N.new_7d, cls: 'week' },
-                    { label: '30 Days', val: N.new_30d, cls: 'month' },
-                  ].map(({ label, val, cls }) => (
-                    <div className="su-new-row" key={label}>
-                      <span className="su-new-period">{label}</span>
-                      <div className="su-new-track">
-                        <div className={`su-new-bar ${cls}`}
-                          style={{ width: `${Math.max(2, ((val ?? 0) / max30d) * 100)}%` }} />
-                      </div>
-                      <strong className="su-new-val">{(val ?? 0).toLocaleString()}</strong>
-                    </div>
-                  ))}
-                </div>
+                <StatRow label="Signed out" value={usage.signed_out} onClick={() => applyStat({ segment: 'signed_out' })} active={isActive({ segment: 'signed_out' })} />
+                <StatRow label="Signed in" value={usage.signed_in} onClick={() => applyStat({ segment: 'signed_in' })} active={isActive({ segment: 'signed_in' })} />
+                <StatRow label="Online now" value={usage.online_now} level={1} onClick={() => applyStat({ segment: 'online_now' })} active={isActive({ segment: 'online_now' })} />
+                <StatRow label="Idle" value={usage.idle} level={1} onClick={() => applyStat({ segment: 'idle' })} active={isActive({ segment: 'idle' })} />
               </div>
 
-              {/* Card 5 · Top Countries */}
-              {countries.length > 0 && (
-                <div className="su-card">
-                  <div className="su-card-top">
-                    <span className="su-card-label">Top Countries</span>
-                    <span className="su-card-accent cyan" />
-                  </div>
-                  <div className="su-countries-bars">
-                    {countries.slice(0, 6).map((c, i) => (
-                      <div className="su-cty-row" key={c.country_code}>
-                        <span className="su-cty-rank">#{i + 1}</span>
-                        <span className="su-cty-code">{c.country_code}</span>
-                        <div className="su-cty-track">
-                          <div className="su-cty-fill" style={{ width: `${(c.count / maxC) * 100}%` }} />
-                        </div>
-                        <strong className="su-cty-count">{c.count.toLocaleString()}</strong>
-                        <span className="su-cty-pct">{Math.round((c.count / total) * 100)}%</span>
-                      </div>
-                    ))}
-                  </div>
+              {/* Card 3 · Needs Attention (queues — rows overlap, no total) */}
+              <div className="su-statcard">
+                <div className="su-statcard-head">
+                  <span className="su-statcard-title">Needs Attention</span>
                 </div>
-              )}
-
+                <StatRow label="Expiring ≤7 days" value={at.expiring_in_7_days} onClick={() => applyStat({ segment: 'expiring_7d' })} active={isActive({ segment: 'expiring_7d' })} />
+                <StatRow label="Blocked" value={at.blocked} onClick={() => applyStat({ status: 'blocked' })} active={isActive({ status: 'blocked' })} />
+                <StatRow label="At device limit" value={at.at_device_limit} onClick={() => applyStat({ segment: 'at_device_limit' })} active={isActive({ segment: 'at_device_limit' })} />
+                <StatRow label="Quiet 90d+ review" value={at.quiet_90d_review} onClick={() => applyStat({ segment: 'quiet_90d' })} active={isActive({ segment: 'quiet_90d' })} />
+                <StatRow label="Licensed, no device" value={at.licensed_no_device} alert={lndAlert} onClick={() => applyStat({ segment: 'licensed_no_device' })} active={isActive({ segment: 'licensed_no_device' })} />
+              </div>
             </div>
           </>
         );
       })()}
-
       {/* Toolbar */}
       <div className="su-toolbar">
         <div className="su-search-wrap">
@@ -538,13 +517,20 @@ export default function AppUsersPage() {
               onChange={(e) => setSearchInput(e.target.value)}
             />
           </div>
+          {activeFilterLabel && (
+            <div className="su-filter-chip" title="Active filter — click ✕ to clear">
+              <span className="su-filter-chip-label">{activeFilterLabel}</span>
+              {chipNote && <span className="su-filter-chip-note">{chipNote}</span>}
+              <button type="button" className="su-filter-chip-x" onClick={clearAllFilters} aria-label="Clear filter">✕</button>
+            </div>
+          )}
         </div>
 
         <div className="su-toolbar-filters">
           <div className="su-filter">
             <label>Account Status</label>
-            <select className="su-select" value={filters.status}
-              onChange={(e) => dispatch(setFilters({ status: e.target.value, page: 1 }))}>
+            <select className="su-select" value={filters.segment ? 'all' : filters.status}
+              onChange={(e) => dispatch(setFilters({ status: e.target.value, segment: '', page: 1 }))}>
               <option value="all">All</option>
               <option value="active">Active</option>
               <option value="blocked">Blocked</option>
@@ -553,8 +539,8 @@ export default function AppUsersPage() {
 
           <div className="su-filter">
             <label>Plan Type</label>
-            <select className="su-select" value={filters.plan_type || 'all'}
-              onChange={(e) => dispatch(setFilters({ plan_type: e.target.value, page: 1 }))}>
+            <select className="su-select" value={filters.segment ? 'all' : (filters.plan_type || 'all')}
+              onChange={(e) => dispatch(setFilters({ plan_type: e.target.value, segment: '', page: 1 }))}>
               <option value="all">All</option>
               <option value="free">Free</option>
               <option value="paid">Paid</option>
@@ -563,8 +549,8 @@ export default function AppUsersPage() {
 
           <div className="su-filter">
             <label>Plan Status</label>
-            <select className="su-select" value={filters.plan_status || 'all'}
-              onChange={(e) => dispatch(setFilters({ plan_status: e.target.value, page: 1 }))}>
+            <select className="su-select" value={filters.segment ? 'all' : (filters.plan_status || 'all')}
+              onChange={(e) => dispatch(setFilters({ plan_status: e.target.value, segment: '', page: 1 }))}>
               <option value="all">All</option>
               <option value="active">Active</option>
               <option value="expired">Expired</option>

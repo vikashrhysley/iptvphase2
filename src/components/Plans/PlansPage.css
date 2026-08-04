@@ -10,7 +10,7 @@
 
 /* ── Summary stats ── */
 .pp-stats-row {
-  display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:20px;
+  display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:20px;
 }
 .pp-stat-card {
   background:var(--bg-card); border:1px solid var(--border-subtle);
