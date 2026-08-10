@@ -6,6 +6,10 @@ import {
   apiFetchNotificationDetail,
   apiMarkNotificationRead,
   apiMarkAllNotificationsRead,
+  apiFetchNotificationSummaryByUser,
+  apiFetchNotificationUserGroups,
+  apiFetchNotificationUserHistory,
+  apiMarkUserNotificationsRead,
 } from './api';
 
 const TOKEN = 'test-token';
@@ -107,5 +111,45 @@ describe('notifications API — detail & mutations', () => {
 
   it('throws Unauthorized when no token is provided', async () => {
     await expect(apiFetchNotificationUnreadCount('')).rejects.toThrow(/Unauthorized/);
+  });
+});
+
+describe('notifications API — user-grouped endpoints', () => {
+  it('summary-by-user sends the limit and normalizes { totalUnreadUsers, users }', async () => {
+    nextBody = { success: true, data: { total_unread_users: 2, users: [{ user_id: 'u1', unread_count: 1 }] } };
+    const out = await apiFetchNotificationSummaryByUser(TOKEN, 10);
+    expect(lastUrl).toContain('/admin/notifications/summary-by-user?limit=10');
+    expect(out.totalUnreadUsers).toBe(2);
+    expect(out.users).toHaveLength(1);
+  });
+
+  it('user groups list normalizes into { items, total, totalPages } and passes include_archived', async () => {
+    nextBody = { success: true, data: [{ user_id: 'u1' }], meta: { page: 1, page_size: 20, total: 1, total_pages: 1 } };
+    const out = await apiFetchNotificationUserGroups(TOKEN, { page: 1, page_size: 20, include_archived: true });
+    expect(lastUrl).toContain('/admin/notifications/users?');
+    expect(lastUrl).toContain('include_archived=true');
+    expect(out.items).toHaveLength(1);
+    expect(out.total).toBe(1);
+  });
+
+  it('one user history builds the id path with category/priority/date filters', async () => {
+    nextBody = { success: true, data: [{ id: 'n1' }], meta: { page: 1, page_size: 20, total: 1, total_pages: 1 } };
+    const out = await apiFetchNotificationUserHistory(TOKEN, 'u1', { category: 'LICENSING', priority: 'HIGH', date_from: '2026-01-01', page: 1 });
+    expect(lastUrl).toMatch(/\/admin\/notifications\/users\/u1\?/);
+    expect(lastUrl).toContain('category=LICENSING');
+    expect(lastUrl).toContain('priority=HIGH');
+    expect(lastUrl).toContain('date_from=2026-01-01');
+    expect(out.items[0].id).toBe('n1');
+  });
+
+  it('per-user read-all PATCHes /users/{id}/read-all with an optional category', async () => {
+    nextBody = { success: true, data: { marked_count: 2, category: null, target_user_id: 'u1' } };
+    const out = await apiMarkUserNotificationsRead(TOKEN, 'u1');
+    expect(lastOptions.method).toBe('PATCH');
+    expect(lastUrl).toMatch(/\/admin\/notifications\/users\/u1\/read-all$/);
+    expect(out.marked_count).toBe(2);
+
+    await apiMarkUserNotificationsRead(TOKEN, 'u1', 'DEVICE');
+    expect(lastUrl).toContain('/admin/notifications/users/u1/read-all?category=DEVICE');
   });
 });

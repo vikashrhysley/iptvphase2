@@ -104,7 +104,8 @@
 .su-ctx-text strong { color: var(--text-primary); font-weight: 800; }
 .su-ctx-sep { margin: 0 8px; color: var(--text-muted); }
 .su-ctx-new { color: #34d399; font-weight: 700; }
-.su-ctx-deleted { margin-left: 16px; color: var(--text-muted); font-size: 0.82rem; }
+.su-ctx-split { color: var(--text-muted); font-size: 0.86rem; }
+.su-ctx-deleted { color: var(--text-muted); font-size: 0.86rem; }
 .su-ctx-link {
   background: none; border: none; cursor: pointer;
   color: var(--accent-primary); font-family: var(--font-body);
@@ -119,8 +120,24 @@
   padding: 14px 16px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
 }
+/* Rows fill the card so all three cards read at the same height (bars distribute evenly). */
+.su-statcard-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+/* Plan Funnel — full-width card, body laid out in two columns so it's not a tall list */
+.su-statcard-wide { margin-bottom: 14px; }
+.su-funnel-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 32px;
+}
+.su-funnel-col { display: flex; flex-direction: column; gap: 4px; }
 .su-statcard-head {
   display: flex;
   align-items: center;
@@ -146,13 +163,14 @@
   color: var(--text-primary); line-height: 1; cursor: default;
 }
 
+/* A stat row = label + value on one line */
 .su-stat-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   width: 100%;
-  padding: 7px 8px;
+  padding: 5px 8px;
   background: none;
   border: none;
   border-radius: 8px;
@@ -183,14 +201,65 @@
 
 /* The two SAME-set cuts of "Presently using" — grouped so they never read as siblings */
 .su-stat-subgroup {
-  margin: 2px 0 2px 20px;
-  padding: 4px 0 4px 8px;
+  margin: 1px 0 1px 20px;
+  padding: 2px 0 2px 8px;
   border-left: 2px solid var(--border-subtle);
 }
 .su-stat-grouplabel {
   font-size: 0.6rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.07em;
-  color: var(--text-muted); padding: 4px 8px 2px 12px;
+  color: var(--text-muted); padding: 3px 8px 1px 12px;
 }
+
+/* Two cuts of "Presently using", side by side (compact + clearly separated) */
+.su-funnel-cuts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 5px 0 6px 20px;
+}
+.su-cut {
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 8px 6px 6px;
+}
+.su-cut-title {
+  font-size: 0.58rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-muted); padding: 0 6px 4px;
+}
+.su-cut .su-stat-row { padding: 4px 6px; }
+.su-cut .su-stat-label { font-size: 0.8rem; }
+.su-cut .su-stat-val { font-size: 0.86rem; }
+
+/* Stopped-using breakdown as compact chips */
+.su-funnel-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 5px 0 2px 20px;
+}
+.su-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: all var(--transition-fast);
+}
+.su-pill:hover { border-color: var(--border-accent); background: var(--bg-hover); }
+.su-pill.active { background: var(--accent-glow); border-color: var(--border-accent); }
+.su-pill.active .su-pill-label,
+.su-pill.active .su-pill-val { color: var(--accent-primary); }
+.su-pill.disabled { cursor: default; opacity: 0.65; }
+.su-pill.disabled:hover { border-color: var(--border-subtle); background: var(--bg-raised); }
+.su-pill.disabled .su-pill-label,
+.su-pill.disabled .su-pill-val { font-style: italic; }
+.su-pill-label { font-size: 0.74rem; color: var(--text-muted); font-weight: 600; }
+.su-pill-val { font-size: 0.78rem; font-weight: 800; color: var(--text-primary); }
 
 /* Active-filter chip near the search bar */
 .su-filter-chip {
@@ -230,6 +299,7 @@
 .su-cards-row-3 {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch; /* all three cards share the tallest height */
   gap: 14px;
   margin-bottom: 14px;
 }
@@ -848,6 +918,7 @@
   .su-page        { padding: 18px; }
   .su-cards-row-3 { grid-template-columns: 1fr; }
   .su-cards-row-2 { grid-template-columns: 1fr; }
+  .su-funnel-cols { grid-template-columns: 1fr; }
   .su-toolbar     { flex-direction: column; align-items: stretch; }
   .su-search-wrap { max-width: 100%; }
   .su-toolbar-filters { flex-wrap: wrap; }

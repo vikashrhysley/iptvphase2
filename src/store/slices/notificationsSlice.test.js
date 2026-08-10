@@ -11,6 +11,12 @@ import reducer, {
   markNotificationRead,
   markVisibleNotificationsRead,
   markAllNotificationsRead,
+  setActiveNotificationUser,
+  setUserHistoryFilters,
+  fetchNotificationSummaryByUser,
+  fetchNotificationUserGroups,
+  fetchNotificationUserHistory,
+  markUserNotificationsRead,
 } from './notificationsSlice';
 
 // Fresh initial state from the reducer, seeded for a test.
@@ -149,5 +155,88 @@ describe('notificationsSlice — functionality (15 cases)', () => {
 
     s = reducer(s, removeNotification('a'));
     expect(s.items.map((n) => n.id)).toEqual(['b']);
+  });
+});
+
+describe('notificationsSlice — user-grouped views', () => {
+  it('16. summary-by-user fulfilled stores the users + total', () => {
+    let s = seed();
+    s = reducer(s, act(fetchNotificationSummaryByUser, 'fulfilled', { totalUnreadUsers: 2, users: [{ user_id: 'u1', unread_count: 1 }] }));
+    expect(s.summaryByUserLoading).toBe(false);
+    expect(s.summaryByUser.totalUnreadUsers).toBe(2);
+    expect(s.summaryByUser.users).toHaveLength(1);
+  });
+
+  it('17. user groups fulfilled stores rows + pagination', () => {
+    let s = seed();
+    s = reducer(s, act(fetchNotificationUserGroups, 'fulfilled', { items: [{ user_id: 'u1' }], page: 1, pageSize: 20, total: 1, totalPages: 1 }));
+    expect(s.userGroups).toHaveLength(1);
+    expect(s.userGroupsTotal).toBe(1);
+  });
+
+  it('18. setActiveNotificationUser sets the user and resets history filters', () => {
+    let s = seed({ userHistoryFilters: { category: 'DEVICE', priority: 'HIGH', include_archived: true, date_from: 'x', date_to: 'y', page: 3, page_size: 20 } });
+    s = reducer(s, setActiveNotificationUser({ user_id: 'u1', email: 'a@b.com', full_name: 'A' }));
+    expect(s.activeUser.user_id).toBe('u1');
+    expect(s.userHistoryFilters.category).toBe('');
+    expect(s.userHistoryFilters.page).toBe(1);
+    expect(s.userHistory).toEqual([]);
+  });
+
+  it('19. setUserHistoryFilters merges into the existing history filters', () => {
+    let s = seed();
+    s = reducer(s, setUserHistoryFilters({ category: 'LICENSING', page: 2 }));
+    expect(s.userHistoryFilters.category).toBe('LICENSING');
+    expect(s.userHistoryFilters.page).toBe(2);
+    expect(s.userHistoryFilters.page_size).toBe(20);
+  });
+
+  it('20. user history fulfilled stores items + pagination', () => {
+    let s = seed();
+    s = reducer(s, act(fetchNotificationUserHistory, 'fulfilled', { items: [{ id: 'n1', is_read: false }], page: 1, pageSize: 20, total: 1, totalPages: 1 }));
+    expect(s.userHistory).toHaveLength(1);
+    expect(s.userHistoryTotal).toBe(1);
+  });
+
+  it('21. per-user read-all (no category) drops the user from the bell + trims badge/group/history', () => {
+    let s = seed({
+      unreadCount: 5,
+      activeUser: { user_id: 'u1' },
+      summaryByUser: { totalUnreadUsers: 2, users: [{ user_id: 'u1', unread_count: 2 }, { user_id: 'u2', unread_count: 1 }] },
+      userGroups: [{ user_id: 'u1', unread_count: 2 }],
+      userHistory: [{ id: 'n1', category: 'DEVICE', is_read: false }, { id: 'n2', category: 'USER', is_read: false }],
+    });
+    s = reducer(s, act(markUserNotificationsRead, 'fulfilled', { marked_count: 2, category: null, target_user_id: 'u1' }, { userId: 'u1' }));
+    expect(s.unreadCount).toBe(3);
+    expect(s.summaryByUser.users.map((u) => u.user_id)).toEqual(['u2']);
+    expect(s.summaryByUser.totalUnreadUsers).toBe(1);
+    expect(s.userGroups[0].unread_count).toBe(0);
+    expect(s.userHistory.every((n) => n.is_read)).toBe(true);
+  });
+
+  it('22. per-user read-all scoped to a category only flips that category in history', () => {
+    let s = seed({
+      unreadCount: 3,
+      activeUser: { user_id: 'u1' },
+      summaryByUser: { totalUnreadUsers: 1, users: [{ user_id: 'u1', unread_count: 2 }] },
+      userHistory: [{ id: 'n1', category: 'DEVICE', is_read: false }, { id: 'n2', category: 'USER', is_read: false }],
+    });
+    s = reducer(s, act(markUserNotificationsRead, 'fulfilled', { marked_count: 1, category: 'DEVICE', target_user_id: 'u1' }, { userId: 'u1', category: 'DEVICE' }));
+    expect(s.userHistory.find((n) => n.id === 'n1').is_read).toBe(true);
+    expect(s.userHistory.find((n) => n.id === 'n2').is_read).toBe(false);
+    expect(s.summaryByUser.users[0].unread_count).toBe(1);
+  });
+
+  it('23. global read-all also empties the bell and zeroes group rows', () => {
+    let s = seed({
+      unreadCount: 4,
+      summaryByUser: { totalUnreadUsers: 2, users: [{ user_id: 'u1', unread_count: 2 }, { user_id: 'u2', unread_count: 2 }] },
+      userGroups: [{ user_id: 'u1', unread_count: 2 }, { user_id: 'u2', unread_count: 2 }],
+    });
+    s = reducer(s, act(markAllNotificationsRead, 'fulfilled', { marked_count: 4, category: null, target_user_id: null }, {}));
+    expect(s.unreadCount).toBe(0);
+    expect(s.summaryByUser.users).toEqual([]);
+    expect(s.summaryByUser.totalUnreadUsers).toBe(0);
+    expect(s.userGroups.every((g) => g.unread_count === 0)).toBe(true);
   });
 });

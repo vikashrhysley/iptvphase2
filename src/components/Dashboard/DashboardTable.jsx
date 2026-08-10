@@ -245,37 +245,27 @@ const LIVE_SECTIONS = [
     ],
     groups: [
       {
+        // One flat status list — the six by_status buckets sum exactly to the headline count,
+        // so the parts visibly reach the whole. Scales against the total (totalPath), and every
+        // bucket is drawn (including zero rows and Cancelled, which the old nested layout hid).
         label: 'Total Licenses Ever',
-        // Part-to-whole: presently held + stopped working sum to the lifetime total.
         totalPath: 'total_licenses_ever.count',
         bars: [
-          { label: 'Present Licenses', path: 'total_licenses_ever.presently_held.count', tone: 'good' },
-          { label: 'Stopped Working', path: 'total_licenses_ever.stopped_working.count', tone: 'warn' },
+          { label: 'Active',         path: 'total_licenses_ever.by_status.active_licenses',         tone: 'good'  },
+          { label: 'Blocked',        path: 'total_licenses_ever.by_status.blocked_licenses',        tone: 'bad'   },
+          { label: 'Plan Expired',   path: 'total_licenses_ever.by_status.plan_expired_licenses',   tone: 'muted' },
+          { label: 'Payment Failed', path: 'total_licenses_ever.by_status.payment_failed_licenses', tone: 'warn'  },
+          { label: 'Cancelled',      path: 'total_licenses_ever.by_status.cancelled_licenses',      tone: 'muted' },
+          { label: 'Deleted',        path: 'total_licenses_ever.by_status.deleted_licenses',        tone: 'muted' },
         ],
       },
       {
-        label: 'Present Licenses',
-        // Header shows the present-licenses count; working + blocked sum to it.
-        totalPath: 'total_licenses_ever.presently_held.count',
-        bars: [
-          { label: 'Working Licenses', path: 'total_licenses_ever.presently_held.by_state.working_licenses', tone: 'good' },
-          { label: 'Blocked Licenses', path: 'total_licenses_ever.presently_held.by_state.blocked_licenses', tone: 'bad' },
-        ],
-      },
-      {
-        label: 'Stopped Working',
-        totalPath: 'total_licenses_ever.stopped_working.count',
-        bars: [
-          { label: 'Plan Expired Licenses', path: 'total_licenses_ever.stopped_working.plan_expired_licenses', tone: 'warn' },
-          { label: 'Payment Failed', path: 'total_licenses_ever.stopped_working.payment_failed_licenses', tone: 'bad' },
-          { label: 'Deleted Licenses', path: 'total_licenses_ever.deleted_licenses', tone: 'muted' },
-        ],
-      },
-      {
+        // Kept separate: 48h/7d/30d are overlapping windows over active licences and do not sum
+        // to anything — no totalPath, so they scale to their own peak, not the status total.
         label: 'Licenses Expiring Soon',
         bars: [
-          { label: 'Expiring 48h', path: 'expiring_soon.expiring_48h', tone: 'bad' },
-          { label: 'Expiring 7d', path: 'expiring_soon.expiring_7d', tone: 'warn' },
+          { label: 'Expiring 48h', path: 'expiring_soon.expiring_48h', tone: 'warn' },
+          { label: 'Expiring 7d',  path: 'expiring_soon.expiring_7d',  tone: 'warn' },
           { label: 'Expiring 30d', path: 'expiring_soon.expiring_30d', tone: 'warn' },
         ],
       },

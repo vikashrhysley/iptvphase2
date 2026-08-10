@@ -88,6 +88,28 @@
   border-radius: var(--radius-md);
   font-size: 0.875rem;
 }
+.dd-error-msg { font-weight: 700; }
+.dd-error-hint {
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+.dd-error-retry {
+  margin-top: 14px;
+  padding: 8px 18px;
+  background: rgba(239,68,68,0.12);
+  border: 1px solid rgba(239,68,68,0.4);
+  border-radius: var(--radius-md);
+  color: #f87171;
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.dd-error-retry:hover { background: #f87171; color: #1a0000; border-color: #f87171; }
 
 /* ── Hero ── */
 .dd-hero {

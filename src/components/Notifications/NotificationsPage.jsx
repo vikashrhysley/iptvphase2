@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
-  fetchNotifications,
+  fetchNotificationUserGroups,
+  fetchNotificationUserHistory,
   fetchNotificationDetail,
   markNotificationRead,
-  markAllNotificationsRead,
+  markUserNotificationsRead,
   fetchNotificationUnreadCount,
-  fetchNotificationSummary,
-  setNotificationFilters,
+  fetchNotificationSummaryByUser,
+  setActiveNotificationUser,
+  setUserHistoryFilters,
+  setUserGroupsIncludeArchived,
   clearNotificationDetail,
   dropReadFromCount,
-  removeNotification,
 } from '../../store/slices/notificationsSlice';
 import './NotificationsPage.css';
 
@@ -39,6 +41,17 @@ const fmtFull = (iso) => {
     });
   } catch { return '—'; }
 };
+
+const avatarChar = (u) => {
+  const s = (u?.full_name || u?.email || '').trim();
+  return s ? s.charAt(0).toUpperCase() : '?';
+};
+
+const BackIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+    <polyline points="15 18 9 12 15 6" />
+  </svg>
+);
 
 /* ── Detail modal ────────────────────────────────────────── */
 function NotificationDetailModal({ onClose }) {
@@ -81,45 +94,22 @@ function NotificationDetailModal({ onClose }) {
   );
 }
 
-export default function NotificationsPage() {
+/* ── Level 1: user-grouped list ──────────────────────────── */
+function UserGroupsView() {
   const dispatch = useDispatch();
-  const { items, loading, error, page, totalPages, total, filters, unreadCount } = useSelector((s) => s.notifications);
-  const [detailOpen, setDetailOpen] = useState(false);
+  const {
+    userGroups, userGroupsLoading, userGroupsError,
+    userGroupsTotal, userGroupsTotalPages, userGroupsIncludeArchived,
+  } = useSelector((s) => s.notifications);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
-    dispatch(fetchNotifications(filters));
-  }, [dispatch, filters]);
+    dispatch(fetchNotificationUserGroups({ page, page_size: 20, include_archived: userGroupsIncludeArchived }));
+  }, [dispatch, page, userGroupsIncludeArchived]);
 
-  const setF = (patch) => dispatch(setNotificationFilters({ page: 1, ...patch }));
-
-  const openNotif = (n) => {
-    if (!n.is_read) {
-      dispatch(markNotificationRead({ id: n.id }));
-      // Badge drops after 5s, then the row leaves the list after 10s.
-      setTimeout(() => dispatch(dropReadFromCount({ id: n.id, category: n.category })), 5000);
-      setTimeout(() => dispatch(removeNotification(n.id)), 10000);
-    }
-    dispatch(fetchNotificationDetail(n.id));
-    setDetailOpen(true);
-  };
-
-  const closeDetail = () => { setDetailOpen(false); dispatch(clearNotificationDetail()); };
-
-  // "Mark all read" = one bulk /read-all call (scoped to the active category filter if any),
-  // then refetch the list + badge + summary so the rows and the bell reflect server truth.
-  // Using the bulk endpoint is reliable (one request the reducer zeroes the count on) instead
-  // of firing N per-id PATCHes where a single failure would silently leave everything unread.
-  const markPageRead = async () => {
-    const category = filters.category || undefined;
-    try {
-      await dispatch(markAllNotificationsRead(category ? { category } : {})).unwrap();
-    } catch { /* surfaced via error state */ }
-    dispatch(fetchNotifications(filters));
-    dispatch(fetchNotificationUnreadCount());
-    dispatch(fetchNotificationSummary());
-  };
-
-  const hasUnreadOnPage = items.some((n) => !n.is_read);
+  const openUser = (g) => dispatch(setActiveNotificationUser({
+    user_id: g.user_id, email: g.email, full_name: g.full_name,
+  }));
 
   return (
     <div className="nt-page">
@@ -127,11 +117,125 @@ export default function NotificationsPage() {
         <div>
           <h1 className="nt-title">Notifications</h1>
           <div className="nt-subtitle">
-            {total.toLocaleString()} total{unreadCount > 0 ? ` · ${unreadCount} unread` : ''}
+            {userGroupsTotal.toLocaleString()} {userGroupsTotal === 1 ? 'user' : 'users'} with activity
           </div>
         </div>
-        {hasUnreadOnPage && (
-          <button className="nt-markall-btn" onClick={markPageRead}>
+      </div>
+
+      <div className="nt-toolbar">
+        <label className="nt-check">
+          <input
+            type="checkbox"
+            checked={userGroupsIncludeArchived}
+            onChange={(e) => { setPage(1); dispatch(setUserGroupsIncludeArchived(e.target.checked)); }}
+          />
+          Include archived
+        </label>
+      </div>
+
+      {userGroupsLoading && !userGroups.length ? (
+        <div className="nt-empty">Loading…</div>
+      ) : userGroupsError ? (
+        <div className="nt-error">{userGroupsError}</div>
+      ) : userGroups.length === 0 ? (
+        <div className="nt-empty">No notification activity yet.</div>
+      ) : (
+        <div className="nt-list">
+          {userGroups.map((g) => (
+            <button
+              className={`nt-row${(g.unread_count ?? 0) > 0 ? ' unread' : ''}`}
+              key={g.user_id}
+              onClick={() => openUser(g)}
+            >
+              <span className="nt-user-avatar">{avatarChar(g)}</span>
+              <div className="nt-row-main">
+                <div className="nt-row-top">
+                  <span className="nt-user-name">{g.full_name || g.email}</span>
+                  {g.last_category && <span className={`nt-cat cat-${g.last_category?.toLowerCase()}`}>{catLabel(g.last_category)}</span>}
+                  {g.last_priority && <span className={`nt-pri pri-${g.last_priority?.toLowerCase()}`}>{g.last_priority}</span>}
+                  <span className="nt-time">{relTime(g.last_created_at)}</span>
+                </div>
+                <div className="nt-row-title">{g.last_title || '—'}</div>
+                <div className="nt-row-msg">{g.last_message || ''}</div>
+              </div>
+              <div className="nt-user-counts">
+                {(g.unread_count ?? 0) > 0 && <span className="nt-user-unread">{g.unread_count} unread</span>}
+                <span className="nt-user-total">{g.total_count ?? 0} total</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {userGroupsTotalPages > 1 && (
+        <div className="nt-pagination">
+          <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
+          <span>Page {page} of {userGroupsTotalPages}</span>
+          <button disabled={page >= userGroupsTotalPages} onClick={() => setPage((p) => p + 1)}>Next</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Level 2: one user's history ─────────────────────────── */
+function UserHistoryView() {
+  const dispatch = useDispatch();
+  const {
+    activeUser, userHistory, userHistoryLoading, userHistoryError,
+    userHistoryFilters, userHistoryPage, userHistoryTotalPages, userHistoryTotal,
+  } = useSelector((s) => s.notifications);
+  const [detailOpen, setDetailOpen] = useState(false);
+
+  useEffect(() => {
+    dispatch(fetchNotificationUserHistory({ userId: activeUser.user_id, params: userHistoryFilters }));
+  }, [dispatch, activeUser.user_id, userHistoryFilters]);
+
+  const setHF = (patch) => dispatch(setUserHistoryFilters({ page: 1, ...patch }));
+
+  const openNotif = (n) => {
+    if (!n.is_read) {
+      dispatch(markNotificationRead({ id: n.id }));
+      // Badge drops after 5s (row stays visible in the history view).
+      setTimeout(() => dispatch(dropReadFromCount({ id: n.id, category: n.category })), 5000);
+    }
+    dispatch(fetchNotificationDetail(n.id));
+    setDetailOpen(true);
+  };
+
+  const closeDetail = () => { setDetailOpen(false); dispatch(clearNotificationDetail()); };
+
+  // Per-user "Mark all read" → users/{id}/read-all (scoped to the active category filter if any),
+  // then refetch this user's history + the badge + the bell so everything matches server truth.
+  const markUserRead = async () => {
+    const category = userHistoryFilters.category || undefined;
+    try {
+      await dispatch(markUserNotificationsRead({ userId: activeUser.user_id, category })).unwrap();
+    } catch { /* surfaced via error state */ }
+    dispatch(fetchNotificationUserHistory({ userId: activeUser.user_id, params: userHistoryFilters }));
+    dispatch(fetchNotificationUnreadCount());
+    dispatch(fetchNotificationSummaryByUser());
+  };
+
+  const hasUnread = userHistory.some((n) => !n.is_read);
+
+  return (
+    <div className="nt-page">
+      <div className="nt-header">
+        <div className="nt-head-user">
+          <button className="nt-back" onClick={() => dispatch(setActiveNotificationUser(null))}>
+            <BackIcon /> All users
+          </button>
+          <div>
+            <h1 className="nt-title">{activeUser.full_name || activeUser.email}</h1>
+            <div className="nt-subtitle">
+              {activeUser.email}
+              {userHistoryTotal ? ` · ${userHistoryTotal.toLocaleString()} notification${userHistoryTotal === 1 ? '' : 's'}` : ''}
+            </div>
+          </div>
+        </div>
+        {hasUnread && (
+          <button className="nt-markall-btn" onClick={markUserRead}>
             Mark all read
           </button>
         )}
@@ -140,39 +244,47 @@ export default function NotificationsPage() {
       {/* Filters */}
       <div className="nt-toolbar">
         <div className="nt-filter">
-          <label>Status</label>
-          <select className="nt-select" value={filters.is_read} onChange={(e) => setF({ is_read: e.target.value })}>
-            <option value="all">All</option>
-            <option value="false">Unread</option>
-            <option value="true">Read</option>
-          </select>
-        </div>
-        <div className="nt-filter">
           <label>Category</label>
-          <select className="nt-select" value={filters.category} onChange={(e) => setF({ category: e.target.value })}>
+          <select className="nt-select" value={userHistoryFilters.category} onChange={(e) => setHF({ category: e.target.value })}>
             <option value="">All</option>
             {CATEGORIES.map((c) => <option key={c} value={c}>{catLabel(c)}</option>)}
           </select>
         </div>
         <div className="nt-filter">
           <label>Priority</label>
-          <select className="nt-select" value={filters.priority} onChange={(e) => setF({ priority: e.target.value })}>
+          <select className="nt-select" value={userHistoryFilters.priority} onChange={(e) => setHF({ priority: e.target.value })}>
             <option value="">All</option>
             {PRIORITIES.map((p) => <option key={p} value={p}>{p.charAt(0) + p.slice(1).toLowerCase()}</option>)}
           </select>
         </div>
+        <div className="nt-filter">
+          <label>From</label>
+          <input type="date" className="nt-select" value={userHistoryFilters.date_from} onChange={(e) => setHF({ date_from: e.target.value })} />
+        </div>
+        <div className="nt-filter">
+          <label>To</label>
+          <input type="date" className="nt-select" value={userHistoryFilters.date_to} onChange={(e) => setHF({ date_to: e.target.value })} />
+        </div>
+        <label className="nt-check">
+          <input
+            type="checkbox"
+            checked={userHistoryFilters.include_archived}
+            onChange={(e) => setHF({ include_archived: e.target.checked })}
+          />
+          Include archived
+        </label>
       </div>
 
       {/* List */}
-      {loading && !items.length ? (
+      {userHistoryLoading && !userHistory.length ? (
         <div className="nt-empty">Loading notifications…</div>
-      ) : error ? (
-        <div className="nt-error">{error}</div>
-      ) : items.length === 0 ? (
+      ) : userHistoryError ? (
+        <div className="nt-error">{userHistoryError}</div>
+      ) : userHistory.length === 0 ? (
         <div className="nt-empty">No notifications match these filters.</div>
       ) : (
         <div className="nt-list">
-          {items.map((n) => (
+          {userHistory.map((n) => (
             <button className={`nt-row${n.is_read ? '' : ' unread'}`} key={n.id} onClick={() => openNotif(n)}>
               <span className={`nt-dot${n.is_read ? ' read' : ''}`} />
               <div className="nt-row-main">
@@ -191,15 +303,20 @@ export default function NotificationsPage() {
       )}
 
       {/* Pagination */}
-      {totalPages > 1 && (
+      {userHistoryTotalPages > 1 && (
         <div className="nt-pagination">
-          <button disabled={page <= 1} onClick={() => setF({ page: page - 1 })}>Prev</button>
-          <span>Page {page} of {totalPages}</span>
-          <button disabled={page >= totalPages} onClick={() => setF({ page: page + 1 })}>Next</button>
+          <button disabled={userHistoryPage <= 1} onClick={() => dispatch(setUserHistoryFilters({ page: userHistoryPage - 1 }))}>Prev</button>
+          <span>Page {userHistoryPage} of {userHistoryTotalPages}</span>
+          <button disabled={userHistoryPage >= userHistoryTotalPages} onClick={() => dispatch(setUserHistoryFilters({ page: userHistoryPage + 1 }))}>Next</button>
         </div>
       )}
 
       {detailOpen && <NotificationDetailModal onClose={closeDetail} />}
     </div>
   );
+}
+
+export default function NotificationsPage() {
+  const activeUser = useSelector((s) => s.notifications.activeUser);
+  return activeUser ? <UserHistoryView /> : <UserGroupsView />;
 }

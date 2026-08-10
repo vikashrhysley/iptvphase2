@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import toast from 'react-hot-toast';
-import { fetchDeviceDetail, clearDeviceDetail, updateDeviceStatus, replaceDevice, clearUpdateState } from '../../store/slices/deviceSlice';
+import { fetchDeviceDetail, clearDeviceDetail } from '../../store/slices/deviceSlice';
 import DeviceActivity    from './DeviceActivity';
 import DeviceLoginHistory from './DeviceLoginHistory';
 import './DeviceDetail.css';
@@ -11,17 +9,6 @@ import './DeviceDetail.css';
 const BackIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
     <polyline points="15 18 9 12 15 6" />
-  </svg>
-);
-const EditIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-  </svg>
-);
-const XIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
   </svg>
 );
 
@@ -74,124 +61,6 @@ function SectionCard({ title, children }) {
   );
 }
 
-/* ── Update Status Modal ────────────────────────────────── */
-const STATUS_OPTIONS = [
-  { value: 'active',    label: 'Active',    color: '#34d399' },
-  { value: 'blocked',   label: 'Blocked',   color: '#f87171' },
-  { value: 'suspended', label: 'Suspended', color: '#fbbf24' },
-  { value: 'replaced',  label: 'Replaced',  color: '#a78bfa' },
-];
-
-export function UpdateStatusModal({ device, onClose }) {
-  const dispatch = useDispatch();
-  const { updateLoading, updateError, updateSuccess } = useSelector(s => s.devices);
-  // Preselect the device's current status (case-insensitive) so e.g. an active device
-  // opens with "Active" already highlighted. Device health "normal" maps to Active.
-  const rawStatus = String(device.status || 'active').toLowerCase();
-  const currentStatus = rawStatus === 'normal' ? 'active' : rawStatus;
-  const [status, setStatus] = useState(currentStatus);
-  const [reason, setReason] = useState('');
-
-  const isReplaced   = status === 'replaced';
-  const alreadyThat  = status === currentStatus;
-  const deviceId     = device.device_id || device.id;
-
-  // On success: close the popup and surface the result as a toast (no inline message).
-  useEffect(() => {
-    if (!updateSuccess) return;
-    toast.success(isReplaced ? 'Device marked as replaced.' : 'Status updated successfully.');
-    dispatch(clearUpdateState());
-    onClose();
-  }, [updateSuccess]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    dispatch(clearUpdateState());
-    if (isReplaced) {
-      dispatch(replaceDevice({ deviceId, reason: reason || 'admin_replacement' }));
-    } else {
-      dispatch(updateDeviceStatus({ deviceId, status, reason }));
-    }
-  };
-
-  // Rendered through a portal to <body> so the fixed overlay is always relative to the
-  // viewport — pages like Device Management use `animation: fadeIn … both` (which animates
-  // transform) on a container, and that would otherwise anchor `position: fixed` to it.
-  return createPortal(
-    <div className="dd-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <form className="dd-modal" onSubmit={handleSubmit}>
-        <div className="dd-modal-header">
-          <div className="dd-modal-title"><EditIcon /> Update Device Status</div>
-          <button type="button" className="dd-modal-close" onClick={onClose}><XIcon /></button>
-        </div>
-        <p className="dd-modal-sub">
-          Change status for <strong>{device.device_brand} {device.device_model || device.device_name}</strong>.
-          The reason is written to the audit log.
-        </p>
-
-        <div className="dd-modal-field">
-          <label>New Status</label>
-          <div className="dd-status-options">
-            {STATUS_OPTIONS.map(opt => {
-              const disabled = opt.value === 'replaced' && currentStatus === 'replaced';
-              return (
-                <label
-                  key={opt.value}
-                  className={`dd-status-option${status === opt.value ? ' selected' : ''}${disabled ? ' dd-opt-disabled' : ''}`}
-                  style={{ '--opt-color': opt.color }}
-                >
-                  <input type="radio" name="status" value={opt.value}
-                    checked={status === opt.value}
-                    disabled={disabled}
-                    onChange={() => { if (!disabled) { setStatus(opt.value); dispatch(clearUpdateState()); } }}
-                  />
-                  <span className="dd-opt-dot" />
-                  {opt.label}
-                </label>
-              );
-            })}
-          </div>
-        </div>
-
-        {isReplaced && (
-          <div className="dd-replace-warn">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            Sets status to <strong>replaced</strong> via a dedicated endpoint. This records a factory reset or device swap.
-            Defaults reason to <code>admin_replacement</code> if left blank.
-          </div>
-        )}
-
-        <div className="dd-modal-field">
-          <label>Reason <span className="dd-optional">(optional — written to audit log)</span></label>
-          <textarea
-            value={reason}
-            onChange={e => { setReason(e.target.value); dispatch(clearUpdateState()); }}
-            placeholder={isReplaced ? 'e.g. factory_reset, device_swap… (default: admin_replacement)' : 'Describe why this status change is being made…'}
-            rows={3}
-            disabled={updateLoading}
-          />
-        </div>
-
-        {updateError && (
-          <div className="dd-modal-error">{updateError}</div>
-        )}
-
-        <div className="dd-modal-actions">
-          <button type="button" className="dd-btn-cancel" onClick={onClose} disabled={updateLoading}>
-            Cancel
-          </button>
-          <button type="submit" className="dd-btn-save"
-            disabled={updateLoading || alreadyThat}>
-            {updateLoading ? <span className="dd-mini-spin" /> : <EditIcon />}
-            {updateLoading ? 'Saving…' : isReplaced ? 'Mark as Replaced' : 'Update Status'}
-          </button>
-        </div>
-      </form>
-    </div>,
-    document.body
-  );
-}
-
 /* ── Main ───────────────────────────────────────────────── */
 export default function DeviceDetail({ deviceId, onBack }) {
   const dispatch = useDispatch();
@@ -237,7 +106,16 @@ export default function DeviceDetail({ deviceId, onBack }) {
         <div className="dd-loading"><span className="dd-spinner" /> Loading device details…</div>
       )}
       {detailError && !detailLoading && (
-        <div className="dd-error">{detailError}</div>
+        <div className="dd-error">
+          <div className="dd-error-msg">{detailError}</div>
+          <div className="dd-error-hint">
+            This device’s details couldn’t be loaded from the server. Other devices open normally,
+            so this is a server-side error for this specific device rather than a problem with the page.
+          </div>
+          <button className="dd-error-retry" onClick={() => dispatch(fetchDeviceDetail(deviceId))}>
+            Retry
+          </button>
+        </div>
       )}
 
       {d && !detailLoading && (
@@ -287,19 +165,21 @@ export default function DeviceDetail({ deviceId, onBack }) {
           {/* ── Row 1: Device Info + License ── */}
           <div className="dd-grid-2">
             <SectionCard title="Device Info">
+              <InfoRow label="Activation"    value={d.activation_type} />
               <InfoRow label="Brand"         value={d.device_brand} />
               <InfoRow label="Model"         value={d.device_model} />
               <InfoRow label="OS Version"    value={d.os_version} />
               <InfoRow label="App Version"   value={d.app_version} />
               <InfoRow label="Device Type"   value={d.device_type?.replace(/_/g,' ')} />
               <InfoRow label="Virtual MAC"   value={<span style={{fontFamily:'monospace',fontSize:'0.8rem'}}>{d.virtual_mac || '—'}</span>} />
-              <InfoRow label="Activation"    value={d.activation_type} />
+              <InfoRow label="Device ID"     value={<span style={{fontFamily:'monospace',fontSize:'0.8rem',overflowWrap:'anywhere'}}>{d.device_id || d.id || '—'}</span>} />
               <InfoRow label="Enrolled"      value={fmtDate(d.enrolled_at)} />
             </SectionCard>
 
             <SectionCard title="License">
               <InfoRow label="Status"     value={<span className={`dd-status-pill ${statusCls(d.license_status)}`}>{d.license_status || '—'}</span>} />
               <InfoRow label="Plan"       value={d.license_plan_type} />
+              <InfoRow label="Started"    value={fmtDate(d.enrolled_at)} />
               <InfoRow label="Expires"    value={fmtDate(d.license_expires_at)} />
               <InfoRow label="Days Left"  value={d.license_days_remaining != null ? `${d.license_days_remaining} days` : '—'} />
               <InfoRow label="Active"     value={d.license_is_active ? '✅ Yes' : '❌ No'} />
@@ -317,7 +197,7 @@ export default function DeviceDetail({ deviceId, onBack }) {
               <InfoRow label="Push Token"   value={d.push_token_updated_at ? fmtDate(d.push_token_updated_at) : '—'} />
             </SectionCard>
 
-            <SectionCard title="User">
+            <SectionCard title="User Profile">
               <div className="dd-user-hero">
                 <div className="dd-user-avatar">{initials(d.user_full_name)}</div>
                 <div>
@@ -325,7 +205,7 @@ export default function DeviceDetail({ deviceId, onBack }) {
                   <div className="dd-user-email">{d.user_email || '—'}</div>
                 </div>
               </div>
-              <InfoRow label="User ID" value={<span style={{fontFamily:'monospace',fontSize:'0.78rem'}}>{d.user_id?.slice(0,16)}…</span>} />
+              <InfoRow label="User ID" value={<span style={{fontFamily:'monospace',fontSize:'0.78rem',overflowWrap:'anywhere'}}>{d.user_id || '—'}</span>} />
               {d.risk_flags && (
                 <div className="dd-risk-flags">
                   {Object.entries(d.risk_flags).map(([k, v]) => (
