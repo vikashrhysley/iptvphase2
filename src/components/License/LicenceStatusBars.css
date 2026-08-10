@@ -1,0 +1,157 @@
+/* ── Licence status breakdown — one full-width bar list ──────────────── */
+.lsb-wrap { margin-bottom: 18px; }
+
+.lsb-card {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+/* Left rail */
+.lsb-aside {
+  flex-shrink: 0;
+  width: 190px;
+  padding: 20px 22px;
+  border-right: 1px solid var(--border-subtle);
+  background: var(--bg-raised);
+  display: flex;
+  flex-direction: column;
+}
+.lsb-aside-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+.lsb-dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 8px rgba(52,211,153,0.5);
+}
+.lsb-aside-hero-label {
+  margin-top: 16px;
+  font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-muted);
+}
+.lsb-aside-hero {
+  font-family: var(--font-display, inherit);
+  font-size: 2rem; font-weight: 800; line-height: 1.1;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.lsb-chips {
+  margin-top: 16px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.lsb-chip {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 6px 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem; color: var(--text-muted);
+}
+.lsb-chip strong { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+
+/* Right body */
+.lsb-body { flex: 1; min-width: 0; padding: 18px 22px; }
+
+.lsb-section-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.lsb-section-label {
+  font-size: 0.7rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--text-muted);
+}
+.lsb-section-scale {
+  font-size: 0.78rem; font-weight: 700; color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.lsb-divider {
+  height: 1px; background: var(--border-subtle);
+  margin: 16px 0;
+}
+
+/* Bar row — label · track (flex:1) · value */
+.lsb-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 30px;
+  padding: 0;
+  background: none;
+  border: none;
+  text-align: left;
+  color: inherit;
+}
+.lsb-label {
+  flex-shrink: 0;
+  width: 150px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.lsb-track {
+  flex: 1;
+  min-width: 0;
+  height: 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+  overflow: hidden;
+}
+.lsb-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.35s ease;
+}
+.lsb-tone-good  { background: #34d399; }
+.lsb-tone-bad   { background: #f87171; }
+.lsb-tone-warn  { background: #fbbf24; }
+.lsb-tone-muted { background: #94a3b8; }
+.lsb-value {
+  flex-shrink: 0;
+  width: 48px;
+  text-align: right;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Clickable status rows (Licenses page) */
+.lsb-row-click { cursor: pointer; border-radius: var(--radius-sm); transition: background 0.15s; }
+.lsb-row-click:hover { background: var(--bg-raised); }
+.lsb-row-click.active { background: var(--bg-raised); }
+.lsb-row-click.active .lsb-label { color: var(--text-primary); font-weight: 700; }
+.lsb-row-click.active .lsb-value { color: var(--accent-primary); }
+
+/* Deleted row — muted, non-interactive */
+.lsb-row-muted { cursor: default; }
+.lsb-row-muted .lsb-label { color: var(--text-muted); }
+.lsb-row-muted .lsb-value { color: var(--text-muted); }
+
+.lsb-footnote {
+  margin: 8px 2px 0;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+@media (max-width: 780px) {
+  .lsb-card { flex-direction: column; }
+  .lsb-aside {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .lsb-label { width: 110px; }
+}

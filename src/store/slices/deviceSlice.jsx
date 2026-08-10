@@ -38,7 +38,11 @@ export const fetchDeviceDetail = createAsyncThunk(
     try {
       const { accessToken } = getState().auth;
       return await apiFetchDeviceDetail(accessToken, deviceId);
-    } catch (err) { return rejectWithValue(err.message); }
+    } catch (err) {
+      // Include the HTTP status so a backend fault (500) reads differently from a missing
+      // device (404) or a permission problem (403) right in the detail error banner.
+      return rejectWithValue(err.status ? `${err.message} (HTTP ${err.status})` : err.message);
+    }
   }
 );
 
@@ -168,6 +172,17 @@ const deviceSlice = createSlice({
       state.filters = { ...DEFAULT_FILTERS };
       state.lastFetched = null;
     },
+    // Force the next fetchDevices to bypass the 30s cache guard.
+    invalidateDevices(state) {
+      state.lastFetched = null;
+    },
+    // Optimistically patch one device in the list (e.g. after block/unblock) so the table
+    // updates instantly, before the authoritative refetch lands.
+    patchDeviceInList(state, a) {
+      const { deviceId, changes } = a.payload;
+      const idx = state.devices.findIndex((d) => (d.device_id || d.id) === deviceId);
+      if (idx !== -1) state.devices[idx] = { ...state.devices[idx], ...changes };
+    },
   },
   extraReducers: (b) => {
     b.addCase(fetchDeviceActivity.pending,   s => { s.activityLoading = true;  s.activityError = null; })
@@ -271,6 +286,7 @@ const deviceSlice = createSlice({
 export const {
   clearToast, setToast,
   setDeviceFilters, clearDeviceFilters,
+  invalidateDevices, patchDeviceInList,
   clearDeviceDetail, clearUpdateState,
   setActivityFilters, clearActivityState,
   setLoginHistoryFilters, clearLoginHistoryState,

@@ -47,7 +47,21 @@ const request = async (url, options = {}) => {
       return null;
     };
 
+    // FastAPI validation errors (422) come back as detail:[{loc:[...], msg, type}]. Render them
+    // as "loc.path: msg" so the actual offending field is visible instead of a generic message.
+    const fastapiValidation = (val) => {
+      if (!Array.isArray(val) || !val.length || typeof val[0] !== 'object') return null;
+      return val
+        .map((e) => {
+          const loc = Array.isArray(e?.loc) ? e.loc.filter((p) => p !== 'body').join('.') : '';
+          return [loc, e?.msg].filter(Boolean).join(': ');
+        })
+        .filter(Boolean)
+        .join(' · ') || null;
+    };
+
     const apiMsg =
+      fastapiValidation(data?.detail) ||
       extractMsg(data?.data?.message) ||
       extractMsg(data?.data?.error)   ||
       extractMsg(data?.message)       ||
@@ -69,7 +83,10 @@ const request = async (url, options = {}) => {
       503: 'Service under maintenance. Please try again later.',
     }[res.status];
 
-    throw new Error(apiMsg || statusMsg || `Request failed (${res.status})`);
+    const err = new Error(apiMsg || statusMsg || `Request failed (${res.status})`);
+    err.status = res.status;       // let callers branch on 400 / 403 / 404
+    err.data = data?.data ?? data; // raw payload for callers that need detail
+    throw err;
   }
   return data;
 };
@@ -317,11 +334,11 @@ export const apiFetchDeviceAnalytics = async (accessToken) => {
 };
 
 // GET /admin/analytics/licenses
-// Response: { data: { count, presently_held:{…}, stopped_working:{…} }, expiring_soon: {…} }.
+// Response: { data: { count, by_status:{…}, presently_held_count, by_plan:{…} }, expiring_soon: {…} }.
 // `data` is exactly the dashboard's `total_licenses_ever` object and `expiring_soon` is a
 // top-level sibling, so reshape into the dashboard "licenses" block. That lets the shared
 // Live Stats licenses card (same section config) render this endpoint unchanged — which
-// also means both endpoints must keep returning the same shape.
+// also means all three licence-stat endpoints must keep returning the same shape.
 export const apiFetchLicenseAnalytics = async (accessToken) => {
   if (!accessToken) throw new Error('Unauthorized');
   const res = await request(`${BASE}/admin/analytics/licenses`, {
@@ -495,7 +512,12 @@ export const apiFetchDeviceLoginHistory = async (accessToken, deviceId, params =
 // GET /admin/devices/{id} - full device detail
 export const apiFetchDeviceDetail = async (accessToken, deviceId) => {
   if (!accessToken) throw new Error('Unauthorized');
-  const res = await request(`${BASE}/admin/devices/${deviceId}`, {
+  // Guard against ever hitting /admin/devices/undefined (which the backend rejects as an
+  // invalid id) when a list row is missing its device_id.
+  if (deviceId == null || deviceId === '' || deviceId === 'undefined') {
+    throw new Error('This device has no id — cannot load its details.');
+  }
+  const res = await request(`${BASE}/admin/devices/${encodeURIComponent(deviceId)}`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${accessToken}` },
   });
@@ -535,6 +557,33 @@ export const apiRevokeDevice = async (accessToken, deviceId, reason) => {
     body: JSON.stringify({ reason }),
   });
   return { success: true, deviceId, ...(res.data || res) };
+};
+
+// POST /admin/devices/{id}/access/block — block a single device (admin+).
+// Returns { new_status, is_logged_in, enforcement, fully_enforced, warnings, message, ... }.
+export const apiBlockDevice = async (accessToken, deviceId, reason) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const body = reason?.trim() ? { reason: reason.trim() } : {};
+  const res = await request(`${BASE}/admin/devices/${deviceId}/access/block`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(body),
+  });
+  return res.data || res;
+};
+
+// POST /admin/devices/{id}/access/unblock — routine/auto unblock (admin+). NOT the
+// superadmin recovery route; a risk_score >= 90 device 400s here pointing at /unblock.
+// Returns { new_status, is_logged_in, seat_available, message, ... }.
+export const apiUnblockDevice = async (accessToken, deviceId, reason) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const body = reason?.trim() ? { reason: reason.trim() } : {};
+  const res = await request(`${BASE}/admin/devices/${deviceId}/access/unblock`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(body),
+  });
+  return res.data || res;
 };
 
 // Keep alias for backward compat
@@ -1059,6 +1108,37 @@ export const apiFetchAppUserDetail = async (accessToken, userId) => {
   const res = await request(`${BASE}/admin/app-users/${userId}`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data || res;
+};
+
+// POST /admin/app-users/{id}/block — block the account and revoke its licence (admin+).
+// Body carries an optional audit reason. Blocking no longer touches devices; devices_blocked
+// is always 0 in the response and must not be surfaced as a count. Errors carry err.status
+// (409 already blocked, 404 unknown user) via the shared request() helper.
+export const apiBlockAppUser = async (accessToken, userId, reason) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const body = reason && reason.trim() ? { reason: reason.trim() } : {};
+  const res = await request(`${BASE}/admin/app-users/${userId}/block`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(body),
+  });
+  return res.data || res;
+};
+
+// POST /admin/app-users/{id}/unblock — unblock the account and restore its licence to the
+// state it held before the block (admin+). extend_for_blocked_days=true gives back the days
+// spent blocked. Response.license_status (active | expired | inactive_due_to_payment |
+// cancelled | null) tells the caller whether the user can actually stream — branch on it.
+export const apiUnblockAppUser = async (accessToken, userId, reason, extendForBlockedDays) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const body = { extend_for_blocked_days: !!extendForBlockedDays };
+  if (reason && reason.trim()) body.reason = reason.trim();
+  const res = await request(`${BASE}/admin/app-users/${userId}/unblock`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(body),
   });
   return res.data || res;
 };
@@ -1899,11 +1979,103 @@ export const apiMarkNotificationRead = async (accessToken, id) => {
 };
 
 // PATCH /admin/notifications/read-all — bulk-mark the calling admin's unread as read.
-// Optionally scoped to one category.
+// Optionally scoped to one category. This is the bell dropdown's "mark all read". The
+// response carries target_user_id: null — that is how it is told apart from the per-user
+// read-all below in logs/tests.
 export const apiMarkAllNotificationsRead = async (accessToken, category) => {
   if (!accessToken) throw new Error('Unauthorized');
   const qs = category ? `?category=${encodeURIComponent(category)}` : '';
   const res = await request(`${BASE}/admin/notifications/read-all${qs}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.data ?? res;
+};
+
+// ── User-grouped notifications ────────────────────────────
+// The bell dropdown and the Notifications page are grouped by the *target user* the events
+// are about, not by category. A user drops out of these views once all of their notifications
+// are read (per the calling admin) and reappears only when a new event fires.
+
+// GET /admin/notifications/summary-by-user — the bell dropdown. Newest-active users first,
+// each with a one-line summary + this admin's unread count. Poll every ~30–45s.
+export const apiFetchNotificationSummaryByUser = async (accessToken, limit = 10) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const qs = limit ? `?limit=${encodeURIComponent(limit)}` : '';
+  const res = await request(`${BASE}/admin/notifications/summary-by-user${qs}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const d = res.data ?? res;
+  return {
+    totalUnreadUsers: d.total_unread_users ?? 0,
+    users: Array.isArray(d.users) ? d.users : [],
+  };
+};
+
+// GET /admin/notifications/users — the full user-grouped list (page level 1). Each row is one
+// user with a preview of their latest notification + unread/total counts. total_count is shared
+// across admins; unread_count is per the calling admin. SYSTEM notifications never appear here.
+export const apiFetchNotificationUserGroups = async (accessToken, params = {}) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const query = new URLSearchParams();
+  if (params.include_archived) query.set('include_archived', 'true');
+  if (params.page)      query.set('page', String(params.page));
+  if (params.page_size) query.set('page_size', String(params.page_size));
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  const res = await request(`${BASE}/admin/notifications/users${qs}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const raw   = res.data ?? res;
+  const items = Array.isArray(raw) ? raw : (raw.data ?? []);
+  const meta  = res.meta ?? raw.meta ?? {};
+  return {
+    items,
+    page:       meta.page        ?? params.page ?? 1,
+    pageSize:   meta.page_size    ?? params.page_size ?? 20,
+    total:      meta.total        ?? items.length,
+    totalPages: meta.total_pages  ?? 1,
+  };
+};
+
+// GET /admin/notifications/users/{target_user_id} — one user's full notification history
+// (page level 2). Filterable by category / priority / archived / date range. An unknown or
+// never-notified user returns an empty list (not a 404).
+export const apiFetchNotificationUserHistory = async (accessToken, userId, params = {}) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const query = new URLSearchParams();
+  if (params.category) query.set('category', params.category);
+  if (params.priority) query.set('priority', params.priority);
+  if (params.include_archived) query.set('include_archived', 'true');
+  if (params.date_from) query.set('date_from', params.date_from);
+  if (params.date_to)   query.set('date_to', params.date_to);
+  if (params.page)      query.set('page', String(params.page));
+  if (params.page_size) query.set('page_size', String(params.page_size));
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  const res = await request(`${BASE}/admin/notifications/users/${userId}${qs}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const raw   = res.data ?? res;
+  const items = Array.isArray(raw) ? raw : (raw.data ?? []);
+  const meta  = res.meta ?? raw.meta ?? {};
+  return {
+    items,
+    page:       meta.page        ?? params.page ?? 1,
+    pageSize:   meta.page_size    ?? params.page_size ?? 20,
+    total:      meta.total        ?? items.length,
+    totalPages: meta.total_pages  ?? 1,
+  };
+};
+
+// PATCH /admin/notifications/users/{target_user_id}/read-all — mark ONE user's notifications
+// read for the calling admin, optionally narrowed to a single category. Returns the marked
+// count + the target_user_id (which distinguishes it from the global read-all).
+export const apiMarkUserNotificationsRead = async (accessToken, userId, category) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const qs = category ? `?category=${encodeURIComponent(category)}` : '';
+  const res = await request(`${BASE}/admin/notifications/users/${userId}/read-all${qs}`, {
     method: 'PATCH',
     headers: { Authorization: `Bearer ${accessToken}` },
   });

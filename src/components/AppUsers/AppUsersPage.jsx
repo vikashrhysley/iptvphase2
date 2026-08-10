@@ -295,6 +295,7 @@ function StatGroup({ children, level = 2 }) {
   return <div className={`su-stat-grouplabel lvl-${level}`}>{children}</div>;
 }
 
+
 export default function AppUsersPage() {
   const dispatch = useDispatch();
   const { users, total, page, pageSize, loading, error, filters, stats, statsLoading, statsError } = useSelector((s) => s.appUsers);
@@ -437,10 +438,17 @@ export default function AppUsersPage() {
             {/* Row 1 — context line (not a card) */}
             <div className="su-context-bar">
               <div className="su-ctx-text">
-                <strong>{listable.toLocaleString()}</strong> verified users
+                {/* Hero = verified_users (matches the PLAN FUNNEL card total beneath it).
+                    When any are deleted, show the whole identity so the reader sees why the
+                    table below has fewer rows: N verified = M listed + K deleted. */}
+                <strong>{verified.toLocaleString()}</strong> verified users
+                {deleted > 0 && (
+                  <span className="su-ctx-split">
+                    {' = '}{listable.toLocaleString()} listed + <span className="su-ctx-deleted">{deleted.toLocaleString()} deleted</span>
+                  </span>
+                )}
                 <span className="su-ctx-sep">·</span>
                 <span className="su-ctx-new">+{newWeek.toLocaleString()} this week</span>
-                {deleted > 0 && <span className="su-ctx-deleted">{deleted.toLocaleString()} deleted</span>}
               </div>
               <button type="button" className="su-ctx-link" onClick={goLiveStats}>
                 View full funnel →
@@ -450,7 +458,7 @@ export default function AppUsersPage() {
             {/* Row 2 — three cards; every number filters the table below */}
             <div className="su-cards-row-3">
               {/* Card 1 · Plan Funnel */}
-              <div className="su-statcard su-statcard-funnel">
+              <div className="su-statcard">
                 <div className="su-statcard-head">
                   <span className="su-statcard-title">Plan Funnel</span>
                   {/* verified_users includes deleted → not clickable */}
@@ -459,6 +467,7 @@ export default function AppUsersPage() {
                 <StatRow label="Not issued a plan" value={pf.not_issued_a_plan} onClick={() => applyStat({ segment: 'never_had_a_plan' })} active={isActive({ segment: 'never_had_a_plan' })} />
                 <StatRow label="Issued a plan" value={ip.count} onClick={() => applyStat({ segment: 'issued_a_plan' })} active={isActive({ segment: 'issued_a_plan' })} />
                 <StatRow label="Presently using" value={pu.count} level={1} onClick={() => applyStat({ segment: 'presently_using' })} active={isActive({ segment: 'presently_using' })} />
+                {/* Two SAME-set cuts — grouped so they never read as siblings */}
                 <div className="su-stat-subgroup">
                   <StatGroup>by account state</StatGroup>
                   <StatRow label="Enabled" value={bas.enabled} level={3} onClick={() => applyStat({ segment: 'on_a_plan' })} active={isActive({ segment: 'on_a_plan' })} />

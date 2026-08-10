@@ -6,6 +6,10 @@ import {
   apiFetchNotificationDetail,
   apiMarkNotificationRead,
   apiMarkAllNotificationsRead,
+  apiFetchNotificationSummaryByUser,
+  apiFetchNotificationUserGroups,
+  apiFetchNotificationUserHistory,
+  apiMarkUserNotificationsRead,
 } from '../../services/api';
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -65,6 +69,44 @@ export const markAllNotificationsRead = createAsyncThunk(
   }
 );
 
+// ── User-grouped thunks ───────────────────────────────────
+// Bell dropdown: users (about whom there are unread events), newest-active first.
+export const fetchNotificationSummaryByUser = createAsyncThunk(
+  'notifications/fetchSummaryByUser',
+  async (limit, { getState, rejectWithValue }) => {
+    try { return await apiFetchNotificationSummaryByUser(withToken(getState), limit); }
+    catch (err) { return rejectWithValue(err.message); }
+  }
+);
+
+// Page level 1: paginated list of users with notification activity.
+export const fetchNotificationUserGroups = createAsyncThunk(
+  'notifications/fetchUserGroups',
+  async (params, { getState, rejectWithValue }) => {
+    try { return await apiFetchNotificationUserGroups(withToken(getState), params); }
+    catch (err) { return rejectWithValue(err.message); }
+  }
+);
+
+// Page level 2: one user's full history (filterable, paginated).
+export const fetchNotificationUserHistory = createAsyncThunk(
+  'notifications/fetchUserHistory',
+  async ({ userId, params }, { getState, rejectWithValue }) => {
+    try { return await apiFetchNotificationUserHistory(withToken(getState), userId, params); }
+    catch (err) { return rejectWithValue(err.message); }
+  }
+);
+
+// Mark one user's notifications read (optionally one category). marked_count/target_user_id
+// in the payload let the reducer trim the badge, the bell list and the group row at once.
+export const markUserNotificationsRead = createAsyncThunk(
+  'notifications/markUserRead',
+  async ({ userId, category } = {}, { getState, rejectWithValue }) => {
+    try { return await apiMarkUserNotificationsRead(withToken(getState), userId, category); }
+    catch (err) { return rejectWithValue(err.message); }
+  }
+);
+
 // Mark ONLY the notifications currently loaded on the page (this page + filter), by
 // calling the per-id read endpoint for each unread one. Used by the page's "Mark all
 // read" so it never touches items the admin can't currently see.
@@ -109,6 +151,40 @@ const initialState = {
   detail: null,
   detailLoading: false,
   detailError: null,
+
+  // ── User-grouped views ──────────────────────────────────
+  // Bell dropdown (summary-by-user).
+  summaryByUser: { totalUnreadUsers: 0, users: [] },
+  summaryByUserLoading: false,
+
+  // Page level 1: user-grouped list.
+  userGroups: [],
+  userGroupsPage: 1,
+  userGroupsPageSize: DEFAULT_PAGE_SIZE,
+  userGroupsTotal: 0,
+  userGroupsTotalPages: 1,
+  userGroupsLoading: false,
+  userGroupsError: null,
+  userGroupsIncludeArchived: false,
+
+  // Page level 2: one user's history + which user the page is currently drilled into.
+  activeUser: null, // { user_id, email, full_name }
+  userHistory: [],
+  userHistoryPage: 1,
+  userHistoryPageSize: DEFAULT_PAGE_SIZE,
+  userHistoryTotal: 0,
+  userHistoryTotalPages: 1,
+  userHistoryLoading: false,
+  userHistoryError: null,
+  userHistoryFilters: {
+    category: '',
+    priority: '',
+    include_archived: false,
+    date_from: '',
+    date_to: '',
+    page: 1,
+    page_size: DEFAULT_PAGE_SIZE,
+  },
 };
 
 // Drop one unread from the badge + the matching category in the summary.
@@ -142,6 +218,23 @@ const notificationsSlice = createSlice({
     removeNotification(state, action) {
       state.items = state.items.filter((n) => n.id !== action.payload);
     },
+    // Which user the Notifications page is drilled into (null → the user-grouped list view).
+    // Setting a user resets the per-user history filters to a clean slate.
+    setActiveNotificationUser(state, action) {
+      state.activeUser = action.payload;
+      state.userHistory = [];
+      state.userHistoryError = null;
+      state.userHistoryFilters = {
+        category: '', priority: '', include_archived: false,
+        date_from: '', date_to: '', page: 1, page_size: state.userHistoryPageSize,
+      };
+    },
+    setUserHistoryFilters(state, action) {
+      state.userHistoryFilters = { ...state.userHistoryFilters, ...action.payload };
+    },
+    setUserGroupsIncludeArchived(state, action) {
+      state.userGroupsIncludeArchived = action.payload;
+    },
   },
   extraReducers: (b) => {
     b.addCase(fetchNotificationUnreadCount.fulfilled, (s, a) => {
@@ -173,8 +266,10 @@ const notificationsSlice = createSlice({
         const item = s.items.find((n) => n.id === id);
         // Mark the visual read state now; the badge drop is deferred (dropReadFromCount, ~5s)
         // and the list removal is deferred too (removeNotification, ~10s).
-        const wasUnread = item && !item.is_read && a.payload?.already_read !== true;
+        const hist = s.userHistory.find((n) => n.id === id);
+        const wasUnread = ((item && !item.is_read) || (hist && !hist.is_read)) && a.payload?.already_read !== true;
         if (item) item.is_read = true;
+        if (hist) hist.is_read = true;
         if (s.detail && s.detail.id === id) s.detail.is_read = true;
         if (wasUnread && !s.pendingReadIds.includes(id)) s.pendingReadIds.push(id);
       });
@@ -188,15 +283,81 @@ const notificationsSlice = createSlice({
     b.addCase(markAllNotificationsRead.fulfilled, (s, a) => {
         const category = a.payload?.category ?? a.meta.arg?.category ?? null;
         s.items.forEach((n) => { if (!category || n.category === category) n.is_read = true; });
+        s.userHistory.forEach((n) => { if (!category || n.category === category) n.is_read = true; });
         if (category) {
           const row = s.summary.byCategory.find((c) => c.category === category);
           const removed = row?.unread_count ?? 0;
           if (row) row.unread_count = 0;
           s.unreadCount = Math.max(0, s.unreadCount - removed);
           s.summary.totalUnread = Math.max(0, s.summary.totalUnread - removed);
+          // Per-user views: category read-all across all users is hard to reconcile locally;
+          // leave the bell/group counts for the next poll/refetch to correct.
         } else {
           s.unreadCount = 0;
           s.summary = { totalUnread: 0, byCategory: s.summary.byCategory.map((c) => ({ ...c, unread_count: 0 })) };
+          // Global read-all empties the bell (every user is now caught up) and zeroes group rows.
+          s.summaryByUser = { totalUnreadUsers: 0, users: [] };
+          s.userGroups.forEach((g) => { g.unread_count = 0; });
+        }
+      });
+
+    // ── User-grouped extra reducers ─────────────────────────
+    b.addCase(fetchNotificationSummaryByUser.pending,   (s) => { s.summaryByUserLoading = true; })
+     .addCase(fetchNotificationSummaryByUser.fulfilled, (s, a) => { s.summaryByUserLoading = false; s.summaryByUser = a.payload; })
+     .addCase(fetchNotificationSummaryByUser.rejected,  (s) => { s.summaryByUserLoading = false; });
+
+    b.addCase(fetchNotificationUserGroups.pending,   (s) => { s.userGroupsLoading = true; s.userGroupsError = null; })
+     .addCase(fetchNotificationUserGroups.fulfilled, (s, a) => {
+        s.userGroupsLoading = false;
+        s.userGroups = a.payload.items;
+        s.userGroupsPage = a.payload.page;
+        s.userGroupsPageSize = a.payload.pageSize;
+        s.userGroupsTotal = a.payload.total;
+        s.userGroupsTotalPages = a.payload.totalPages;
+      })
+     .addCase(fetchNotificationUserGroups.rejected, (s, a) => { s.userGroupsLoading = false; s.userGroupsError = a.payload; });
+
+    b.addCase(fetchNotificationUserHistory.pending,   (s) => { s.userHistoryLoading = true; s.userHistoryError = null; })
+     .addCase(fetchNotificationUserHistory.fulfilled, (s, a) => {
+        s.userHistoryLoading = false;
+        s.userHistory = a.payload.items;
+        s.userHistoryPage = a.payload.page;
+        s.userHistoryPageSize = a.payload.pageSize;
+        s.userHistoryTotal = a.payload.total;
+        s.userHistoryTotalPages = a.payload.totalPages;
+      })
+     .addCase(fetchNotificationUserHistory.rejected, (s, a) => { s.userHistoryLoading = false; s.userHistoryError = a.payload; });
+
+    b.addCase(markUserNotificationsRead.fulfilled, (s, a) => {
+        const category = a.payload?.category ?? a.meta.arg?.category ?? null;
+        const userId   = a.payload?.target_user_id ?? a.meta.arg?.userId ?? null;
+        const marked   = a.payload?.marked_count ?? 0;
+
+        // Badge: drop the marked count (poll will reconcile any drift).
+        s.unreadCount = Math.max(0, s.unreadCount - marked);
+
+        // Bell dropdown: a fully-read user drops out; a category read-all just decrements.
+        const su = s.summaryByUser.users.find((u) => u.user_id === userId);
+        if (su) {
+          if (!category) {
+            s.summaryByUser.users = s.summaryByUser.users.filter((u) => u.user_id !== userId);
+            s.summaryByUser.totalUnreadUsers = Math.max(0, s.summaryByUser.totalUnreadUsers - 1);
+          } else {
+            su.unread_count = Math.max(0, (su.unread_count ?? 0) - marked);
+            if (su.unread_count === 0) {
+              s.summaryByUser.users = s.summaryByUser.users.filter((u) => u.user_id !== userId);
+              s.summaryByUser.totalUnreadUsers = Math.max(0, s.summaryByUser.totalUnreadUsers - 1);
+            }
+          }
+        }
+
+        // Page level 1 group row.
+        const g = s.userGroups.find((u) => u.user_id === userId);
+        if (g) g.unread_count = Math.max(0, (g.unread_count ?? 0) - marked);
+
+        // Page level 2 history rows (the user currently drilled into).
+        if (s.activeUser && s.activeUser.user_id === userId) {
+          s.userHistory.forEach((n) => { if (!category || n.category === category) n.is_read = true; });
         }
       });
   },
@@ -207,5 +368,8 @@ export const {
   clearNotificationDetail,
   dropReadFromCount,
   removeNotification,
+  setActiveNotificationUser,
+  setUserHistoryFilters,
+  setUserGroupsIncludeArchived,
 } = notificationsSlice.actions;
 export default notificationsSlice.reducer;

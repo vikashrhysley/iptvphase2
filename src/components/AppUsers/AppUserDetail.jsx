@@ -1,10 +1,11 @@
 import { Fragment, useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchAppUserDetail, clearSelectedUser, flagUserForReview, clearReviewState } from '../../store/slices/appUsersSlice';
+import toast from 'react-hot-toast';
+import { fetchAppUserDetail, clearSelectedUser, patchSelectedUser, flagUserForReview, clearReviewState } from '../../store/slices/appUsersSlice';
 import {
   apiFetchLicenseHistory, apiFetchSubscriptionHistory, apiFetchLicenseDetail, apiFetchSubscriptionDetail,
   apiCancelSubscription, apiExtendSubscription, apiSetSubscriptionDeviceLimit, apiActivateSubscription,
-  apiFetchUserSeats,
+  apiFetchUserSeats, apiBlockAppUser, apiUnblockAppUser,
 } from '../../services/api';
 import UserActivityPage from './UserActivityPage';
 import UserLoginHistory from './UserLoginHistory';
@@ -62,6 +63,24 @@ const HistoryIcon = () => (
     <polyline points="12 7 12 12 15 14" />
   </svg>
 );
+const CopyIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+  </svg>
+);
+const BlockIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+    <circle cx="12" cy="12" r="10" />
+    <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+  </svg>
+);
+const UnblockIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+    <path d="M9 11V7a3 3 0 0 1 6 0" />
+    <rect x="5" y="11" width="14" height="10" rx="2" />
+  </svg>
+);
 
 /* ── Helpers ────────────────────────────────────────────── */
 const fmt = (iso) => {
@@ -108,6 +127,29 @@ const statusClass = (s) => {
 };
 
 const devStatusClass = (s) => (s === 'active' ? 'active' : 'inactive');
+
+// Relative "1 hour ago" style time for LAST SEEN and "blocked N days ago". Falls back to a
+// calendar date beyond a month, and to an em-dash when there is no timestamp at all.
+const relTime = (iso) => {
+  if (!iso || iso === 'null') return '—';
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '—';
+  const s = Math.floor((Date.now() - then) / 1000);
+  if (s < 45) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} minute${m !== 1 ? 's' : ''} ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} hour${h !== 1 ? 's' : ''} ago`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `${d} day${d !== 1 ? 's' : ''} ago`;
+  return fmtDate(iso);
+};
+
+// Title-cased account status for the STATUS row ("Active", "Blocked", "Pending", "Deleted").
+const humanizeAccountStatus = (s) => {
+  const v = String(s || '').trim();
+  return v ? v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() : '—';
+};
 
 // plan_type is 'free' | 'paid' on the wire; shown as Trial / Paid.
 const planTypeLabel = (type) => {
@@ -757,27 +799,13 @@ function SectionCard({ title, children }) {
 }
 
 /* ── MAC Seats block ────────────────────────────────────── */
-// A seat is the furniture (a mac_slot); a device is who's sitting in it. `assignment`
-// answers "is a device in this seat?", `status` answers "is the seat usable at all?" —
-// they're orthogonal. And `assigned` ≠ "in use": a dark device still holds its seat, so
-// liveness is shown separately from is_logged_in + last_successful_heartbeat_at.
-const SEAT_LIVE_WINDOW_MS = 15 * 60 * 1000; // heartbeat within this = "live"
+// A seat is one MAC slot: a permanently-paired virtual_mac + virtual_device_id. Each seat
+// is either occupied by a device (assignment "assigned") or free ("not_assigned") — that is
+// the ONLY state a seat has now. `assigned` ≠ "in use": a dark/logged-out device still holds
+// its seat, so liveness is shown separately from is_logged_in + last_successful_heartbeat_at.
+const SEAT_LIVE_WINDOW_MS = 10 * 60 * 1000; // heartbeat within 10 min = "live"
 
 const formatMac = (mac) => String(mac || '').toUpperCase() || '—';
-
-const seatStatusClass = (s) => {
-  const v = String(s || '').toLowerCase();
-  if (v === 'active') return 'active';
-  if (v === 'pending_ministra') return 'pending';
-  if (v === 'dormant') return 'dormant';
-  return 'unknown';
-};
-const seatStatusLabel = (s) => {
-  if (s === 'pending_ministra') return 'Pending Ministra';
-  if (s === 'active') return 'Active';
-  if (s === 'dormant') return 'Dormant';
-  return humanizeStatus(s);
-};
 
 const compactAge = (ms) => {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -786,14 +814,17 @@ const compactAge = (ms) => {
   const d = Math.floor(h / 24); return `${d}d`;
 };
 
-// Liveness for an assigned seat's device. Returns null when no device sits in the seat.
+// Liveness for an occupied seat's device — report only what's provable (never infer).
 const seatLiveness = (dev) => {
   if (!dev) return null;
+  if (dev.status && String(dev.status).toLowerCase() !== 'normal') {
+    return { tone: 'blocked', label: '● Blocked' };
+  }
+  if (!dev.is_logged_in) return { tone: 'out', label: '○ Logged out' };
   const hb = dev.last_successful_heartbeat_at ? new Date(dev.last_successful_heartbeat_at).getTime() : NaN;
-  const recent = !Number.isNaN(hb) && (Date.now() - hb) < SEAT_LIVE_WINDOW_MS;
-  if (dev.is_logged_in && recent) return { tone: 'live', label: '✓ live' };
-  const age = Number.isNaN(hb) ? '' : ` ${compactAge(Date.now() - hb)}`;
-  return { tone: 'dark', label: `⚠ dark${age}` };
+  const ageMs = Number.isNaN(hb) ? Infinity : Date.now() - hb;
+  if (ageMs < SEAT_LIVE_WINDOW_MS) return { tone: 'live', label: `● Live · seen ${compactAge(ageMs)} ago` };
+  return { tone: 'dark', label: Number.isNaN(hb) ? '⚠ Dark' : `⚠ Dark ${compactAge(ageMs)}` };
 };
 
 function SeatRow({ seat }) {
@@ -801,7 +832,7 @@ function SeatRow({ seat }) {
   const dev = seat.device;
   const assigned = seat.assignment === 'assigned';
   const live = assigned ? seatLiveness(dev) : null;
-  const occupant = assigned ? (dev?.device_name || dev?.platform || 'Device') : 'Not assigned';
+  const occupant = dev?.device_name || dev?.platform || 'Device';
   const deviceHead = dev
     ? [dev.device_name || `${dev.device_brand || ''} ${dev.device_model || ''}`.trim() || 'Device',
        [dev.platform, dev.os_version].filter(Boolean).join(' '),
@@ -814,13 +845,18 @@ function SeatRow({ seat }) {
       <button type="button" className="udd-seat-row" onClick={() => setOpen((o) => !o)}>
         <span className="udd-seat-caret">{open ? '▾' : '▸'}</span>
         <span className="udd-seat-mac">{formatMac(seat.virtual_mac)}</span>
-        <span className="udd-seat-statuscol">
-          <span className={`udd-seat-status ${seatStatusClass(seat.status)}`}>{seatStatusLabel(seat.status)}</span>
-        </span>
-        <span className={`udd-seat-occupant${assigned ? '' : ' muted'}`}>{occupant}</span>
-        <span className="udd-seat-live">
-          {live && <span className={`udd-live ${live.tone}`}>{live.label}</span>}
-        </span>
+        {assigned ? (
+          <>
+            <span className="udd-seat-occupant">{occupant}</span>
+            <span className="udd-seat-live">
+              {live && <span className={`udd-live ${live.tone}`}>{live.label}</span>}
+            </span>
+          </>
+        ) : (
+          <span className="udd-seat-occupant muted">
+            {seat.released_at ? `Free — released ${fmtDate(seat.released_at)}` : 'Free — ready to claim'}
+          </span>
+        )}
       </button>
 
       {open && (
@@ -830,14 +866,15 @@ function SeatRow({ seat }) {
               <span>Virtual Device ID <em>stable identity</em></span>
               <strong className="udd-seat-mono">{seat.virtual_device_id || '—'}</strong>
             </div>
-            <div className="udd-seat-field"><span>Registered in Ministra</span><strong>{fmtDate(seat.ministra_registered_at)}</strong></div>
-            <div className="udd-seat-field"><span>Seat First Claimed</span><strong>{fmtDate(seat.assigned_at)}</strong></div>
-            {seat.status === 'dormant' && seat.dormant_reason && (
-              <div className="udd-seat-field wide"><span>Dormant Reason</span><strong>{seat.dormant_reason}</strong></div>
+            {seat.assigned_at && (
+              <div className="udd-seat-field"><span>Seat First Claimed</span><strong>{fmtDate(seat.assigned_at)}</strong></div>
+            )}
+            {!assigned && seat.released_at && (
+              <div className="udd-seat-field"><span>Released</span><strong>{fmtDate(seat.released_at)}</strong></div>
             )}
           </div>
 
-          {dev ? (
+          {dev && (
             <div className="udd-seat-device">
               <div className="udd-seat-device-title">Device in this seat</div>
               <div className="udd-seat-device-head">{deviceHead}</div>
@@ -852,11 +889,21 @@ function SeatRow({ seat }) {
                 <div className="udd-seat-field"><span>Risk Score</span><strong>{dev.risk_score ?? '—'}</strong></div>
               </div>
             </div>
-          ) : (
-            <div className="udd-seat-nodev">No device in this seat.</div>
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// One IN USE / FREE group with its own count and empty-state line.
+function SeatGroup({ title, seats, emptyText }) {
+  return (
+    <div className="udd-seat-group">
+      <div className="udd-seat-group-title">{title} ({seats.length})</div>
+      {seats.length
+        ? <div className="udd-seats-list">{seats.map((s) => <SeatRow key={s.slot_id} seat={s} />)}</div>
+        : <div className="udd-seat-empty">{emptyText}</div>}
     </div>
   );
 }
@@ -882,7 +929,12 @@ function MacSeatsBlock({ userId }) {
   const summary = data?.summary || {};
   const seats = Array.isArray(data?.seats) ? data.seats : [];
   const noLicence = data && data.license_id == null && summary.device_limit == null;
-  const pending = seats.filter((s) => s.status === 'pending_ministra').length;
+  const inUse = seats.filter((s) => s.assignment === 'assigned');
+  const free  = seats.filter((s) => s.assignment === 'not_assigned');
+  // Header numbers come from summary (authoritative); the lists render what we actually got.
+  const deviceLimit = summary.device_limit ?? seats.length;
+  const assignedN   = summary.assigned ?? inUse.length;
+  const freeN       = summary.not_assigned ?? free.length;
 
   return (
     <div className="udd-card udd-seats">
@@ -890,10 +942,8 @@ function MacSeatsBlock({ userId }) {
         <div className="udd-card-title udd-seats-title">Virtual MAC Details</div>
         {data && !noLicence && (
           <div className="udd-seats-summary">
-            <span className="udd-seats-count">
-              {summary.assigned ?? 0} / {summary.device_limit ?? seats.length} assigned
-            </span>
-            {pending > 0 && <span className="udd-seats-warn">⚠ {pending} needs Ministra</span>}
+            <span className="udd-seats-count">{assignedN} of {deviceLimit} in use</span>
+            <span className="udd-seats-free">· {freeN} free</span>
           </div>
         )}
       </div>
@@ -907,9 +957,10 @@ function MacSeatsBlock({ userId }) {
       ) : seats.length === 0 ? (
         <div className="udd-empty-section">No MAC seats.</div>
       ) : (
-        <div className="udd-seats-list">
-          {seats.map((seat) => <SeatRow key={seat.slot_id} seat={seat} />)}
-        </div>
+        <>
+          <SeatGroup title="In use" seats={inUse} emptyText="No devices are using a seat yet." />
+          <SeatGroup title="Free" seats={free} emptyText="No free seats — all MACs are currently in use." />
+        </>
       )}
     </div>
   );
@@ -925,6 +976,112 @@ const REVIEW_REASONS = [
   { value: 'unusual_activity_pattern', label: 'Unusual Activity Pattern' },
   { value: 'manual_review_requested', label: 'Manual Review Requested' },
 ];
+
+/* ── Block dialog ───────────────────────────────────────── */
+// Spells out the (deliberately limited) blast radius of a block: the account + licence are
+// affected, devices are NOT. The "what does not happen" half is required copy — admins used
+// to expect device-level damage from the old behaviour, so it must be stated explicitly.
+function BlockUserDialog({ user, busy, onClose, onConfirm }) {
+  const [reason, setReason] = useState('');
+  const submit = (e) => { e.preventDefault(); onConfirm(reason); };
+  return (
+    <div className="udd-modal-overlay" onClick={(e) => e.target === e.currentTarget && !busy && onClose()}>
+      <form className="udd-modal udd-access-modal" onSubmit={submit}>
+        <div className="udd-modal-header">
+          <div className="udd-modal-title udd-modal-title-block"><BlockIcon /> Block this user?</div>
+          <button type="button" className="udd-modal-close" onClick={onClose} disabled={busy}><XIcon /></button>
+        </div>
+        <div className="udd-access-email">{user.email}</div>
+
+        <div className="udd-access-half">
+          <div className="udd-access-half-title good">What happens</div>
+          <ul className="udd-access-list good">
+            <li>The account is blocked — the user cannot sign in.</li>
+            <li>Their licence is revoked, so nothing can stream.</li>
+            <li>The licence's current state is saved, so unblocking restores it exactly as it was.</li>
+          </ul>
+        </div>
+        <div className="udd-access-half">
+          <div className="udd-access-half-title bad">What does not happen</div>
+          <ul className="udd-access-list bad">
+            <li>Their devices are <strong>not</strong> blocked. Each device keeps its own status. (To block one device, use the Devices page.)</li>
+            <li>Nothing is deleted. This is fully reversible.</li>
+          </ul>
+        </div>
+
+        <label className="udd-modal-field udd-field-full">
+          <span>Reason <span className="udd-optional">(optional, recorded in the audit trail)</span></span>
+          <textarea value={reason} onChange={(e) => setReason(e.target.value)}
+            placeholder="e.g. Fraudulent activity" rows={3} disabled={busy} />
+        </label>
+
+        <div className="udd-modal-actions">
+          <button type="button" className="udd-btn-cancel" onClick={onClose} disabled={busy}>Cancel</button>
+          <button type="submit" className="udd-btn-danger-solid" disabled={busy}>
+            {busy ? 'Blocking…' : 'Block User'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+/* ── Unblock dialog ─────────────────────────────────────── */
+// The one real choice: does the user get back the days they spent blocked? Defaults to
+// "do not extend" (the API default / normal case for a justified block). Restoring the
+// licence may legitimately leave it unusable — the backend words the result each way.
+function UnblockUserDialog({ user, busy, onClose, onConfirm }) {
+  const [reason, setReason] = useState('');
+  const [extend, setExtend] = useState(false);
+  const blockedAgo = user.blocked_at ? relTime(user.blocked_at) : null;
+  const submit = (e) => { e.preventDefault(); onConfirm(reason, extend); };
+  return (
+    <div className="udd-modal-overlay" onClick={(e) => e.target === e.currentTarget && !busy && onClose()}>
+      <form className="udd-modal udd-access-modal" onSubmit={submit}>
+        <div className="udd-modal-header">
+          <div className="udd-modal-title udd-modal-title-unblock"><UnblockIcon /> Unblock this user?</div>
+          <button type="button" className="udd-modal-close" onClick={onClose} disabled={busy}><XIcon /></button>
+        </div>
+        <div className="udd-access-email">
+          {user.email}
+          {blockedAgo && blockedAgo !== '—' && <span className="udd-access-ago"> · blocked {blockedAgo}</span>}
+        </div>
+        <p className="udd-modal-sub">Their licence returns to the state it had before the block.</p>
+
+        <div className="udd-modal-field udd-field-full">
+          <span>Licence period</span>
+          <label className={`udd-radio${!extend ? ' checked' : ''}`}>
+            <input type="radio" name="extend" checked={!extend} onChange={() => setExtend(false)} disabled={busy} />
+            <span className="udd-radio-body">
+              <strong>Do not extend</strong>
+              <span className="udd-radio-note">The user forfeits the days spent blocked.</span>
+            </span>
+          </label>
+          <label className={`udd-radio${extend ? ' checked' : ''}`}>
+            <input type="radio" name="extend" checked={extend} onChange={() => setExtend(true)} disabled={busy} />
+            <span className="udd-radio-body">
+              <strong>Extend by the blocked duration</strong>
+              <span className="udd-radio-note">Give back the time they lost.</span>
+            </span>
+          </label>
+        </div>
+
+        <label className="udd-modal-field udd-field-full">
+          <span>Reason <span className="udd-optional">(optional)</span></span>
+          <textarea value={reason} onChange={(e) => setReason(e.target.value)}
+            placeholder="e.g. Appeal upheld" rows={3} disabled={busy} />
+        </label>
+
+        <div className="udd-modal-actions">
+          <button type="button" className="udd-btn-cancel" onClick={onClose} disabled={busy}>Cancel</button>
+          <button type="submit" className="udd-btn-save" disabled={busy}>
+            {busy ? 'Unblocking…' : 'Unblock User'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
 
 function FlagReviewModal({ user, onClose }) {
   const dispatch = useDispatch();
@@ -1008,6 +1165,7 @@ function FlagReviewModal({ user, onClose }) {
 export default function AppUserDetail({ userId, onBack }) {
   const dispatch = useDispatch();
   const { selectedUser: u, detailLoading, detailError } = useSelector((s) => s.appUsers);
+  const accessToken = useSelector((s) => s.auth.accessToken);
   const [showFlag, setShowFlag] = useState(false);
   const [showActivity, setShowActivity] = useState(false);
   const [showLoginHistory, setShowLoginHistory] = useState(false);
@@ -1015,6 +1173,9 @@ export default function AppUserDetail({ userId, onBack }) {
   const [showSubscriptions, setShowSubscriptions] = useState(false);
   const [showLicenseHistory, setShowLicenseHistory] = useState(false);
   const [showSubscriptionHistory, setShowSubscriptionHistory] = useState(false);
+  const [showBlock, setShowBlock] = useState(false);
+  const [showUnblock, setShowUnblock] = useState(false);
+  const [accessBusy, setAccessBusy] = useState(false);
 
   // All hooks must run before any conditional return
   useEffect(() => {
@@ -1025,6 +1186,74 @@ export default function AppUserDetail({ userId, onBack }) {
   const handleCloseFlag = () => {
     dispatch(clearReviewState());
     setShowFlag(false);
+  };
+
+  const copyUserId = (id) => {
+    if (!id || !navigator.clipboard) return;
+    navigator.clipboard.writeText(id)
+      .then(() => toast.success('User ID copied'))
+      .catch(() => {});
+  };
+
+  // Block/unblock share an error path: 409 means our view was stale (refresh), 404 means the
+  // user is gone (navigate back), anything else is a hard error. account status flips
+  // optimistically via patchSelectedUser so the banner/button update without a reload.
+  const handleAccessError = (err, close) => {
+    if (err?.status === 409) {
+      toast(err.message || 'The account state changed — refreshing.', { icon: 'ℹ️' });
+      close();
+      dispatch(fetchAppUserDetail(u.id));
+    } else if (err?.status === 404) {
+      toast(err.message || 'This user no longer exists.', { icon: 'ℹ️' });
+      close();
+      onBack?.();
+    } else {
+      toast.error(err?.message || 'Something went wrong. Please try again.');
+    }
+  };
+
+  const doBlock = async (reason) => {
+    setAccessBusy(true);
+    try {
+      const data = await apiBlockAppUser(accessToken, u.id, reason);
+      dispatch(patchSelectedUser({ status: 'blocked', blocked_at: data.blocked_at || new Date().toISOString() }));
+      toast.success(data.message || 'Account blocked and licence revoked.', { duration: 7000 });
+      setShowBlock(false);
+      dispatch(fetchAppUserDetail(u.id));
+    } catch (err) {
+      handleAccessError(err, () => setShowBlock(false));
+    } finally {
+      setAccessBusy(false);
+    }
+  };
+
+  const doUnblock = async (reason, extend) => {
+    setAccessBusy(true);
+    try {
+      const data = await apiUnblockAppUser(accessToken, u.id, reason, extend);
+      dispatch(patchSelectedUser({ status: 'active', blocked_at: null }));
+      // status:"active" is the ACCOUNT — whether the user can stream depends on license_status.
+      const ls = data.license_status;
+      const msg = data.message || 'Account unblocked.';
+      if (ls === 'active') {
+        toast.success(msg, { duration: 7000 });
+      } else if (ls == null) {
+        toast(msg, { icon: 'ℹ️', duration: 8000 });
+      } else {
+        // expired · inactive_due_to_payment · cancelled → restored but still unusable.
+        toast(msg, {
+          icon: '⚠️',
+          duration: 9000,
+          style: { border: '1px solid rgba(245,158,11,0.5)', color: '#f59e0b', maxWidth: 460 },
+        });
+      }
+      setShowUnblock(false);
+      dispatch(fetchAppUserDetail(u.id));
+    } catch (err) {
+      handleAccessError(err, () => setShowUnblock(false));
+    } finally {
+      setAccessBusy(false);
+    }
   };
 
   if (showActivity && u) {
@@ -1058,12 +1287,6 @@ export default function AppUserDetail({ userId, onBack }) {
         </button>
         {u && (
           <div className="udd-topbar-actions">
-            <button className="udd-activity-btn" onClick={() => setShowActivity(true)}>
-              <ActivityIcon /> Activity
-            </button>
-            <button className="udd-activity-btn" onClick={() => setShowLoginHistory(true)}>
-              <LoginHistoryIcon /> Login History
-            </button>
             <button
               className={`udd-flag-btn${u?.flagged_for_review ? ' flagged' : ''}`}
               onClick={() => setShowFlag(true)}
@@ -1071,6 +1294,17 @@ export default function AppUserDetail({ userId, onBack }) {
             >
               <FlagIcon /> {u?.flagged_for_review ? 'Flagged' : 'Flag for Review'}
             </button>
+            {u.status !== 'deleted' && (
+              u.status === 'blocked' ? (
+                <button className="udd-access-btn unblock" onClick={() => setShowUnblock(true)}>
+                  <UnblockIcon /> Unblock User
+                </button>
+              ) : (
+                <button className="udd-access-btn block" onClick={() => setShowBlock(true)}>
+                  <BlockIcon /> Block User
+                </button>
+              )
+            )}
           </div>
         )}
       </div>
@@ -1087,38 +1321,89 @@ export default function AppUserDetail({ userId, onBack }) {
 
       {u && !detailLoading && (
         <>
-          {/* ── Hero ──────────────────────────────────────── */}
-          <div className="udd-hero">
-            {/* Left: identity */}
-            <div className="udd-hero-left">
-              <div className="udd-avatar">{initials(u.full_name)}</div>
-              <div className="udd-hero-body">
-                <div className="udd-hero-email">{u.email}</div>
-                <div className="udd-hero-id" title={u.id}>User ID: {u.id}</div>
-                <div className="udd-hero-badges">
-                  <span className={`udd-status-pill ${statusClass(u.status)}`}>{u.status}</span>
-                  {u.email_verified && <span className="udd-badge green">Email Verified</span>}
-                  {u.phone_verified && <span className="udd-badge green">Phone Verified</span>}
-                  {u.trial_used && <span className="udd-badge amber">Trial Used</span>}
-                  {u.is_locked && <span className="udd-badge red">Locked</span>}
+          {/* ── Identity card ─────────────────────────────── */}
+          <div className={`udd-idcard${u.status === 'blocked' ? ' blocked' : ''}`}>
+            {u.status === 'blocked' && (
+              <div className="udd-idcard-banner">
+                <BlockIcon />
+                <span>
+                  Account blocked — licence revoked
+                  {u.blocked_at && relTime(u.blocked_at) !== '—' ? ` · blocked ${relTime(u.blocked_at)}` : ''}
+                </span>
+              </div>
+            )}
+            <div className="udd-idcard-body">
+              {/* Left rail: avatar + secondary view-actions */}
+              <div className="udd-idrail">
+                <div className="udd-avatar">{initials(u.full_name)}</div>
+                <button className="udd-rail-btn" onClick={() => setShowActivity(true)}>
+                  <ActivityIcon /> Activity
+                </button>
+                <button className="udd-rail-btn" onClick={() => setShowLoginHistory(true)}>
+                  <LoginHistoryIcon /> Login History
+                </button>
+              </div>
+
+              {/* Right body: title + key-value record + 2×2 nav grid */}
+              <div className="udd-idmain">
+                <div className="udd-idtitle">{u.email || '—'}</div>
+
+                <div className="udd-idrecord">
+                  <div className="udd-idrow">
+                    <span className="udd-idkey">User ID</span>
+                    <span className="udd-idval">
+                      <span className="udd-idmono">{u.id || u.user_id || '—'}</span>
+                      {(u.id || u.user_id) && (
+                        <button type="button" className="udd-idcopy" title="Copy user ID"
+                          onClick={() => copyUserId(u.id || u.user_id)}>
+                          <CopyIcon />
+                        </button>
+                      )}
+                    </span>
+                  </div>
+                  <div className="udd-idrow">
+                    <span className="udd-idkey">Status</span>
+                    <span className={`udd-idval udd-idstatus ${statusClass(u.status)}`}>
+                      <span className="udd-idstatus-dot" />{humanizeAccountStatus(u.status)}
+                    </span>
+                  </div>
+                  <div className="udd-idrow">
+                    <span className="udd-idkey">Email</span>
+                    <span className="udd-idval">
+                      {u.email_verified
+                        ? <span className="udd-idverified"><CheckIcon /> Verified</span>
+                        : 'Not verified'}
+                    </span>
+                  </div>
+                  <div className="udd-idrow">
+                    <span className="udd-idkey">Trial</span>
+                    <span className="udd-idval">{u.trial_used ? 'Used' : 'Not used'}</span>
+                  </div>
+                  <div className="udd-idrow">
+                    <span className="udd-idkey">Joined</span>
+                    <span className="udd-idval">{fmtDate(u.created_at)}</span>
+                  </div>
+                  <div className="udd-idrow">
+                    <span className="udd-idkey">Last Seen</span>
+                    <span className="udd-idval">{relTime(u.security_summary?.last_login_at)}</span>
+                  </div>
+                </div>
+
+                <div className="udd-idnav">
+                  <button className="udd-action-btn" onClick={() => setShowSubscriptions(true)}>
+                    <EditIcon /> View/Edit Subscription
+                  </button>
+                  <button className="udd-action-btn" onClick={() => setShowSubscriptionHistory(true)}>
+                    <HistoryIcon /> Subscription History
+                  </button>
+                  <button className="udd-action-btn" onClick={() => setShowLicenses(true)}>
+                    <LicenseIcon /> View Licenses
+                  </button>
+                  <button className="udd-action-btn" onClick={() => setShowLicenseHistory(true)}>
+                    <HistoryIcon /> Licenses History
+                  </button>
                 </div>
               </div>
-            </div>
-
-            {/* Right: quick actions */}
-            <div className="udd-hero-actions">
-              <button className="udd-action-btn" onClick={() => setShowSubscriptions(true)}>
-                <EditIcon /> View/Edit Subscription
-              </button>
-              <button className="udd-action-btn" onClick={() => setShowSubscriptionHistory(true)}>
-                <HistoryIcon /> View Subscription History
-              </button>
-              <button className="udd-action-btn" onClick={() => setShowLicenses(true)}>
-                <LicenseIcon /> View Licenses
-              </button>
-              <button className="udd-action-btn" onClick={() => setShowLicenseHistory(true)}>
-                <HistoryIcon /> View Licenses History
-              </button>
             </div>
           </div>
           {/* ── MAC Seats (directly under the identity card) ─ */}
@@ -1251,6 +1536,14 @@ export default function AppUserDetail({ userId, onBack }) {
 
       {showFlag && u && (
         <FlagReviewModal user={u} onClose={handleCloseFlag} />
+      )}
+      {showBlock && u && (
+        <BlockUserDialog user={u} busy={accessBusy}
+          onClose={() => !accessBusy && setShowBlock(false)} onConfirm={doBlock} />
+      )}
+      {showUnblock && u && (
+        <UnblockUserDialog user={u} busy={accessBusy}
+          onClose={() => !accessBusy && setShowUnblock(false)} onConfirm={doUnblock} />
       )}
       {showLicenses && u && (
         <LicenseDetailModal

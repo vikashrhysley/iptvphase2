@@ -168,6 +168,13 @@ const appUsersSlice = createSlice({
       state.filters = { ...state.filters, ...action.payload };
       state.lastFetched = null;
     },
+    // Optimistic in-place patch of the loaded detail — lets block/unblock flip the
+    // status + banner without waiting for a reload/refetch.
+    patchSelectedUser(state, action) {
+      if (state.selectedUser) {
+        state.selectedUser = { ...state.selectedUser, ...action.payload };
+      }
+    },
     clearSelectedUser(state) {
       state.selectedUser  = null;
       state.detailLoading = false;
@@ -297,10 +304,17 @@ const appUsersSlice = createSlice({
         s.updateError   = a.payload;
       });
 
-    b.addCase(fetchAppUserDetail.pending, (s) => {
-      s.detailLoading = true;
+    b.addCase(fetchAppUserDetail.pending, (s, a) => {
       s.detailError = null;
-      s.selectedUser = null;
+      // Keep the currently-shown user on screen while re-fetching the SAME id — this is the
+      // silent refresh after block/unblock, and blanking to a spinner would read as a reload.
+      // Only the first load of a (different) user shows the full-page spinner.
+      const sameUser = s.selectedUser &&
+        (s.selectedUser.id === a.meta.arg || s.selectedUser.user_id === a.meta.arg);
+      if (!sameUser) {
+        s.detailLoading = true;
+        s.selectedUser = null;
+      }
     })
       .addCase(fetchAppUserDetail.fulfilled, (s, a) => {
         s.detailLoading = false;
@@ -350,7 +364,7 @@ const appUsersSlice = createSlice({
 
 export const {
   setFilters, clearFilters,
-  clearSelectedUser, clearUpdateState, clearReviewState,
+  clearSelectedUser, patchSelectedUser, clearUpdateState, clearReviewState,
   setActivityFilters, clearActivityState,
   setLoginHistoryFilters, clearLoginHistoryState,
 } = appUsersSlice.actions;

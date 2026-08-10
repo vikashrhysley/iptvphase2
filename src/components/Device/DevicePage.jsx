@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import toast from 'react-hot-toast';
 import {
   fetchDevices, fetchDeviceStats,
-  updateDeviceStatus, revokeDevice,
-  clearToast, setDeviceFilters, clearDeviceFilters, clearDeviceDetail, clearUpdateState,
+  clearToast, setDeviceFilters, clearDeviceFilters, clearDeviceDetail,
+  invalidateDevices, patchDeviceInList,
 } from '../../store/slices/deviceSlice';
-import { apiFetchAdminDevices } from '../../services/api';
-import DeviceDetail, { UpdateStatusModal } from './DeviceDetail';
+import { apiFetchAdminDevices, apiBlockDevice, apiUnblockDevice } from '../../services/api';
+import DeviceDetail from './DeviceDetail';
 import './DevicePage.css';
 
 /* ── Icons ─────────────────────────────────────────────── */
@@ -20,47 +21,95 @@ const AppIcon     = () => <svg width="11" height="11" viewBox="0 0 24 24" fill="
 const ChevLeft    = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>;
 const ChevRight   = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>;
 
-/* ── Revoke modal ───────────────────────────────────────── */
-function RevokeModal({ device, onClose, onConfirm, busy }) {
+/* ── Device status → button/chip helpers ────────────────── */
+// New device.status vocabulary: normal · admin_blocked · auto_blocked · admin_released
+// · recovered · deleted. Only normal/admin_blocked/auto_blocked are actionable here.
+const isBlockedStatus = (s) => {
+  const v = String(s || '').toLowerCase();
+  return v === 'admin_blocked' || v === 'auto_blocked';
+};
+const dispStatusKey = (s) => {
+  const v = String(s || '').toLowerCase();
+  if (v === 'normal') return 'active';
+  if (isBlockedStatus(v)) return 'blocked';
+  if (v === 'admin_released' || v === 'recovered' || v === 'deleted') return 'inactive';
+  return v || 'unknown';
+};
+const dispStatusLabel = (s) => {
+  const v = String(s || '').toLowerCase();
+  if (v === 'normal') return 'Active';
+  if (isBlockedStatus(v)) return 'Blocked';
+  if (v === 'admin_released') return 'Released';
+  if (v === 'recovered') return 'Recovered';
+  if (v === 'deleted') return 'Deleted';
+  return v ? v.charAt(0).toUpperCase() + v.slice(1).replace(/_/g, ' ') : '—';
+};
+
+// The single access-control button, driven entirely by device.status.
+function DeviceAccessButton({ device, busy, onBlock, onUnblock, compact }) {
+  const v = String(device.status || '').toLowerCase();
+  const style = compact ? { padding: '5px 12px', fontSize: '0.72rem' } : undefined;
+  if (v === 'deleted') return null;                        // hide the action entirely
+  if (v === 'admin_released') {
+    return <button className="dc-btn disabled-btn" style={style} disabled title="Device released; must re-enrol">—</button>;
+  }
+  if (v === 'recovered') {
+    return <button className="dc-btn disabled-btn" style={style} disabled title="Device retired via recovery">—</button>;
+  }
+  if (isBlockedStatus(v)) {
+    return (
+      <button className="dc-btn unblock" style={style} onClick={() => onUnblock(device)} disabled={busy}>
+        {busy ? '…' : '✔ Unblock'}
+      </button>
+    );
+  }
+  // normal (and any unknown routine state) → Block
+  return (
+    <button className="dc-btn block" style={style} onClick={() => onBlock(device)} disabled={busy}>
+      {busy ? '…' : '⛔ Block'}
+    </button>
+  );
+}
+
+/* ── Block / Unblock confirm dialog ─────────────────────── */
+function AccessDialog({ device, mode, busy, onClose, onConfirm }) {
   const [reason, setReason] = useState('');
-  const [localError, setLocalError] = useState('');
-
-  const submit = (e) => {
-    e.preventDefault();
-    if (!reason.trim()) { setLocalError('Reason is required.'); return; }
-    onConfirm(reason.trim());
-  };
-
+  const isBlock = mode === 'block';
   const name = device.device_brand
     ? `${device.device_brand} ${device.device_model || ''}`.trim()
     : (device.device_name || device.name || 'this device');
+  const submit = (e) => { e.preventDefault(); onConfirm(reason.trim()); };
 
   return (
-    <div className="rv-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+    <div className="rv-overlay" onClick={e => e.target === e.currentTarget && !busy && onClose()}>
       <form className="rv-modal" onSubmit={submit}>
-        <div className="rv-title">✕ Revoke Device Access</div>
+        <div className="rv-title">{isBlock ? '⛔ Block Device' : '✔ Unblock Device'}</div>
         <p className="rv-sub">
-          Revoke the active license on <strong>{name}</strong>.
-          The device will fail heartbeat validation immediately.
+          {isBlock ? (
+            <>Block <strong>{name}</strong>. This blocks <strong>this device only</strong> — the user's
+              account and other devices are unaffected. Its current session is terminated immediately.</>
+          ) : (
+            <>Unblock <strong>{name}</strong>. It returns to a logged-out state and the user must sign in
+              again; it re-claims a MAC seat only if one is free.</>
+          )}
         </p>
 
         <div className="rv-field">
-          <label>Reason <span className="rv-required">*</span></label>
+          <label>Reason <span className="rv-optional">(optional — written to the audit log)</span></label>
           <textarea
             value={reason}
-            onChange={e => { setReason(e.target.value); setLocalError(''); }}
-            placeholder="e.g. Fraudulent activation detected"
+            onChange={e => setReason(e.target.value)}
+            placeholder={isBlock ? 'e.g. Suspicious activity from multiple IPs' : 'e.g. Reviewed — false positive'}
             rows={3}
             disabled={busy}
             autoFocus
           />
-          {localError && <span className="rv-field-error">{localError}</span>}
         </div>
 
         <div className="rv-actions">
           <button type="button" className="rv-cancel" onClick={onClose} disabled={busy}>Cancel</button>
-          <button type="submit" className="rv-confirm" disabled={busy}>
-            {busy ? '…' : '✕ Revoke'}
+          <button type="submit" className={`rv-confirm${isBlock ? ' rv-danger' : ' rv-primary'}`} disabled={busy}>
+            {busy ? '…' : (isBlock ? '⛔ Block device' : '✔ Unblock device')}
           </button>
         </div>
       </form>
@@ -156,11 +205,7 @@ function Pagination({ current, totalPages, totalItems, pageSize, onPage }) {
 }
 
 /* ── Device Card ────────────────────────────────────────── */
-// Device health "normal" is shown to admins as "Active" (and styled green like active).
-const dispStatusKey = (s) => (String(s || '').toLowerCase() === 'normal' ? 'active' : String(s || '').toLowerCase());
-const dispStatusLabel = (s) => { const k = dispStatusKey(s); return k ? k.charAt(0).toUpperCase() + k.slice(1) : '—'; };
-
-function DeviceCard({ device, canEdit, onToggle, onRevoke, actionLoading, onCardClick, onEdit }) {
+function DeviceCard({ device, canEdit, actionLoading, onCardClick, onBlock, onUnblock }) {
   const id   = device.device_id || device.id;
   const tc   = TYPE_CONFIG[device.device_type || device.type] || TYPE_CONFIG.phone;
   const busy = actionLoading === id;
@@ -178,7 +223,7 @@ function DeviceCard({ device, canEdit, onToggle, onRevoke, actionLoading, onCard
 
   return (
     <div
-      className={`device-card${device.status === 'blocked' || device.status === 'revoked' ? ' blocked' : ''}`}
+      className={`device-card${isBlockedStatus(device.status) ? ' blocked' : ''}`}
       style={{ '--type-color': tc.color, '--type-bg': tc.bg, '--type-border': tc.border, cursor: 'pointer' }}
       onClick={onCardClick}
     >
@@ -189,10 +234,15 @@ function DeviceCard({ device, canEdit, onToggle, onRevoke, actionLoading, onCard
           <div className="dc-device-name">{name}</div>
           <div className="dc-os">{os}</div>
         </div>
-        <span className={`dc-status ${dispStatusKey(device.status)}`}>
-          <span className="dc-status-dot" />
-          {dispStatusLabel(device.status)}
-        </span>
+        <div className="dc-status-col">
+          <span className={`dc-status ${dispStatusKey(device.status)}`}>
+            <span className="dc-status-dot" />
+            {dispStatusLabel(device.status)}
+          </span>
+          {String(device.status).toLowerCase() === 'auto_blocked' && (
+            <span className="dc-autoblocked" title="Blocked automatically by the heartbeat sweep">Auto-blocked</span>
+          )}
+        </div>
       </div>
 
       {/* User */}
@@ -226,24 +276,16 @@ function DeviceCard({ device, canEdit, onToggle, onRevoke, actionLoading, onCard
 
       {/* Actions */}
       <div className="dc-actions" onClick={e => e.stopPropagation()}>
-        {!canEdit ? (
-          <button className="dc-btn disabled-btn" disabled>No Permission</button>
-        ) : device.status === 'blocked' || device.status === 'revoked' ? (
-          <button className="dc-btn activate" onClick={() => onToggle(id, 'active')} disabled={busy}>
-            {busy ? '…' : '✓ Restore'}
-          </button>
-        ) : (
-          <button className="dc-btn edit" onClick={onEdit}>
-            ✎ Edit
-          </button>
-        )}
+        {!canEdit
+          ? <button className="dc-btn disabled-btn" disabled>No Permission</button>
+          : <DeviceAccessButton device={device} busy={busy} onBlock={onBlock} onUnblock={onUnblock} />}
       </div>
     </div>
   );
 }
 
 /* ── Device Table Row ───────────────────────────────────── */
-function DeviceTableRow({ device, canEdit, onToggle, onRevoke, actionLoading, onRowClick, onEdit }) {
+function DeviceTableRow({ device, canEdit, actionLoading, onRowClick, onBlock, onUnblock }) {
   const id   = device.device_id || device.id;
   const tc   = TYPE_CONFIG[device.device_type || device.type] || TYPE_CONFIG.phone;
   const busy = actionLoading === id;
@@ -280,14 +322,14 @@ function DeviceTableRow({ device, canEdit, onToggle, onRevoke, actionLoading, on
           <span className="dc-status-dot" />
           {dispStatusLabel(device.status)}
         </span>
+        {String(device.status).toLowerCase() === 'auto_blocked' && (
+          <span className="dc-autoblocked" style={{ marginLeft: 6 }} title="Blocked automatically by the heartbeat sweep">Auto</span>
+        )}
       </td>
       <td onClick={e => e.stopPropagation()}>
-        {!canEdit ? <span style={{ fontSize:'0.72rem', color:'var(--text-muted)' }}>—</span>
-          : device.status === 'blocked' || device.status === 'revoked' ? (
-            <button className="dc-btn activate" style={{ padding:'5px 12px' }} onClick={() => onToggle(id,'active')} disabled={busy}>{busy?'…':'✓ Restore'}</button>
-          ) : (
-            <button className="dc-btn edit" style={{ padding:'5px 12px', fontSize:'0.72rem' }} onClick={onEdit}>✎ Edit</button>
-          )}
+        {!canEdit
+          ? <span style={{ fontSize:'0.72rem', color:'var(--text-muted)' }}>—</span>
+          : <DeviceAccessButton device={device} busy={busy} onBlock={onBlock} onUnblock={onUnblock} compact />}
       </td>
     </tr>
   );
@@ -304,8 +346,8 @@ export default function DevicePage() {
   const [detailId,      setDetailId]     = useState(
     () => sessionStorage.getItem('deviceDetailId') || null
   );
-  const [revokeTarget,  setRevokeTarget] = useState(null);
-  const [editTarget,    setEditTarget]   = useState(null);
+  const [accessTarget,  setAccessTarget] = useState(null); // { device, mode: 'block' | 'unblock' }
+  const [accessBusy,    setAccessBusy]   = useState(false);
   const [exportOpen,    setExportOpen]   = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const [exportError,   setExportError]   = useState(null);
@@ -347,12 +389,17 @@ export default function DevicePage() {
       filters.plan_type, filters.has_risk_flag, filters.heartbeat_stale, filters.current_session,
       filters.sort_by, filters.sort_order, filters.page, filters.page_size]);
 
-  // If detail fetch fails (e.g. stale sessionStorage ID after refresh), silently fall back to list
+  // A stale sessionStorage ID restored after a refresh silently falls back to the list when its
+  // fetch fails. A device the admin just CLICKED must not — it should open and show any error
+  // in the detail view. (Auto-bouncing every click, via a stale detailError captured in this
+  // effect's closure, is what made the detail page look like it "won't open".)
+  const restoredIdRef = useRef(sessionStorage.getItem('deviceDetailId') || null);
   useEffect(() => {
-    if (detailId && detailError) {
+    if (detailId && detailId === restoredIdRef.current && detailError) {
       sessionStorage.removeItem('deviceDetailId');
       dispatch(clearDeviceDetail());
       setDetailId(null);
+      restoredIdRef.current = null;
     }
   }, [detailId, detailError, dispatch]);
 
@@ -365,6 +412,9 @@ export default function DevicePage() {
   }, [exportOpen]);
 
   const openDetail = (id) => {
+    // A user-clicked device is never the "stale restore" case — clear the ref so its detail
+    // fetch is never auto-bounced back to the list.
+    restoredIdRef.current = null;
     sessionStorage.setItem('deviceDetailId', id);
     setDetailId(id);
   };
@@ -373,9 +423,10 @@ export default function DevicePage() {
     setDetailId(null);
   };
 
-  // Re-fetch the current device list (used after an inline status edit so the card/row
-  // reflects the new status without a page reload).
+  // Re-fetch the current device list. Invalidate first so the 30s cache guard on
+  // fetchDevices doesn't skip the refetch right after a block/unblock.
   const refreshDevices = () => {
+    dispatch(invalidateDevices());
     const p = {};
     if (filters.search)          p.search          = filters.search;
     if (filters.status)          p.status          = filters.status;
@@ -392,8 +443,83 @@ export default function DevicePage() {
     dispatch(fetchDevices(p));
   };
 
-  const openEdit = (device) => { dispatch(clearUpdateState()); setEditTarget(device); };
-  const closeEdit = () => { setEditTarget(null); refreshDevices(); };
+  // ── Block / Unblock ──────────────────────────────────────
+  const openBlock   = (device) => setAccessTarget({ device, mode: 'block' });
+  const openUnblock = (device) => setAccessTarget({ device, mode: 'unblock' });
+  const closeAccess = () => { if (!accessBusy) setAccessTarget(null); };
+
+  const amberStyle = { border: '1px solid rgba(251,191,36,0.5)', color: '#fbbf24', maxWidth: 460 };
+
+  // Block. When fully_enforced is false the device IS blocked but a cut-off step failed —
+  // warn (amber, verbatim message + warnings) and offer to re-issue the same block call.
+  const runBlock = async (device, reason) => {
+    const id = device.device_id || device.id;
+    const data = await apiBlockDevice(accessToken, id, reason);
+    // Instant table update; the refetch below reconciles with the server.
+    dispatch(patchDeviceInList({ deviceId: id, changes: { status: data.new_status || 'admin_blocked', is_logged_in: data.is_logged_in ?? false } }));
+    if (data.fully_enforced === false) {
+      const warns = Array.isArray(data.warnings) ? data.warnings : [];
+      toast((t) => (
+        <div className="dv-warn-toast">
+          <strong>{data.message || 'Device blocked, but enforcement is incomplete.'}</strong>
+          {warns.length > 0 && <ul>{warns.map((w, i) => <li key={i}>{w}</li>)}</ul>}
+          <button
+            type="button"
+            className="dv-warn-retry"
+            onClick={() => { toast.dismiss(t.id); runBlock(device, reason).then(refreshDevices).catch(handleAccessError); }}
+          >
+            Retry enforcement
+          </button>
+        </div>
+      ), { duration: 12000, style: amberStyle });
+    } else {
+      toast.success(data.message || 'Device blocked. Session terminated.');
+    }
+  };
+
+  // Unblock (routine/auto). seat_available === false ⇒ unblocked, but the seat is gone —
+  // amber warning that streaming stays unavailable until one frees up.
+  const runUnblock = async (device, reason) => {
+    const id = device.device_id || device.id;
+    const data = await apiUnblockDevice(accessToken, id, reason);
+    dispatch(patchDeviceInList({ deviceId: id, changes: { status: data.new_status || 'normal', is_logged_in: data.is_logged_in ?? false } }));
+    if (data.seat_available === false) {
+      toast(data.message || 'Device unblocked, but no free seat — streaming stays unavailable until one frees up.',
+        { icon: '⚠️', duration: 9000, style: amberStyle });
+    } else {
+      toast.success(data.message || 'Device unblocked. It must log in again.');
+    }
+  };
+
+  // 400 (already/not blocked, or risk ≥ 90 → superadmin route) and 404 are informational and
+  // want a card refresh; anything else is a hard error.
+  const handleAccessError = (err) => {
+    if (err.status === 400 || err.status === 404) {
+      toast(err.message || (err.status === 404 ? 'Device not found — refreshing the list.' : 'Action not allowed in the current state.'),
+        { icon: 'ℹ️', duration: 7000 });
+      refreshDevices();
+    } else {
+      toast.error(err.message || 'Action failed.');
+    }
+  };
+
+  const doAccess = async (reason) => {
+    if (!accessTarget) return;
+    const { device, mode } = accessTarget;
+    setAccessBusy(true);
+    try {
+      if (mode === 'block') await runBlock(device, reason);
+      else                  await runUnblock(device, reason);
+      setAccessTarget(null);
+      refreshDevices();
+      dispatch(fetchDeviceStats());
+    } catch (err) {
+      setAccessTarget(null);
+      handleAccessError(err);
+    } finally {
+      setAccessBusy(false);
+    }
+  };
 
   if (detailId) {
     return <DeviceDetail deviceId={detailId} onBack={closeDetail} />;
@@ -530,14 +656,6 @@ export default function DevicePage() {
     } finally {
       setExportLoading(false);
     }
-  };
-
-  const handleToggle = (deviceId, status) => dispatch(updateDeviceStatus({ deviceId, status }));
-  const handleRevoke = (device) => setRevokeTarget(device);
-  const confirmRevoke = (reason) => {
-    const id = revokeTarget.device_id || revokeTarget.id;
-    dispatch(revokeDevice({ deviceId: id, reason }));
-    setRevokeTarget(null);
   };
 
   /* Stats cards */
@@ -730,11 +848,10 @@ export default function DevicePage() {
                 key={d.device_id || d.id}
                 device={d}
                 canEdit={canEdit}
-                onToggle={handleToggle}
-                onRevoke={() => handleRevoke(d)}
-                actionLoading={actionLoading}
+                actionLoading={accessBusy ? (accessTarget?.device?.device_id || accessTarget?.device?.id) : null}
                 onCardClick={() => openDetail(d.device_id || d.id)}
-                onEdit={() => openEdit(d)}
+                onBlock={openBlock}
+                onUnblock={openUnblock}
               />
             ))}
           </div>
@@ -759,8 +876,8 @@ export default function DevicePage() {
               <tbody>
                 {devices.map(d => (
                   <DeviceTableRow key={d.device_id || d.id} device={d} canEdit={canEdit}
-                    onToggle={handleToggle} onRevoke={() => handleRevoke(d)} actionLoading={actionLoading}
-                    onRowClick={() => openDetail(d.device_id || d.id)} onEdit={() => openEdit(d)} />
+                    actionLoading={accessBusy ? (accessTarget?.device?.device_id || accessTarget?.device?.id) : null}
+                    onRowClick={() => openDetail(d.device_id || d.id)} onBlock={openBlock} onUnblock={openUnblock} />
                 ))}
               </tbody>
             </table>
@@ -770,17 +887,14 @@ export default function DevicePage() {
         </div>
       )}
 
-      {revokeTarget && (
-        <RevokeModal
-          device={revokeTarget}
-          busy={!!actionLoading}
-          onClose={() => setRevokeTarget(null)}
-          onConfirm={confirmRevoke}
+      {accessTarget && (
+        <AccessDialog
+          device={accessTarget.device}
+          mode={accessTarget.mode}
+          busy={accessBusy}
+          onClose={closeAccess}
+          onConfirm={doAccess}
         />
-      )}
-
-      {editTarget && (
-        <UpdateStatusModal device={editTarget} onClose={closeEdit} />
       )}
     </div>
   );

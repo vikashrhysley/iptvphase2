@@ -1,7 +1,12 @@
 // src/components/Layout/Header.js
 import { useEffect, useRef, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { fetchNotificationSummary, markAllNotificationsRead, setNotificationFilters } from '../../store/slices/notificationsSlice';
+import {
+  fetchNotificationSummaryByUser,
+  fetchNotificationUnreadCount,
+  markAllNotificationsRead,
+  setActiveNotificationUser,
+} from '../../store/slices/notificationsSlice';
 import { useTheme } from '../../context/ThemeContext';
 import './Header.css';
 
@@ -52,8 +57,24 @@ const MoonIcon = () => (
   </svg>
 );
 
-// Notification category → display label (USER → User, SUBSCRIPTION → Subscription…)
-const catLabel = (c) => (c ? c.charAt(0) + c.slice(1).toLowerCase() : c);
+// Compact "3m ago / 2h ago / 5d ago" relative time for the bell rows.
+const relTime = (iso) => {
+  if (!iso) return '';
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '';
+  const s = Math.floor((Date.now() - then) / 1000);
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60); if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24); if (d < 30) return `${d}d ago`;
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
+
+// First letter for the row avatar — name, else email, else '?'.
+const avatarChar = (u) => {
+  const s = (u.full_name || u.email || '').trim();
+  return s ? s.charAt(0).toUpperCase() : '?';
+};
 
 const MenuIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -68,31 +89,36 @@ export default function Header({ activePage, dashboardTab, analyticsTab, sidebar
   const dispatch   = useDispatch();
   const { theme, toggleTheme } = useTheme();
 
-  // Notifications — badge + per-category breakdown are driven by the polling in
-  // useNotificationPolling (unread-count + summary). Opening the dropdown refreshes summary.
-  const unreadCount = useSelector(s => s.notifications.unreadCount);
-  const summary     = useSelector(s => s.notifications.summary);
+  // Notifications — badge + per-user dropdown are driven by the polling in
+  // useNotificationPolling (unread-count + summary-by-user). Opening refreshes the user list.
+  const unreadCount   = useSelector(s => s.notifications.unreadCount);
+  const summaryByUser = useSelector(s => s.notifications.summaryByUser);
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef(null);
 
   useEffect(() => {
     if (!notifOpen) return undefined;
-    dispatch(fetchNotificationSummary());   // freshen on open
+    dispatch(fetchNotificationSummaryByUser());   // freshen on open
     const onClick = (e) => { if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false); };
     document.addEventListener('mousedown', onClick);
     return () => document.removeEventListener('mousedown', onClick);
   }, [notifOpen, dispatch]);
 
-  const goToNotifications = (category) => {
+  // Open the Notifications page — either drilled into one user, or the grouped list (user=null).
+  const goToNotifications = (user) => {
     setNotifOpen(false);
-    // Seed the list filter (clicking a category row → that category's unread).
-    dispatch(setNotificationFilters({
-      category: category || '',
-      is_read: category ? 'false' : 'all',
-      page: 1,
-    }));
+    dispatch(setActiveNotificationUser(user || null));
     onNavigate?.('notifications');
   };
+
+  // Bell "mark all read" → global read-all (#5), then refresh the bell + badge to server truth.
+  const markAllRead = async () => {
+    try { await dispatch(markAllNotificationsRead()).unwrap(); } catch { /* ignore */ }
+    dispatch(fetchNotificationSummaryByUser());
+    dispatch(fetchNotificationUnreadCount());
+  };
+
+  const users = summaryByUser?.users ?? [];
 
   const left = sidebarCollapsed ? 'var(--sidebar-collapsed)' : 'var(--sidebar-width)';
   const breadcrumb = activePage === 'home'
@@ -147,34 +173,40 @@ export default function Header({ activePage, dashboardTab, analyticsTab, sidebar
               <div className="notif-panel-head">
                 <span>Notifications</span>
                 {unreadCount > 0 && (
-                  <button
-                    className="notif-markall"
-                    onClick={() => dispatch(markAllNotificationsRead())}
-                    title="Mark all as read"
-                  >
+                  <button className="notif-markall" onClick={markAllRead} title="Mark all as read">
                     Mark all read
                   </button>
                 )}
               </div>
               <div className="notif-panel-body">
-                {(summary?.byCategory?.length ?? 0) === 0 || summary.totalUnread === 0 ? (
+                {users.length === 0 ? (
                   <div className="notif-empty">
                     <BellIcon />
                     <span>You're all caught up</span>
                   </div>
                 ) : (
-                  summary.byCategory
-                    .filter(c => (c.unread_count ?? 0) > 0)
-                    .map(c => (
-                      <button className="notif-cat-row" key={c.category} onClick={() => goToNotifications(c.category)}>
-                        <span className={`notif-cat-dot cat-${c.category?.toLowerCase()}`} />
-                        <span className="notif-cat-label">{catLabel(c.category)}</span>
-                        <span className="notif-cat-count">{c.unread_count}</span>
-                      </button>
-                    ))
+                  users.map(u => (
+                    <button
+                      className="notif-user-row"
+                      key={u.user_id}
+                      onClick={() => goToNotifications(u)}
+                    >
+                      <span className="notif-user-avatar">{avatarChar(u)}</span>
+                      <span className="notif-user-main">
+                        <span className="notif-user-top">
+                          <span className="notif-user-name">{u.full_name || u.email}</span>
+                          <span className="notif-user-time">{relTime(u.latest_created_at)}</span>
+                        </span>
+                        <span className="notif-user-summary">{u.summary_line || u.email}</span>
+                      </span>
+                      {(u.unread_count ?? 0) > 0 && (
+                        <span className="notif-user-count">{u.unread_count > 9 ? '9+' : u.unread_count}</span>
+                      )}
+                    </button>
+                  ))
                 )}
               </div>
-              <button className="notif-viewall" onClick={() => goToNotifications()}>
+              <button className="notif-viewall" onClick={() => goToNotifications(null)}>
                 View all notifications
               </button>
             </div>
