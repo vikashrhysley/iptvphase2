@@ -291,7 +291,7 @@ export default function ProfilePage() {
         </div>
 
         <div className="pp-hero-info">
-          <div className="pp-name">{profile.full_name || profile.username || 'Admin User'}</div>
+          <div className="pp-name">{profile.full_name || profile.username || roleLabel(profile)}</div>
           <div className="pp-email">{profile.email}</div>
           <div className="pp-badges">
             <span className={`pp-role-badge ${role}`}>{roleLabel(profile)}</span>

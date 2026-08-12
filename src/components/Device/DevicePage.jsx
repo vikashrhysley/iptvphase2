@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import toast from 'react-hot-toast';
 import {
-  fetchDevices, fetchDeviceStats,
+  fetchDevices, fetchDeviceStats, fetchDeviceBreakdown,
   clearToast, setDeviceFilters, clearDeviceFilters, clearDeviceDetail,
   invalidateDevices, patchDeviceInList,
 } from '../../store/slices/deviceSlice';
@@ -21,27 +21,32 @@ const AppIcon     = () => <svg width="11" height="11" viewBox="0 0 24 24" fill="
 const ChevLeft    = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>;
 const ChevRight   = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>;
 
-/* ── Device status → button/chip helpers ────────────────── */
-// New device.status vocabulary: normal · admin_blocked · auto_blocked · admin_released
-// · recovered · deleted. Only normal/admin_blocked/auto_blocked are actionable here.
+/* ── Device status → chip/button helpers ────────────────── */
+// device.status vocabulary (7 values). "recovered" was renamed to "retired" and no longer exists.
+// STATE (this) and PRESENCE (online-now) are different axes — never conflate them.
+const STATUS_MAP = {
+  normal:             { label: 'In service',          cls: 'in-service' },   // green
+  auto_blocked:       { label: 'Auto-blocked',        cls: 'auto-blocked' }, // amber (user can clear)
+  admin_blocked:      { label: 'Blocked',             cls: 'blocked' },      // red
+  risk_score_blocked: { label: 'Blocked · High risk', cls: 'blocked' },      // red
+  admin_released:     { label: 'Released',            cls: 'out-service' },  // grey
+  retired:            { label: 'Retired',             cls: 'out-service' },  // grey
+  deleted:            { label: 'Deleted',             cls: 'out-service' },  // grey
+};
+// The three blocked states are the only ones with an Unblock action.
 const isBlockedStatus = (s) => {
   const v = String(s || '').toLowerCase();
-  return v === 'admin_blocked' || v === 'auto_blocked';
+  return v === 'admin_blocked' || v === 'auto_blocked' || v === 'risk_score_blocked';
 };
-const dispStatusKey = (s) => {
+// The "out of service" family: finished, not blocked — no unblock, the user re-enrols.
+const isOutOfService = (s) => {
   const v = String(s || '').toLowerCase();
-  if (v === 'normal') return 'active';
-  if (isBlockedStatus(v)) return 'blocked';
-  if (v === 'admin_released' || v === 'recovered' || v === 'deleted') return 'inactive';
-  return v || 'unknown';
+  return v === 'retired' || v === 'admin_released' || v === 'deleted';
 };
+const dispStatusKey = (s) => STATUS_MAP[String(s || '').toLowerCase()]?.cls || 'unknown';
 const dispStatusLabel = (s) => {
   const v = String(s || '').toLowerCase();
-  if (v === 'normal') return 'Active';
-  if (isBlockedStatus(v)) return 'Blocked';
-  if (v === 'admin_released') return 'Released';
-  if (v === 'recovered') return 'Recovered';
-  if (v === 'deleted') return 'Deleted';
+  if (STATUS_MAP[v]) return STATUS_MAP[v].label;
   return v ? v.charAt(0).toUpperCase() + v.slice(1).replace(/_/g, ' ') : '—';
 };
 
@@ -49,13 +54,7 @@ const dispStatusLabel = (s) => {
 function DeviceAccessButton({ device, busy, onBlock, onUnblock, compact }) {
   const v = String(device.status || '').toLowerCase();
   const style = compact ? { padding: '5px 12px', fontSize: '0.72rem' } : undefined;
-  if (v === 'deleted') return null;                        // hide the action entirely
-  if (v === 'admin_released') {
-    return <button className="dc-btn disabled-btn" style={style} disabled title="Device released; must re-enrol">—</button>;
-  }
-  if (v === 'recovered') {
-    return <button className="dc-btn disabled-btn" style={style} disabled title="Device retired via recovery">—</button>;
-  }
+  if (isOutOfService(v)) return null;   // retired / released / deleted → no action; user re-enrols
   if (isBlockedStatus(v)) {
     return (
       <button className="dc-btn unblock" style={style} onClick={() => onUnblock(device)} disabled={busy}>
@@ -84,18 +83,24 @@ function AccessDialog({ device, mode, busy, onClose, onConfirm }) {
     <div className="rv-overlay" onClick={e => e.target === e.currentTarget && !busy && onClose()}>
       <form className="rv-modal" onSubmit={submit}>
         <div className="rv-title">{isBlock ? '⛔ Block Device' : '✔ Unblock Device'}</div>
-        <p className="rv-sub">
-          {isBlock ? (
-            <>Block <strong>{name}</strong>. This blocks <strong>this device only</strong> — the user's
-              account and other devices are unaffected. Its current session is terminated immediately.</>
-          ) : (
-            <>Unblock <strong>{name}</strong>. It returns to a logged-out state and the user must sign in
-              again; it re-claims a MAC seat only if one is free.</>
-          )}
-        </p>
+        <p className="rv-sub">{isBlock ? <>Block <strong>{name}</strong>.</> : <>Unblock <strong>{name}</strong>.</>}</p>
+        {isBlock ? (
+          <ul className="rv-list">
+            <li>This device is <strong>signed out immediately</strong> and cannot stream.</li>
+            <li>Its MAC seat is freed, so another of the user's devices can take it.</li>
+            <li>The user's account, licence and <strong>other devices are NOT affected</strong>.</li>
+            <li>The device cannot re-enrol until an admin unblocks it.</li>
+          </ul>
+        ) : (
+          <ul className="rv-list">
+            <li>The device comes back <strong>signed out</strong> — the user has to sign in again. This restores eligibility, not a live session.</li>
+            <li>Its risk score is reset to 0 and any open risk events are resolved.</li>
+            <li>If its MAC seat was taken by another device since it was blocked, unblocking alone will not restore streaming.</li>
+          </ul>
+        )}
 
         <div className="rv-field">
-          <label>Reason <span className="rv-optional">(optional — written to the audit log)</span></label>
+          <label>Reason <span className="rv-required">*</span></label>
           <textarea
             value={reason}
             onChange={e => setReason(e.target.value)}
@@ -108,7 +113,7 @@ function AccessDialog({ device, mode, busy, onClose, onConfirm }) {
 
         <div className="rv-actions">
           <button type="button" className="rv-cancel" onClick={onClose} disabled={busy}>Cancel</button>
-          <button type="submit" className={`rv-confirm${isBlock ? ' rv-danger' : ' rv-primary'}`} disabled={busy}>
+          <button type="submit" className={`rv-confirm${isBlock ? ' rv-danger' : ' rv-primary'}`} disabled={busy || !reason.trim()}>
             {busy ? '…' : (isBlock ? '⛔ Block device' : '✔ Unblock device')}
           </button>
         </div>
@@ -137,11 +142,93 @@ const TYPE_TABS = [
   { key: 'streaming_stick', label: 'Streaming' },
 ];
 
+// Status dropdown — the STATE axis. active/inactive were REMOVED (they now match nothing and
+// return an empty list); every value here is a real ?status= bucket the backend recognises.
 const STATUS_FILTERS = [
-  { key: 'all',             label: 'All',             status: '',         current_session: false },
-  { key: 'active',          label: 'Active',          status: 'active',   current_session: false, color: '#10b981' },
-  { key: 'blocked',         label: 'Blocked',         status: 'blocked',  current_session: false, color: '#ef4444' },
+  { value: '',                   label: 'All statuses' },
+  { value: 'normal',             label: 'In service' },
+  { value: 'auto_blocked',       label: 'Auto-blocked' },
+  { value: 'admin_blocked',      label: 'Admin-blocked' },
+  { value: 'risk_score_blocked', label: 'Risk-blocked' },
+  { value: 'retired',            label: 'Retired' },
+  { value: 'admin_released',     label: 'Released' },
+  { value: 'deleted',            label: 'Deleted' },
+  { value: 'blocked',            label: 'Blocked (all)' },
+  { value: 'out_of_service',     label: 'Out of service' },
 ];
+
+// Human labels for every clickable ?status= bucket (status + roll-ups + in-use + signals),
+// used by the active-filter chip so a filter set from a card click still reads clearly.
+const STATUS_LABELS = {
+  normal: 'In service', auto_blocked: 'Auto-blocked', admin_blocked: 'Admin-blocked',
+  risk_score_blocked: 'Risk-blocked', retired: 'Retired', admin_released: 'Released',
+  deleted: 'Deleted', blocked: 'Blocked', out_of_service: 'Out of service',
+  online_now: 'Online now', logged_in_idle: 'Idle', logged_out: 'Signed out',
+  never_heartbeat: 'Never checked in', high_risk: 'High risk', push_enabled: 'Push enabled',
+  new_enrollments_24h: 'New (24h)', new_enrollments_7d: 'New (7d)',
+};
+
+/* ── Devices-page stat-card row definitions (from dashboard/stats.devices) ── */
+// Card A — DEVICE STATUS. Seven by_status buckets, always sum to total_devices.count.
+const STATUS_BAR_ROWS = [
+  { key: 'in_service_devices',    label: 'In service',    tone: 'good',  status: 'normal' },
+  { key: 'auto_blocked_devices',  label: 'Auto-blocked',  tone: 'warn',  status: 'auto_blocked' },
+  { key: 'admin_blocked_devices', label: 'Admin-blocked', tone: 'bad',   status: 'admin_blocked' },
+  { key: 'risk_blocked_devices',  label: 'Risk-blocked',  tone: 'bad',   status: 'risk_score_blocked' },
+  { key: 'retired_devices',       label: 'Retired',       tone: 'muted', status: 'retired' },
+  { key: 'released_devices',      label: 'Released',      tone: 'muted', status: 'admin_released' },
+  { key: 'deleted_devices',       label: 'Deleted',       tone: 'muted', status: 'deleted' },
+];
+// Card B — IN USE. Three buckets, always sum to in_service_devices.
+const IN_USE_BAR_ROWS = [
+  { key: 'online_now',     label: 'Online now', tone: 'good',  status: 'online_now',     tip: 'Being used right now' },
+  { key: 'logged_in_idle', label: 'Idle',       tone: 'warn',  status: 'logged_in_idle', tip: 'Signed in, but the app has gone quiet' },
+  { key: 'logged_out',     label: 'Signed out', tone: 'muted', status: 'logged_out',     tip: 'Healthy, nobody signed in' },
+];
+// Card C — NEEDS ATTENTION. Signals overlap each other and the partition — tiles, no total bar.
+const SIGNAL_TILE_ROWS = [
+  { key: 'never_heartbeat',     label: 'Never checked in', icon: '📡', color: '#fbbf24', status: 'never_heartbeat' },
+  { key: 'high_risk_devices',   label: 'High risk',        icon: '⚠️', color: '#f87171', status: 'high_risk' },
+  { key: 'push_enabled',        label: 'Push enabled',     icon: '🔔', color: '#8b5cf6', status: 'push_enabled' },
+  { key: 'new_enrollments_24h', label: 'New (24h)',        icon: '✨', color: '#00d4ff', status: 'new_enrollments_24h' },
+  { key: 'new_enrollments_7d',  label: 'New (7d)',         icon: '🆕', color: '#34d399', status: 'new_enrollments_7d' },
+];
+
+// One horizontal bar for the status / in-use cards. Clickable → filters the list below.
+function DeviceStatBar({ label, value, total, tone, tip, onClick }) {
+  const pct = total > 0 && value > 0 ? Math.max((value / total) * 100, value > 0 ? 1.5 : 0) : 0;
+  return (
+    <button type="button" className="dv-bar-row" onClick={onClick} title={tip ? `${label} — ${tip}` : `Filter to ${label}`}>
+      <span className="dv-bar-label">{label}</span>
+      <span className="dv-bar-track">
+        <span className={`dv-bar-fill tone-${tone}`} style={{ width: `${pct}%`, minWidth: value > 0 ? 3 : 0 }} />
+      </span>
+      <span className="dv-bar-value">{Number(value || 0).toLocaleString()}</span>
+    </button>
+  );
+}
+
+// A full card of bars (status partition or in-use), with a reconciling headline.
+function DeviceBarCard({ title, icon, headlineLabel, total, rows, source, sort, onFilter }) {
+  const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  let items = rows.map((r) => ({ ...r, value: num(source?.[r.key]) }));
+  if (sort) items = [...items].sort((a, b) => b.value - a.value);
+  return (
+    <div className="device-stats-panel dv-bar-card">
+      <div className="dsp-title"><span className="dsp-title-icon">{icon}</span> {title}</div>
+      <div className="dv-bar-headline">
+        <strong>{num(total).toLocaleString()}</strong>
+        <span>{headlineLabel}</span>
+      </div>
+      <div className="dv-bar-list">
+        {items.map((r) => (
+          <DeviceStatBar key={r.key} label={r.label} value={r.value} total={num(total)} tone={r.tone} tip={r.tip}
+            onClick={() => onFilter(r.status)} />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /* ── Helpers ────────────────────────────────────────────── */
 const timeAgo = (iso) => {
@@ -338,7 +425,7 @@ function DeviceTableRow({ device, canEdit, actionLoading, onRowClick, onBlock, o
 /* ── Main Page ──────────────────────────────────────────── */
 export default function DevicePage() {
   const dispatch = useDispatch();
-  const { devices, total, page, pageSize, loading, error, actionLoading, stats, statsLoading, filters, detailError } = useSelector(s => s.devices);
+  const { devices, total, page, pageSize, loading, error, actionLoading, stats, statsLoading, breakdown, breakdownLoading, filters, detailError } = useSelector(s => s.devices);
   const { user: me, accessToken } = useSelector(s => s.auth);
   const canEdit = me?.role === 'superadmin' || me?.role === 'admin';
 
@@ -361,6 +448,12 @@ export default function DevicePage() {
 
   /* All hooks first */
   useEffect(() => { dispatch(fetchDeviceStats()); }, [dispatch]);
+  // The reconciling status/in-use/signals breakdown for the three cards (shared dashboard source).
+  useEffect(() => { dispatch(fetchDeviceBreakdown()); }, [dispatch]);
+
+  // Click a card bucket → filter the list below in place (pass the ?status= value straight through).
+  const applyStatusFilter = (status) => dispatch(setDeviceFilters({ status, current_session: false, page: 1 }));
+  const clearStatusFilter = () => dispatch(setDeviceFilters({ status: '', current_session: false, page: 1 }));
 
   useEffect(() => {
     clearTimeout(debounceRef.current);
@@ -658,24 +751,14 @@ export default function DevicePage() {
     }
   };
 
-  /* Stats cards */
-  const S  = stats?.stats             ?? {};
-  const ES = stats?.extra_stats       ?? {};
+  /* Stats cards — the three reconciling cards read from the shared dashboard breakdown */
   const PB = stats?.platform_breakdown ?? {};
-
-  const deviceStatItems = [
-    { label: 'Total',    value: S.total    ?? 0, color: '#00d4ff', icon: '📱' },
-    { label: 'Active',   value: S.active   ?? 0, color: '#10b981', icon: '✅' },
-    { label: 'Inactive', value: S.inactive ?? 0, color: '#94a3b8', icon: '💤' },
-    { label: 'Blocked',  value: S.blocked  ?? 0, color: '#ef4444', icon: '🚫' },
-  ];
-
-  const auxiliaryStatItems = [
-    { label: 'Current Sessions', value: ES.current_sessions     ?? 0, color: '#00d4ff', icon: '🟢' },
-    { label: 'High Risk',        value: ES.high_risk            ?? 0, color: '#f87171', icon: '⚠️' },
-    { label: 'Expiring 7d',      value: ES.expiring_licenses_7d ?? 0, color: '#fbbf24', icon: '⏳' },
-    { label: 'Push Enabled',     value: ES.push_enabled         ?? 0, color: '#8b5cf6', icon: '🔔' },
-  ];
+  const bd        = breakdown ?? {};
+  const byStatus  = bd.total_devices?.by_status ?? {};
+  const inUse     = bd.in_use ?? {};
+  const signals   = bd.signals ?? {};
+  const totalCount     = bd.total_devices?.count ?? 0;
+  const inServiceCount = byStatus.in_service_devices ?? 0;
 
   const PLATFORM_META = {
     android: { color: '#3ddc84', icon: '🤖' },
@@ -696,37 +779,26 @@ export default function DevicePage() {
       <Toast />
 
       {/* ── Stats ── */}
-      {statsLoading && <div className="device-stats-shimmer" />}
-      {!statsLoading && (
-        <div className="device-stats">
-          <div className="device-stats-panel">
-            <div className="dsp-title"><span className="dsp-title-icon">📊</span> Device Stats</div>
-            <div className="dsp-grid">
-              {deviceStatItems.map(({ label, value, color, icon }) => (
-                <div className="dsp-item" key={label} style={{ '--dsc': color }}>
-                  <div className="dsp-icon">{icon}</div>
-                  <div className="dsp-info">
-                    <div className="dsp-value">{value.toLocaleString()}</div>
-                    <div className="dsp-label">{label}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="device-stats-panel">
-            <div className="dsp-title"><span className="dsp-title-icon">📈</span> Auxiliary Stats</div>
-            <div className="dsp-grid">
-              {auxiliaryStatItems.map(({ label, value, color, icon }) => (
-                <div className="dsp-item" key={label} style={{ '--dsc': color }}>
-                  <div className="dsp-icon">{icon}</div>
-                  <div className="dsp-info">
-                    <div className="dsp-value">{value.toLocaleString()}</div>
-                    <div className="dsp-label">{label}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+      {(statsLoading || breakdownLoading) && !breakdown && <div className="device-stats-shimmer" />}
+      {(breakdown || !breakdownLoading) && (
+        <div className="device-stats device-stats-3">
+          {/* Card A — DEVICE STATUS (7 bars, reconciles to total) */}
+          <DeviceBarCard
+            title="Device Status" icon="📊"
+            headlineLabel="Total Devices" total={totalCount}
+            rows={STATUS_BAR_ROWS} source={byStatus} sort
+            onFilter={applyStatusFilter}
+          />
+
+          {/* Card B — IN USE RIGHT NOW (3 bars, reconciles to in-service) */}
+          <DeviceBarCard
+            title="In Use Right Now" icon="🟢"
+            headlineLabel="In service" total={inServiceCount}
+            rows={IN_USE_BAR_ROWS} source={inUse}
+            onFilter={applyStatusFilter}
+          />
+
+          {/* Platform Stats — unchanged */}
           <div className="device-stats-panel">
             <div className="dsp-title"><span className="dsp-title-icon">🌐</span> Platform Stats</div>
             <div className="dsp-grid">
@@ -778,17 +850,21 @@ export default function DevicePage() {
 
           <select
             className="status-filter"
-            value={filters.current_session ? 'current_session' : (filters.status || '')}
-            onChange={e => {
-              const val = e.target.value;
-              const f = STATUS_FILTERS.find(x => x.key === val) || STATUS_FILTERS[0];
-              dispatch(setDeviceFilters({ status: f.status, current_session: f.current_session, page: 1 }));
-            }}
+            value={STATUS_FILTERS.some(f => f.value === filters.status) ? filters.status : ''}
+            onChange={e => dispatch(setDeviceFilters({ status: e.target.value, current_session: false, page: 1 }))}
           >
             {STATUS_FILTERS.map(f => (
-              <option key={f.key} value={f.key}>{f.label}</option>
+              <option key={f.value || 'all'} value={f.value}>{f.label}</option>
             ))}
           </select>
+
+          {/* Active filter chip — shows any status set from a card click, with a clear (x) */}
+          {filters.status && (
+            <span className="dv-filter-chip">
+              {STATUS_LABELS[filters.status] || filters.status}
+              <button type="button" className="dv-filter-chip-x" onClick={clearStatusFilter} title="Clear filter">✕</button>
+            </span>
+          )}
 
           {/* Export */}
           <div className="dv-export-wrap" ref={exportRef}>

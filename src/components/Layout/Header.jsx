@@ -5,6 +5,7 @@ import {
   fetchNotificationSummaryByUser,
   fetchNotificationUnreadCount,
   markAllNotificationsRead,
+  markUserNotificationsRead,
   setActiveNotificationUser,
 } from '../../store/slices/notificationsSlice';
 import { useTheme } from '../../context/ThemeContext';
@@ -111,6 +112,13 @@ export default function Header({ activePage, dashboardTab, analyticsTab, sidebar
     onNavigate?.('notifications');
   };
 
+  // Clicking a user row marks that user's notifications read — the bell badge drops by their
+  // unread count and the user leaves the list — then opens their notifications.
+  const openUser = (user) => {
+    dispatch(markUserNotificationsRead({ userId: user.user_id }));
+    goToNotifications(user);
+  };
+
   // Bell "mark all read" → global read-all (#5), then refresh the bell + badge to server truth.
   const markAllRead = async () => {
     try { await dispatch(markAllNotificationsRead()).unwrap(); } catch { /* ignore */ }
@@ -189,7 +197,7 @@ export default function Header({ activePage, dashboardTab, analyticsTab, sidebar
                     <button
                       className="notif-user-row"
                       key={u.user_id}
-                      onClick={() => goToNotifications(u)}
+                      onClick={() => openUser(u)}
                     >
                       <span className="notif-user-avatar">{avatarChar(u)}</span>
                       <span className="notif-user-main">
@@ -199,9 +207,6 @@ export default function Header({ activePage, dashboardTab, analyticsTab, sidebar
                         </span>
                         <span className="notif-user-summary">{u.summary_line || u.email}</span>
                       </span>
-                      {(u.unread_count ?? 0) > 0 && (
-                        <span className="notif-user-count">{u.unread_count > 9 ? '9+' : u.unread_count}</span>
-                      )}
                     </button>
                   ))
                 )}

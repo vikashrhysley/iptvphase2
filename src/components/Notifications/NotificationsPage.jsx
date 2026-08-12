@@ -122,17 +122,6 @@ function UserGroupsView() {
         </div>
       </div>
 
-      <div className="nt-toolbar">
-        <label className="nt-check">
-          <input
-            type="checkbox"
-            checked={userGroupsIncludeArchived}
-            onChange={(e) => { setPage(1); dispatch(setUserGroupsIncludeArchived(e.target.checked)); }}
-          />
-          Include archived
-        </label>
-      </div>
-
       {userGroupsLoading && !userGroups.length ? (
         <div className="nt-empty">Loading…</div>
       ) : userGroupsError ? (
@@ -241,47 +230,13 @@ function UserHistoryView() {
         )}
       </div>
 
-      {/* Filters */}
-      <div className="nt-toolbar">
-        <div className="nt-filter">
-          <label>Category</label>
-          <select className="nt-select" value={userHistoryFilters.category} onChange={(e) => setHF({ category: e.target.value })}>
-            <option value="">All</option>
-            {CATEGORIES.map((c) => <option key={c} value={c}>{catLabel(c)}</option>)}
-          </select>
-        </div>
-        <div className="nt-filter">
-          <label>Priority</label>
-          <select className="nt-select" value={userHistoryFilters.priority} onChange={(e) => setHF({ priority: e.target.value })}>
-            <option value="">All</option>
-            {PRIORITIES.map((p) => <option key={p} value={p}>{p.charAt(0) + p.slice(1).toLowerCase()}</option>)}
-          </select>
-        </div>
-        <div className="nt-filter">
-          <label>From</label>
-          <input type="date" className="nt-select" value={userHistoryFilters.date_from} onChange={(e) => setHF({ date_from: e.target.value })} />
-        </div>
-        <div className="nt-filter">
-          <label>To</label>
-          <input type="date" className="nt-select" value={userHistoryFilters.date_to} onChange={(e) => setHF({ date_to: e.target.value })} />
-        </div>
-        <label className="nt-check">
-          <input
-            type="checkbox"
-            checked={userHistoryFilters.include_archived}
-            onChange={(e) => setHF({ include_archived: e.target.checked })}
-          />
-          Include archived
-        </label>
-      </div>
-
       {/* List */}
       {userHistoryLoading && !userHistory.length ? (
         <div className="nt-empty">Loading notifications…</div>
       ) : userHistoryError ? (
         <div className="nt-error">{userHistoryError}</div>
       ) : userHistory.length === 0 ? (
-        <div className="nt-empty">No notifications match these filters.</div>
+        <div className="nt-empty">No notifications for this user.</div>
       ) : (
         <div className="nt-list">
           {userHistory.map((n) => (
