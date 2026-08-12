@@ -206,11 +206,15 @@ function CreateAdminUserModal({ onClose, onCreated }) {
   const [form, setForm] = useState({
     full_name: '',
     email: '',
-    password: '',
     role: 'admin',
   });
   const [localError, setLocalError] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+
+  // Pull a fresh assignable-roles list each time the modal opens so a role created since the
+  // page first loaded shows up in the dropdown — no page refresh needed.
+  useEffect(() => {
+    dispatch(fetchAssignableRoles({ force: true }));
+  }, [dispatch]);
 
   const roleOptions = assignableRoles.length ? assignableRoles : FALLBACK_ROLES;
   const selectedRole = assignableRoles.find((r) => r.name === form.role);
@@ -234,14 +238,6 @@ function CreateAdminUserModal({ onClose, onCreated }) {
       setLocalError('Enter a valid admin email.');
       return;
     }
-    if (!form.password) {
-      setLocalError('Initial password is required.');
-      return;
-    }
-    if (form.password.length < 8) {
-      setLocalError('Password must be at least 8 characters.');
-      return;
-    }
     if (!form.role) {
       setLocalError('Role is required.');
       return;
@@ -250,7 +246,6 @@ function CreateAdminUserModal({ onClose, onCreated }) {
     try {
       await dispatch(createAdminUser({
         email,
-        password: form.password,
         role: form.role,
         full_name: fullName || undefined,
       })).unwrap();
@@ -290,28 +285,6 @@ function CreateAdminUserModal({ onClose, onCreated }) {
               placeholder="newadmin@company.com"
               disabled={createLoading}
             />
-          </label>
-
-          <label className="au-modal-field">
-            <span>Initial Password</span>
-            <div className="au-password-wrap">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={form.password}
-                onChange={(e) => updateField('password', e.target.value)}
-                placeholder="TempPass123!"
-                disabled={createLoading}
-              />
-              <button
-                type="button"
-                className="au-password-toggle"
-                onClick={() => setShowPassword((v) => !v)}
-                tabIndex={-1}
-                title={showPassword ? 'Hide password' : 'Show password'}
-              >
-                {showPassword ? <EyeOffIcon /> : <EyeIcon />}
-              </button>
-            </div>
           </label>
 
           <label className="au-modal-field">

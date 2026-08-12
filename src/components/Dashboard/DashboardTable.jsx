@@ -277,28 +277,28 @@ const LIVE_SECTIONS = [
     label: 'Devices',
     accent: 'var(--accent-primary)',
     source: 'devices',
-    hero: { label: 'Total Devices', path: 'total_devices' },
+    // Clicking a bar/chip navigates to the Devices page with that ?status= filter applied.
+    filterPage: 'device',
+    hero: { label: 'Total Devices', path: 'total_devices.count' },
     chips: [
-      { label: 'New 24h', path: 'new_enrollments_24h' },
-      { label: 'New 7d', path: 'new_enrollments_7d' },
+      { label: 'Blocked', path: 'total_devices.blocked_count', filter: 'blocked' },
+      { label: 'Out of Service', path: 'total_devices.out_of_service_count', filter: 'out_of_service' },
     ],
     groups: [
       {
-        label: 'Connectivity',
+        // One flat status partition — the seven by_status buckets ALWAYS sum to count. Every
+        // bucket is drawn (including zeros), sorted largest-first, scaled against the total.
+        label: 'Total Devices',
+        totalPath: 'total_devices.count',
+        sortDesc: true,
         bars: [
-          { label: 'Active', path: 'active_devices', tone: 'good' },
-          { label: 'Inactive', path: 'inactive_devices', tone: 'muted' },
-          { label: 'Never Heartbeat', path: 'never_heartbeat', tone: 'warn' },
-          { label: 'Push Enabled', path: 'push_enabled' },
-        ],
-      },
-      {
-        label: 'Risk & Blocking',
-        bars: [
-          { label: 'Blocked (Total)', path: 'total_blocked_devices', tone: 'bad' },
-          { label: 'Auto Blocked', path: 'auto_blocked_devices', tone: 'bad' },
-          { label: 'Admin Blocked', path: 'admin_blocked_devices', tone: 'bad' },
-          { label: 'High Risk', path: 'high_risk_devices', tone: 'warn' },
+          { label: 'In service',    path: 'total_devices.by_status.in_service_devices',    tone: 'good',  filter: 'normal' },
+          { label: 'Auto-blocked',  path: 'total_devices.by_status.auto_blocked_devices',  tone: 'warn',  filter: 'auto_blocked' },
+          { label: 'Admin-blocked', path: 'total_devices.by_status.admin_blocked_devices', tone: 'bad',   filter: 'admin_blocked' },
+          { label: 'Risk-blocked',  path: 'total_devices.by_status.risk_blocked_devices',  tone: 'bad',   filter: 'risk_score_blocked' },
+          { label: 'Retired',       path: 'total_devices.by_status.retired_devices',       tone: 'muted', filter: 'retired' },
+          { label: 'Released',      path: 'total_devices.by_status.released_devices',       tone: 'muted', filter: 'admin_released' },
+          { label: 'Deleted',       path: 'total_devices.by_status.deleted_devices',       tone: 'muted', filter: 'deleted' },
         ],
       },
     ],
@@ -410,11 +410,14 @@ export const buildLiveSections = (stats, overview) => (
     const read = (path) => metricValue(getNestedValue(source, path));
 
     const groups = (section.groups || []).map(group => {
-      const bars = group.bars.map(bar => ({
+      let bars = group.bars.map(bar => ({
         label: bar.label,
         tone: bar.tone || 'accent',
         value: numericValue(read(bar.path)) ?? 0,
+        filter: bar.filter,   // click-to-filter value (passed straight through as ?status=)
       }));
+      // Sort largest-first when asked, so a status partition stays readable as the fleet shifts.
+      if (group.sortDesc) bars = [...bars].sort((a, b) => b.value - a.value);
       // A group with a totalPath is part-to-whole: bars scale against that total and
       // the header states it plainly. Without one, bars scale to the largest bar and
       // the header says "peak N", so a scale max is never mistaken for a total.
@@ -682,11 +685,18 @@ const entriesFromObject = (items) => Object.entries(items || {}).map(([label, va
 
 // One horizontal bar. Length is the encoding, the value is always printed, and the
 // tone class only ever *reinforces* a label that is already there in text.
-function MetricBar({ label, value, max, tone }) {
+function MetricBar({ label, value, max, tone, onClick }) {
   const pct = max > 0 ? (value / max) * 100 : 0;
-
+  const clickable = typeof onClick === 'function';
   return (
-    <div className="ls-bar-row" title={`${label}: ${value.toLocaleString()}`}>
+    <div
+      className={`ls-bar-row${clickable ? ' ls-bar-click' : ''}`}
+      title={clickable ? `${label}: ${value.toLocaleString()} — click to filter` : `${label}: ${value.toLocaleString()}`}
+      onClick={onClick}
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onKeyDown={clickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
+    >
       <span className="ls-bar-label">{label}</span>
       <div className="ls-bar-track">
         <div className={`ls-bar-fill ls-tone-${tone}`} style={{ width: `${pct}%` }} />
@@ -696,9 +706,14 @@ function MetricBar({ label, value, max, tone }) {
   );
 }
 
+// Navigate to another page with a device status filter applied (handled in AppLayout).
+const navigateWithFilter = (page, status) =>
+  window.dispatchEvent(new CustomEvent('app:navigate', { detail: { page, deviceStatus: status } }));
+
 // A full-width Live Stats row: hero figure and chips on the left, bar charts on the right.
 export function MetricSectionCard({ section }) {
-  const { label, accent, hero, chips, groups } = section;
+  const { label, accent, hero, chips, groups, filterPage } = section;
+  const onFilter = (filter) => filterPage && filter && navigateWithFilter(filterPage, filter);
 
   return (
     <section className="ls-card" style={{ '--stat-accent': accent }}>
@@ -713,12 +728,21 @@ export function MetricSectionCard({ section }) {
 
         {chips.length > 0 && (
           <div className="ls-chips">
-            {chips.map(chip => (
-              <div className="ls-chip" key={chip.label}>
-                <span>{chip.label}</span>
-                <strong>{formatValue(chip.value)}</strong>
-              </div>
-            ))}
+            {chips.map(chip => {
+              const clickable = filterPage && chip.filter;
+              return (
+                <div
+                  className={`ls-chip${clickable ? ' ls-chip-click' : ''}`}
+                  key={chip.label}
+                  onClick={clickable ? () => onFilter(chip.filter) : undefined}
+                  role={clickable ? 'button' : undefined}
+                  tabIndex={clickable ? 0 : undefined}
+                >
+                  <span>{chip.label}</span>
+                  <strong>{formatValue(chip.value)}</strong>
+                </div>
+              );
+            })}
           </div>
         )}
       </header>
@@ -740,6 +764,7 @@ export function MetricSectionCard({ section }) {
                 value={bar.value}
                 max={group.max}
                 tone={bar.tone}
+                onClick={filterPage && bar.filter ? () => onFilter(bar.filter) : undefined}
               />
             ))}
           </div>

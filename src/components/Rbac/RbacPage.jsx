@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useDispatch, useSelector } from 'react-redux';
+import { refreshCurrentUser } from '../../store/slices/authSlice';
 import {
   fetchRbacRoles,
   fetchRbacModules,
@@ -1700,12 +1701,26 @@ export default function RbacPage() {
   };
   const handleBackToRoles = () => setPageView('roles');
 
-  const handleSave = (roleId, add, remove) =>
-    dispatch(patchRolePermissions({ roleId, add, remove }));
+  const handleSave = async (roleId, add, remove) => {
+    const result = await dispatch(patchRolePermissions({ roleId, add, remove }));
+    if (patchRolePermissions.fulfilled.match(result)) {
+      // The save only merges the roles list — re-fetch the role detail so the permission
+      // matrix redraws with the just-saved grants (no page refresh needed)…
+      dispatch(fetchRoleDetail(roleId));
+      // …and if this role governs the signed-in admin, refresh their sidebar gating too.
+      dispatch(refreshCurrentUser());
+    }
+    return result;
+  };
 
   const handleCreate = async (payload) => {
     const result = await dispatch(createRbacRole(payload));
-    if (!result.error) setShowCreateModal(false);
+    if (!result.error) {
+      setShowCreateModal(false);
+      // Re-fetch the roles list so the new role appears immediately — with its real
+      // user/module/perm counts — instead of only after a page refresh.
+      dispatch(fetchRbacRoles());
+    }
   };
 
   const handleEditOpen  = (role) => { dispatch(clearUpdateError()); setEditingRole(role); };
@@ -1732,6 +1747,8 @@ export default function RbacPage() {
     if (!result.error) {
       setAssigningUser(null);
       dispatch(fetchRoleDetail(roleId));
+      // Reassigning a role may have changed the signed-in admin's own access — refresh live.
+      dispatch(refreshCurrentUser());
     }
   };
 

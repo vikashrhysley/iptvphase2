@@ -426,6 +426,12 @@
   transition: background var(--transition-fast);
 }
 
+/* Clickable status bars / roll-up chips (navigate to the filtered Devices list) */
+.ls-bar-click { cursor: pointer; }
+.ls-bar-click:hover .ls-bar-label { color: var(--text-primary); }
+.ls-chip-click { cursor: pointer; }
+.ls-chip-click:hover { filter: brightness(1.15); }
+
 .ls-bar-row:hover {
   background: color-mix(in srgb, var(--stat-accent, var(--accent-primary)) 7%, transparent);
 }

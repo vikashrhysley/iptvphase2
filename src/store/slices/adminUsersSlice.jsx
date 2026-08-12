@@ -81,7 +81,7 @@ export const createAdminUser = createAsyncThunk(
 
 export const fetchAssignableRoles = createAsyncThunk(
   'adminUsers/fetchAssignableRoles',
-  async (_, { getState, rejectWithValue }) => {
+  async (_arg, { getState, rejectWithValue }) => {
     try {
       const { accessToken } = getState().auth;
       return await apiGetAssignableRoles(accessToken);
@@ -89,7 +89,10 @@ export const fetchAssignableRoles = createAsyncThunk(
       return rejectWithValue(err.message);
     }
   },
-  { condition: (_, { getState }) => {
+  // Cached: only fetch once (when empty). Pass { force: true } to bypass the cache and pull a
+  // fresh list — e.g. right after a new role is created, so it shows up without a page reload.
+  { condition: (arg, { getState }) => {
+    if (arg && arg.force) return true;
     const { assignableRolesLoading, assignableRoles } = getState().adminUsers;
     return !assignableRolesLoading && assignableRoles.length === 0;
   }}

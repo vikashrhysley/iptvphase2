@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { logoutUser } from '../../store/slices/authSlice';
+import { canAccessPage } from '../../utils/pageAccess';
 import { useTheme } from '../../context/ThemeContext';
 import logoDark from '../../assets/vodeonai-logo-trimmed-dark.png';
 import logoLight from '../../assets/vodeonai-logo-trimmed-light.png';
@@ -267,10 +268,22 @@ export default function Sidebar({
   }, [activePage]);
 
   const profileUser = user || {};
-  const displayRole = profileUser.role_display || roleLabel(profileUser.role);
-  const displayName = profileUser.full_name || profileUser.fullName || profileUser.name || profileUser.username || profileUser.email || displayRole;
+
+  // Page-level access control lives in ../../utils/pageAccess (shared with the app layout so
+  // the sidebar and the rendered page can never disagree). It maps each page key to the RBAC
+  // module name(s) that grant it, and fails CLOSED while the profile is still loading so a
+  // reload never briefly shows a gated user the full admin nav.
+  const profileLoaded = !!user;
+  const canSeePage = (item) => canAccessPage(user, item.page);
+
+  // Until the profile lands, show a neutral loading identity instead of the null-user fallbacks
+  // (which resolve to "AD" / "Admin" and read as if an admin is signed in).
+  const displayRole = profileLoaded ? (profileUser.role_display || roleLabel(profileUser.role)) : '';
+  const displayName = profileLoaded
+    ? (profileUser.full_name || profileUser.fullName || profileUser.name || profileUser.username || profileUser.email || displayRole)
+    : 'Loading…';
   const avatarUrl = profileUser.avatar_url || profileUser.avatarUrl;
-  const initials = initialsFor(displayName);
+  const initials = profileLoaded ? initialsFor(displayName) : '…';
   const effectiveCollapsed = collapsed && !mobileOpen;
 
 
@@ -297,7 +310,7 @@ export default function Sidebar({
         </div>
 
         <nav className="sidebar-nav">
-          {NAV_ITEMS.filter(item => !item.superadminOnly || profileUser.role === 'superadmin').map(item => (
+          {NAV_ITEMS.filter(canSeePage).map(item => (
             <div className="nav-group" key={item.id}>
               <button
                 className={`nav-item${activePage === item.page ? ' active' : ''}`}

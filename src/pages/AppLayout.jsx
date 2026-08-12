@@ -1,8 +1,13 @@
 // src/pages/AppLayout.js
 import React, { Suspense, useState, useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import Sidebar from '../components/Layout/Sidebar';
 import Header from '../components/Layout/Header';
 import useNotificationPolling from '../hooks/useNotificationPolling';
+import useProfileRefresh from '../hooks/useProfileRefresh';
+import { refreshCurrentUser } from '../store/slices/authSlice';
+import { setDeviceFilters } from '../store/slices/deviceSlice';
+import { canAccessPage, firstAccessiblePage } from '../utils/pageAccess';
 
 const DashboardTable     = React.lazy(() => import('../components/Dashboard/DashboardTable'));
 const DevicePage         = React.lazy(() => import('../components/Device/DevicePage'));
@@ -70,6 +75,8 @@ class PageErrorBoundary extends React.Component {
 }
 
 export default function AppLayout() {
+  const dispatch = useDispatch();
+  const user = useSelector((s) => s.auth.user);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [activePage, setActivePage] = useState(
@@ -90,6 +97,9 @@ export default function AppLayout() {
 
   // Client-side polling for the notification bell (unread-count + summary), paused on hidden tabs.
   useNotificationPolling();
+  // Keep role + permissions fresh (on focus + interval) so page gating reflects permission
+  // edits without a manual reload.
+  useProfileRefresh();
 
   const mainLeft = collapsed ? 'var(--sidebar-collapsed)' : 'var(--sidebar-width)';
 
@@ -97,7 +107,22 @@ export default function AppLayout() {
     setActivePage(page);
     sessionStorage.setItem('activePage', page);
     setMobileNavOpen(false);
+    // Navigating is a natural checkpoint to re-sync this admin's permissions, so a page they
+    // were just granted/removed appears or disappears immediately as they move around.
+    dispatch(refreshCurrentUser());
   };
+
+  // Page-level enforcement: once the profile has loaded, if the active page isn't permitted for
+  // this user (e.g. a Manager whose sessionStorage still points at RBAC from a prior superadmin
+  // session, or a page they've lost access to), redirect them to their first accessible page.
+  // Skipped while the profile is loading (user null) so the reload window doesn't misfire.
+  useEffect(() => {
+    if (!user) return;
+    if (canAccessPage(user, activePage)) return;
+    const target = firstAccessiblePage(user);
+    setActivePage(target);
+    sessionStorage.setItem('activePage', target);
+  }, [user, activePage]);
 
   // ── Browser back/forward integration ──────────────────────────────
   // Navigation is state-based (activePage), so without this the URL never changes and
@@ -139,9 +164,11 @@ export default function AppLayout() {
   // optionally targeting a record (planId → open that plan on the Plans page).
   useEffect(() => {
     const onNavIntent = (e) => {
-      const { page, planId } = e.detail || {};
+      const { page, planId, deviceStatus } = e.detail || {};
       if (!page) return;
       if (planId) sessionStorage.setItem('openPlanId', planId);
+      // A device-status filter carried from the dashboard cards → seed the Devices list filter.
+      if (deviceStatus) dispatch(setDeviceFilters({ status: deviceStatus, current_session: false, page: 1 }));
       applyPage(page);
       window.history.pushState({ appPage: page }, '', window.location.pathname);
     };

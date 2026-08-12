@@ -173,10 +173,20 @@ export const fetch2FASetup = createAsyncThunk('auth/fetch2FASetup',
   }
 );
 
+// After a login handshake we only have { role, role_id } from the token response. Pull the
+// full profile (crucially its `permissions`) so page-level gating works the instant the user
+// lands, not only after a reload. Falls back to the minimal user if the profile fetch fails.
+const withFullProfile = async (result) => {
+  try {
+    const profile = await apiGetProfile(result.accessToken);
+    return { ...result, user: { ...result.user, ...profile } };
+  } catch { return result; }
+};
+
 // Step 2b — POST 2fa/confirm with totp_code
 export const confirm2FASetup = createAsyncThunk('auth/confirm2FASetup',
   async ({ totpCode }, { getState, rejectWithValue }) => {
-    try { return await api2FAConfirm(getState().auth.tempToken, totpCode); }
+    try { return await withFullProfile(await api2FAConfirm(getState().auth.tempToken, totpCode)); }
     catch (err) {
       const msg = err.message?.toLowerCase();
       if (msg?.includes('401') || msg?.includes('invalid') || msg?.includes('incorrect'))
@@ -191,7 +201,7 @@ export const confirm2FASetup = createAsyncThunk('auth/confirm2FASetup',
 // Step 3 — POST verify-totp (returning user)
 export const verifyTOTP = createAsyncThunk('auth/verifyTOTP',
   async ({ totpCode }, { getState, rejectWithValue }) => {
-    try { return await apiVerifyTOTP(getState().auth.tempToken, totpCode); }
+    try { return await withFullProfile(await apiVerifyTOTP(getState().auth.tempToken, totpCode)); }
     catch (err) {
       const msg = err.message?.toLowerCase();
       if (msg?.includes('401') || msg?.includes('invalid') || msg?.includes('incorrect'))
@@ -210,6 +220,18 @@ export const logoutUser = createAsyncThunk('auth/logoutUser',
     try { await apiLogout(accessToken); } catch { /* best-effort */ }
     clearTokens();
     return { success: true };
+  }
+);
+
+// Re-fetch the signed-in admin's own profile (role + permissions) and refresh it in place.
+// Dispatch this after a permission edit so anything driven by auth.user.permissions — the
+// sidebar page gating in particular — updates live, with no page reload.
+export const refreshCurrentUser = createAsyncThunk('auth/refreshCurrentUser',
+  async (_, { getState, rejectWithValue }) => {
+    const { accessToken } = getState().auth;
+    if (!accessToken) return rejectWithValue('No session');
+    try { return await apiGetProfile(accessToken); }
+    catch (err) { return rejectWithValue(err.message); }
   }
 );
 
@@ -261,6 +283,11 @@ const authSlice = createSlice({
     clearError(s) { s.error = null; },
   },
   extraReducers: b => {
+    // Live profile refresh (e.g. after a permission edit) — swap in the fresh user only.
+    b.addCase(refreshCurrentUser.fulfilled, (s, a) => {
+      if (a.payload) s.user = a.payload;
+    });
+
     // ── Token status check (startup) ──
     b.addCase(checkTokenStatus.pending, s => {
        s.tokenCheckLoading = true;

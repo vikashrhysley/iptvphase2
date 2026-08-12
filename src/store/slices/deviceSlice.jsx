@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { apiFetchDeviceActivity, apiFetchDeviceLoginHistory, apiFetchDeviceDetail, apiFetchDeviceStats, apiFetchAdminDevices, apiUpdateDeviceStatus, apiReplaceDevice, apiRevokeDevice } from '../../services/api';
+import { apiFetchDeviceActivity, apiFetchDeviceLoginHistory, apiFetchDeviceDetail, apiFetchDeviceStats, apiFetchAdminDevices, apiUpdateDeviceStatus, apiReplaceDevice, apiRevokeDevice, apiFetchDashboardStats } from '../../services/api';
 
 const DEFAULT_FILTERS = {
   search: '',
@@ -55,6 +55,19 @@ export const fetchDeviceStats = createAsyncThunk(
     } catch (err) { return rejectWithValue(err.message); }
   },
   { condition: (_, { getState }) => !getState().devices.statsLoading }
+);
+
+// The reconciling device breakdown (status partition + in-use + signals) comes from the one
+// shared dashboard/stats source, so the dashboard card and the devices-page cards can never
+// disagree. Returns the `devices` block: { total_devices, in_use, signals }.
+export const fetchDeviceBreakdown = createAsyncThunk(
+  'devices/fetchBreakdown',
+  async (_, { getState, rejectWithValue }) => {
+    try {
+      const stats = await apiFetchDashboardStats(getState().auth.accessToken);
+      return stats?.devices || {};
+    } catch (err) { return rejectWithValue(err.message); }
+  }
 );
 
 export const fetchDevices = createAsyncThunk(
@@ -116,6 +129,11 @@ const deviceSlice = createSlice({
     stats: null,
     statsLoading: false,
     statsError: null,
+
+    // Reconciling breakdown from dashboard/stats: { total_devices, in_use, signals }.
+    breakdown: null,
+    breakdownLoading: false,
+    breakdownError: null,
 
     selectedDevice: null,
     detailLoading: false,
@@ -200,6 +218,10 @@ const deviceSlice = createSlice({
     b.addCase(fetchDeviceStats.pending,   s => { s.statsLoading = true;  s.statsError = null; })
      .addCase(fetchDeviceStats.fulfilled, (s, a) => { s.statsLoading = false; s.stats = a.payload?.data || a.payload; })
      .addCase(fetchDeviceStats.rejected,  (s, a) => { s.statsLoading = false; s.statsError = a.payload; });
+
+    b.addCase(fetchDeviceBreakdown.pending,   s => { s.breakdownLoading = true;  s.breakdownError = null; })
+     .addCase(fetchDeviceBreakdown.fulfilled, (s, a) => { s.breakdownLoading = false; s.breakdown = a.payload; })
+     .addCase(fetchDeviceBreakdown.rejected,  (s, a) => { s.breakdownLoading = false; s.breakdownError = a.payload; });
 
     b.addCase(fetchDevices.pending,   s => { s.loading = true; s.error = null; })
      .addCase(fetchDevices.fulfilled, (s, a) => {
