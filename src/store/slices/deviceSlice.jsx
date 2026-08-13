@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { apiFetchDeviceActivity, apiFetchDeviceLoginHistory, apiFetchDeviceDetail, apiFetchDeviceStats, apiFetchAdminDevices, apiUpdateDeviceStatus, apiReplaceDevice, apiRevokeDevice, apiFetchDashboardStats } from '../../services/api';
+import { apiFetchDeviceActivity, apiFetchDeviceLoginHistory, apiFetchDeviceOwnershipHistory, apiFetchDeviceDetail, apiFetchDeviceStats, apiFetchAdminDevices, apiUpdateDeviceStatus, apiReplaceDevice, apiRevokeDevice, apiFetchDashboardStats } from '../../services/api';
 
 const DEFAULT_FILTERS = {
   search: '',
@@ -28,6 +28,14 @@ export const fetchDeviceLoginHistory = createAsyncThunk(
   'devices/fetchLoginHistory',
   async ({ deviceId, params }, { getState, rejectWithValue }) => {
     try { return await apiFetchDeviceLoginHistory(getState().auth.accessToken, deviceId, params); }
+    catch (err) { return rejectWithValue(err.message); }
+  }
+);
+
+export const fetchDeviceOwnershipHistory = createAsyncThunk(
+  'devices/fetchOwnershipHistory',
+  async ({ deviceId, params }, { getState, rejectWithValue }) => {
+    try { return await apiFetchDeviceOwnershipHistory(getState().auth.accessToken, deviceId, params); }
     catch (err) { return rejectWithValue(err.message); }
   }
 );
@@ -151,6 +159,10 @@ const deviceSlice = createSlice({
     loginHistoryLoading: false, loginHistoryError: null,
     loginHistoryFilters: { status: 'all', page: 1, page_size: 20 },
 
+    // Ownership History — one row per ownership tenure (Devices Rework build guide §6).
+    ownershipHistoryItems: [], ownershipHistoryTotal: 0,
+    ownershipHistoryLoading: false, ownershipHistoryError: null,
+
     filters: { ...DEFAULT_FILTERS },
     lastFetched: null,
   },
@@ -164,6 +176,10 @@ const deviceSlice = createSlice({
       state.updateLoading  = false;
       state.updateError    = null;
       state.updateSuccess  = false;
+      state.ownershipHistoryItems   = [];
+      state.ownershipHistoryTotal   = 0;
+      state.ownershipHistoryLoading = false;
+      state.ownershipHistoryError   = null;
     },
     clearUpdateState(state) {
       state.updateLoading = false;
@@ -210,6 +226,10 @@ const deviceSlice = createSlice({
     b.addCase(fetchDeviceLoginHistory.pending,   s => { s.loginHistoryLoading = true;  s.loginHistoryError = null; })
      .addCase(fetchDeviceLoginHistory.fulfilled, (s, a) => { s.loginHistoryLoading = false; s.loginHistoryItems = a.payload.items; s.loginHistoryTotal = a.payload.total; s.loginHistoryPage = a.payload.page; s.loginHistoryPageSize = a.payload.pageSize; })
      .addCase(fetchDeviceLoginHistory.rejected,  (s, a) => { s.loginHistoryLoading = false; s.loginHistoryError = a.payload; });
+
+    b.addCase(fetchDeviceOwnershipHistory.pending,   s => { s.ownershipHistoryLoading = true;  s.ownershipHistoryError = null; })
+     .addCase(fetchDeviceOwnershipHistory.fulfilled, (s, a) => { s.ownershipHistoryLoading = false; s.ownershipHistoryItems = a.payload.items; s.ownershipHistoryTotal = a.payload.total; })
+     .addCase(fetchDeviceOwnershipHistory.rejected,  (s, a) => { s.ownershipHistoryLoading = false; s.ownershipHistoryError = a.payload; });
 
     b.addCase(fetchDeviceDetail.pending,   s => { s.detailLoading = true;  s.detailError = null; s.selectedDevice = null; })
      .addCase(fetchDeviceDetail.fulfilled, (s, a) => { s.detailLoading = false; s.selectedDevice = a.payload?.data || a.payload; })

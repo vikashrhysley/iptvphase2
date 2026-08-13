@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchDeviceDetail, clearDeviceDetail } from '../../store/slices/deviceSlice';
+import { fetchDeviceDetail, clearDeviceDetail, fetchDeviceOwnershipHistory } from '../../store/slices/deviceSlice';
 import DeviceActivity    from './DeviceActivity';
 import DeviceLoginHistory from './DeviceLoginHistory';
 import './DeviceDetail.css';
@@ -42,6 +42,21 @@ const sevCls     = (s) => ({ critical:'critical', warning:'warning', info:'info'
 
 const PLATFORM_ICONS = { android:'🤖', firetv:'🔥', ios:'🍎', roku:'📺', samsung:'📺' };
 
+// Ownership History reason codes → plain English (Devices Rework build guide §6.3.4).
+// Backfilled rows are inferred, not observed (an approximate started_at / ended_at) — render
+// them muted rather than presenting them with the same confidence as an observed tenure.
+const START_REASON_LABELS = {
+  enrollment: 'Enrolled this device',
+  ownership_transfer: 'Took over from previous owner',
+  backfill: 'Recorded before ownership tracking',
+};
+const END_REASON_LABELS = {
+  claimed_by_other_user: 'Passed to another user',
+  account_deleted: 'Owner deleted their account',
+  backfill_detached: 'Recorded before ownership tracking',
+};
+const isBackfilledTenure = (entry) => entry.start_reason === 'backfill' || entry.end_reason === 'backfill_detached';
+
 /* ── Reusable row ───────────────────────────────────────── */
 function InfoRow({ label, value }) {
   return (
@@ -77,12 +92,18 @@ function SectionCard({ title, children, collapsible, defaultOpen = true }) {
 /* ── Main ───────────────────────────────────────────────── */
 export default function DeviceDetail({ deviceId, onBack }) {
   const dispatch = useDispatch();
-  const { selectedDevice: d, detailLoading, detailError } = useSelector(s => s.devices);
+  const {
+    selectedDevice: d, detailLoading, detailError,
+    ownershipHistoryItems, ownershipHistoryLoading, ownershipHistoryError,
+  } = useSelector(s => s.devices);
   const [showActivity,     setShowActivity]     = useState(false);
   const [showLoginHistory, setShowLoginHistory] = useState(false);
 
   useEffect(() => {
     dispatch(fetchDeviceDetail(deviceId));
+    // Its own fetch, never chained off the detail call — same pattern as MAC seats on the App
+    // User detail page.
+    dispatch(fetchDeviceOwnershipHistory({ deviceId, params: { page: 1, page_size: 20 } }));
     return () => dispatch(clearDeviceDetail());
   }, [dispatch, deviceId]);
 
@@ -309,6 +330,44 @@ export default function DeviceDetail({ deviceId, onBack }) {
               </div>
             </SectionCard>
           )}
+
+          {/* ── Ownership History — NEW, bottom of page (Devices Rework build guide §5, §6) ── */}
+          <SectionCard title="Ownership History" collapsible defaultOpen={false}>
+            {ownershipHistoryLoading ? (
+              <div className="dd-empty-section">Loading ownership history…</div>
+            ) : ownershipHistoryError ? (
+              <div className="dd-error" style={{ margin: 0 }}>{ownershipHistoryError}</div>
+            ) : ownershipHistoryItems.length === 0 ? (
+              // Empty state matters here: until the ownership-history migration runs this is the
+              // normal state for every device, not an error and not a loading flicker (§6.3.5).
+              <div className="dd-empty-section">No ownership history recorded</div>
+            ) : (
+              <div className="dd-own-list">
+                {ownershipHistoryItems.map((entry) => {
+                  const muted = isBackfilledTenure(entry);
+                  const reasonText = entry.is_current
+                    ? null
+                    : END_REASON_LABELS[entry.end_reason] || START_REASON_LABELS[entry.start_reason] || null;
+                  return (
+                    <div className={`dd-own-row${entry.is_current ? ' current' : ''}${muted ? ' muted' : ''}`} key={entry.id}>
+                      <div className="dd-own-who">
+                        <span className="dd-own-name">{entry.owner_name || '—'}</span>
+                        <span className="dd-own-email">{entry.owner_email}</span>
+                      </div>
+                      <div className="dd-own-period">
+                        {fmtDate(entry.started_at)} – {entry.is_current || entry.ended_at == null ? 'now' : fmtDate(entry.ended_at)}
+                      </div>
+                      <div className="dd-own-status">
+                        {entry.is_current
+                          ? <span className="dd-own-current-badge">Current</span>
+                          : reasonText && <span className="dd-own-reason">{reasonText}</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </SectionCard>
         </>
       )}
     </div>

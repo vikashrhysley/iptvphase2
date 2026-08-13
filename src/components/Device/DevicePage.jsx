@@ -12,26 +12,32 @@ import './DevicePage.css';
 
 /* ── Icons ─────────────────────────────────────────────── */
 const SearchIcon  = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
-const GridIcon    = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>;
-const ListIcon    = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>;
+const CopyIcon    = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>;
 const RefreshIcon = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>;
-const MapPinIcon  = () => <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>;
-const ClockIcon   = () => <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
-const AppIcon     = () => <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>;
+
+// Copy any table-cell value to the clipboard without triggering the row's own click (opens
+// the device detail) — every copy button stops propagation before writing.
+const copyToClipboard = (e, text) => {
+  e.stopPropagation();
+  if (!text || !navigator.clipboard) return;
+  navigator.clipboard.writeText(text).then(() => toast.success('Email copied')).catch(() => {});
+};
 const ChevLeft    = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>;
 const ChevRight   = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>;
 
 /* ── Device status → chip/button helpers ────────────────── */
-// device.status vocabulary (7 values). "recovered" was renamed to "retired" and no longer exists.
+// device.status vocabulary (7 values, Devices Rework build guide §2.1). 'retired' was renamed
+// to 'recovery_device'; account deletion now DETACHES the device (status returns to 'normal')
+// instead of setting 'deleted' — that value only remains on legacy/historical rows.
 // STATE (this) and PRESENCE (online-now) are different axes — never conflate them.
 const STATUS_MAP = {
-  normal:             { label: 'In service',          cls: 'in-service' },   // green
-  auto_blocked:       { label: 'Auto-blocked',        cls: 'auto-blocked' }, // amber (user can clear)
-  admin_blocked:      { label: 'Blocked',             cls: 'blocked' },      // red
-  risk_score_blocked: { label: 'Blocked · High risk', cls: 'blocked' },      // red
-  admin_released:     { label: 'Released',            cls: 'out-service' },  // grey
-  retired:            { label: 'Retired',             cls: 'out-service' },  // grey
-  deleted:            { label: 'Deleted',             cls: 'out-service' },  // grey
+  normal:             { label: 'Active',               cls: 'in-service' },   // green
+  auto_blocked:       { label: 'Auto-blocked',         cls: 'auto-blocked' }, // amber (user can clear)
+  admin_blocked:      { label: 'Blocked',              cls: 'blocked' },      // red
+  risk_score_blocked: { label: 'Blocked · High risk',  cls: 'blocked' },      // red
+  admin_released:     { label: 'Released',             cls: 'out-service' },  // grey
+  recovery_device:    { label: 'Recovery',             cls: 'out-service' },  // grey
+  deleted:            { label: 'Deleted',              cls: 'out-service' },  // grey — legacy rows only
 };
 // The three blocked states are the only ones with an Unblock action.
 const isBlockedStatus = (s) => {
@@ -41,7 +47,7 @@ const isBlockedStatus = (s) => {
 // The "out of service" family: finished, not blocked — no unblock, the user re-enrols.
 const isOutOfService = (s) => {
   const v = String(s || '').toLowerCase();
-  return v === 'retired' || v === 'admin_released' || v === 'deleted';
+  return v === 'recovery_device' || v === 'admin_released' || v === 'deleted';
 };
 const dispStatusKey = (s) => STATUS_MAP[String(s || '').toLowerCase()]?.cls || 'unknown';
 const dispStatusLabel = (s) => {
@@ -54,7 +60,7 @@ const dispStatusLabel = (s) => {
 function DeviceAccessButton({ device, busy, onBlock, onUnblock, compact }) {
   const v = String(device.status || '').toLowerCase();
   const style = compact ? { padding: '5px 12px', fontSize: '0.72rem' } : undefined;
-  if (isOutOfService(v)) return null;   // retired / released / deleted → no action; user re-enrols
+  if (isOutOfService(v)) return null;   // recovery / released / deleted → no action; user re-enrols
   if (isBlockedStatus(v)) {
     return (
       <button className="dc-btn unblock" style={style} onClick={() => onUnblock(device)} disabled={busy}>
@@ -143,14 +149,16 @@ const TYPE_TABS = [
 ];
 
 // Status dropdown — the STATE axis. active/inactive were REMOVED (they now match nothing and
-// return an empty list); every value here is a real ?status= bucket the backend recognises.
+// return an empty list, pinned by a backend test — Devices Rework build guide §3.1); every
+// value here is a real ?status= bucket the backend recognises. 'in_service' is still accepted
+// as a legacy alias of 'active' server-side, but we only ever send the current value.
 const STATUS_FILTERS = [
   { value: '',                   label: 'All statuses' },
-  { value: 'normal',             label: 'In service' },
+  { value: 'normal',             label: 'Active' },
   { value: 'auto_blocked',       label: 'Auto-blocked' },
   { value: 'admin_blocked',      label: 'Admin-blocked' },
   { value: 'risk_score_blocked', label: 'Risk-blocked' },
-  { value: 'retired',            label: 'Retired' },
+  { value: 'recovery_device',    label: 'Recovery' },
   { value: 'admin_released',     label: 'Released' },
   { value: 'deleted',            label: 'Deleted' },
   { value: 'blocked',            label: 'Blocked (all)' },
@@ -160,8 +168,8 @@ const STATUS_FILTERS = [
 // Human labels for every clickable ?status= bucket (status + roll-ups + in-use + signals),
 // used by the active-filter chip so a filter set from a card click still reads clearly.
 const STATUS_LABELS = {
-  normal: 'In service', auto_blocked: 'Auto-blocked', admin_blocked: 'Admin-blocked',
-  risk_score_blocked: 'Risk-blocked', retired: 'Retired', admin_released: 'Released',
+  normal: 'Active', auto_blocked: 'Auto-blocked', admin_blocked: 'Admin-blocked',
+  risk_score_blocked: 'Risk-blocked', recovery_device: 'Recovery', admin_released: 'Released',
   deleted: 'Deleted', blocked: 'Blocked', out_of_service: 'Out of service',
   online_now: 'Online now', logged_in_idle: 'Idle', logged_out: 'Signed out',
   never_heartbeat: 'Never checked in', high_risk: 'High risk', push_enabled: 'Push enabled',
@@ -169,22 +177,26 @@ const STATUS_LABELS = {
 };
 
 /* ── Devices-page stat-card row definitions (from dashboard/stats.devices) ── */
-// Card A — DEVICE STATUS. Seven by_status buckets, always sum to total_devices.count.
+// Card A — DEVICE STATUS. Seven by_status buckets, mutually exclusive, always sum to total
+// (Devices Rework build guide §3.1). Render all seven, including zeros — Deleted Device is
+// expected to read 0 post-migration (account deletion now detaches the device instead of
+// deleting it) but the bucket stays for historical rows.
 const STATUS_BAR_ROWS = [
-  { key: 'in_service_devices',    label: 'Active Device',        tone: 'good',  status: 'normal' },
+  { key: 'active_devices', label: 'Active Device', tone: 'good', status: 'normal' },
+  {
+    key: 'recovery_devices', label: 'Recovery Device', tone: 'muted', status: 'recovery_device',
+    tipTitle: 'Counts as recovery', tipItems: ['Factory Reset', 'Damage Device', 'Replace Device', 'Lost Device'],
+  },
+  { key: 'deleted_devices', label: 'Deleted Device', tone: 'muted', status: 'deleted' },
   {
     key: 'auto_blocked_devices', label: 'Auto-blocked Device', tone: 'warn', status: 'auto_blocked',
     tipTitle: 'Counts as auto-blocked', tipItems: ['Missed Heartbeat'],
   },
-  { key: 'admin_blocked_devices', label: 'Admin-blocked Device', tone: 'bad',   status: 'admin_blocked' },
-  { key: 'risk_blocked_devices',  label: 'Risk-blocked Device',  tone: 'bad',   status: 'risk_score_blocked' },
-  {
-    key: 'retired_devices', label: 'Recovery Device', tone: 'muted', status: 'retired',
-    tipTitle: 'Counts as recovery', tipItems: ['Factory Reset', 'Damage Device', 'Replace Device', 'Lost Device'],
-  },
-  { key: 'deleted_devices',       label: 'Deleted Device',       tone: 'muted', status: 'deleted' },
+  { key: 'admin_blocked_devices', label: 'Admin-blocked Device', tone: 'bad', status: 'admin_blocked' },
+  { key: 'risk_blocked_devices',  label: 'Risk-blocked Device',  tone: 'bad', status: 'risk_score_blocked' },
+  { key: 'released_devices', label: 'Released Device', tone: 'muted', status: 'admin_released' },
 ];
-// Card B — IN USE. Three buckets, always sum to in_service_devices.
+// Card B — IN USE. Three buckets, always sum to active_devices.
 const IN_USE_BAR_ROWS = [
   { key: 'online_now',     label: 'Online now', tone: 'good',  status: 'online_now',     tip: 'Being used right now' },
   { key: 'logged_in_idle', label: 'Idle',       tone: 'warn',  status: 'logged_in_idle', tip: 'Signed in, but the app has gone quiet' },
@@ -319,24 +331,6 @@ function DeviceSwipeCards({ slides }) {
   );
 }
 
-/* ── Helpers ────────────────────────────────────────────── */
-const timeAgo = (iso) => {
-  if (!iso) return '—';
-  const diff  = Date.now() - new Date(iso).getTime();
-  const days  = Math.floor(diff / 86400000);
-  const hours = Math.floor(diff / 3600000);
-  const mins  = Math.floor(diff / 60000);
-  if (days  > 0) return `${days}d ago`;
-  if (hours > 0) return `${hours}h ago`;
-  if (mins  > 0) return `${mins}m ago`;
-  return 'Just now';
-};
-
-const initials = (name) => {
-  if (!name) return '?';
-  return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
-};
-
 /* ── Toast ─────────────────────────────────────────────── */
 function Toast() {
   const dispatch = useDispatch();
@@ -380,132 +374,94 @@ function Pagination({ current, totalPages, totalItems, pageSize, onPage }) {
   );
 }
 
-/* ── Device Card ────────────────────────────────────────── */
-function DeviceCard({ device, canEdit, actionLoading, onCardClick, onBlock, onUnblock }) {
-  const id   = device.device_id || device.id;
-  const tc   = TYPE_CONFIG[device.device_type || device.type] || TYPE_CONFIG.phone;
-  const busy = actionLoading === id;
-  const name = device.device_brand
-    ? `${device.device_brand} ${device.device_model || ''}`.trim()
-    : (device.device_name || device.name || 'Unknown Device');
-  const os       = device.os_version || device.os || '—';
-  const userName = device.user_full_name || device.userName || device.user_email || '—';
-  const userId   = device.user_id ? `USR-${String(device.user_id).slice(0,6).toUpperCase()}` : (device.userId || '—');
-  const location = device.last_seen_city
-    ? `${device.last_seen_city}${device.last_seen_country ? ', '+device.last_seen_country : ''}`
-    : (device.location || '—');
-  const lastSeen   = device.last_heartbeat_at || device.lastSeen;
-  const appVersion = device.app_version || device.appVersion || '—';
-
-  return (
-    <div
-      className={`device-card${isBlockedStatus(device.status) ? ' blocked' : ''}`}
-      style={{ '--type-color': tc.color, '--type-bg': tc.bg, '--type-border': tc.border, cursor: 'pointer' }}
-      onClick={onCardClick}
-    >
-      {/* Top row */}
-      <div className="dc-top">
-        <div className="dc-type-icon">{tc.icon}</div>
-        <div className="dc-header">
-          <div className="dc-device-name">{name}</div>
-          <div className="dc-os">{os}</div>
-        </div>
-        <div className="dc-status-col">
-          <span className={`dc-status ${dispStatusKey(device.status)}`}>
-            <span className="dc-status-dot" />
-            {dispStatusLabel(device.status)}
-          </span>
-          {String(device.status).toLowerCase() === 'auto_blocked' && (
-            <span className="dc-autoblocked" title="Blocked automatically by the heartbeat sweep">Auto-blocked</span>
-          )}
-        </div>
-      </div>
-
-      {/* User */}
-      <div className="dc-user">
-        <div className="dc-user-avatar-fb">{initials(userName)}</div>
-        <div className="dc-user-info">
-          <div className="dc-user-name">{userName}</div>
-          <div className="dc-user-id">{userId}{device.user_email ? ` · ${device.user_email}` : ''}</div>
-        </div>
-      </div>
-
-      {/* Meta */}
-      <div className="dc-meta">
-        <div className="dc-meta-row">
-          <span className="dc-meta-key"><MapPinIcon /> Location</span>
-          <span className="dc-meta-val">{location}</span>
-        </div>
-        <div className="dc-meta-row">
-          <span className="dc-meta-key"><ClockIcon /> Last seen</span>
-          <span className="dc-meta-val">{timeAgo(lastSeen)}</span>
-        </div>
-        <div className="dc-meta-row">
-          <span className="dc-meta-key"><AppIcon /> App version</span>
-          <span className="dc-meta-val" style={{ color: 'var(--accent-primary)' }}>{appVersion}</span>
-        </div>
-        <div className="dc-meta-row">
-          <span className="dc-meta-key">Device ID</span>
-          <span className="dc-meta-val dc-mono">{id}</span>
-        </div>
-      </div>
-
-      {/* Actions */}
-      <div className="dc-actions" onClick={e => e.stopPropagation()}>
-        {!canEdit
-          ? <button className="dc-btn disabled-btn" disabled>No Permission</button>
-          : <DeviceAccessButton device={device} busy={busy} onBlock={onBlock} onUnblock={onUnblock} />}
-      </div>
-    </div>
-  );
-}
-
 /* ── Device Table Row ───────────────────────────────────── */
+// Columns per the Devices Rework build guide §4.2 — Device / Owner / Status / Usage /
+// Platform / Last Seen / Risk / Licence / Location / App version / Actions. `platform_display`
+// and `last_heartbeat_display` are pre-formatted by the API — never re-derived here (§4.2, §10).
+const USAGE_META = {
+  online_now:     { label: 'Online now', cls: 'online' },
+  logged_in_idle: { label: 'Idle',       cls: 'idle' },
+  logged_out:     { label: 'Signed out', cls: 'out' },
+};
+const riskClass = (score) => (score >= 90 ? 'crit' : score >= 70 ? 'high' : 'ok');
+
 function DeviceTableRow({ device, canEdit, actionLoading, onRowClick, onBlock, onUnblock }) {
   const id   = device.device_id || device.id;
   const tc   = TYPE_CONFIG[device.device_type || device.type] || TYPE_CONFIG.phone;
   const busy = actionLoading === id;
-  const name = device.device_brand ? `${device.device_brand} ${device.device_model || ''}`.trim() : (device.device_name || device.name || '—');
-  const os   = device.os_version || device.os || '—';
-  const userDisplayName = device.user_full_name || device.userName || null;
+
+  const platformLabel = device.platform_display || device.platform || 'Unknown';
+  // Device name: device_name, else brand+model, else "{Platform} Device" (§4.2).
+  const name = device.device_name
+    || (device.device_brand ? `${device.device_brand} ${device.device_model || ''}`.trim() : null)
+    || `${platformLabel} Device`;
+  const os = device.os_version || device.os || '—';
+
+  // Owner — user_id (and user_email) is null ONLY because the owning account was deleted, on
+  // purpose (§4.3). A detached row shows the snapshot last_known_email, greyed + a chip —
+  // never rendered as if it were the current owner.
+  const detached = !device.user_email && !!device.last_known_email;
   const location = device.last_seen_city
-    ? `${device.last_seen_city}${device.last_seen_country ? ', '+device.last_seen_country : ''}`
-    : (device.location || '—');
+    ? `${device.last_seen_city}${device.last_seen_country ? ', ' + device.last_seen_country : ''}`
+    : (device.last_seen_country || null);
+
+  const usage   = USAGE_META[device.usage_state];
+  const risk    = device.risk_score ?? 0;
+  const licDays = device.active_license?.days_remaining;
+
   return (
-    <tr className="dt-row" onClick={onRowClick} style={{ cursor: 'pointer' }}>
+    <tr className={`dt-row${detached ? ' dt-row-detached' : ''}`} onClick={onRowClick} style={{ cursor: 'pointer' }}>
       <td>
         <div className="dt-type-cell" style={{ '--type-bg': tc.bg }}>
           <div className="dt-type-icon">{tc.icon}</div>
           <div>
-            <div style={{ fontWeight:600, fontSize:'0.83rem' }}>{name}</div>
-            <div style={{ fontSize:'0.72rem', color:'var(--text-muted)' }}>{os}</div>
+            <div className="dt-device-name">{name}</div>
+            <div className="dt-device-os">{os}</div>
           </div>
         </div>
       </td>
       <td>
-        <div style={{ fontSize:'0.82rem', fontWeight:500 }}>
-          {userDisplayName || device.user_email || '—'}
-        </div>
-        {userDisplayName && device.user_email && (
-          <div style={{ fontSize:'0.7rem', color:'var(--text-muted)' }}>{device.user_email}</div>
+        {device.user_email ? (
+          <div className="dt-owner">
+            <span>{device.user_email}</span>
+            <button type="button" className="dt-copy-btn" onClick={(e) => copyToClipboard(e, device.user_email)} title="Copy email">
+              <CopyIcon />
+            </button>
+          </div>
+        ) : detached ? (
+          <div className="dt-owner dt-owner-detached" title="The owning account was deleted">
+            <span>{device.last_known_email}</span>
+            <span className="dt-detached-chip">detached</span>
+            <button type="button" className="dt-copy-btn" onClick={(e) => copyToClipboard(e, device.last_known_email)} title="Copy email">
+              <CopyIcon />
+            </button>
+          </div>
+        ) : (
+          <span className="dt-owner-none">—</span>
         )}
       </td>
-      <td><span style={{ fontSize:'0.75rem', background:tc.bg, color:tc.color, padding:'3px 10px', borderRadius:12, fontWeight:700, border:`1px solid ${tc.border}`, whiteSpace:'nowrap', display:'inline-flex', alignItems:'center', gap:5 }}>{tc.icon} {tc.label}</span></td>
-      <td style={{ fontSize:'0.8rem', color:'var(--text-secondary)' }}>{location}</td>
-      <td style={{ fontSize:'0.8rem', color:'var(--text-muted)' }}>{timeAgo(device.last_heartbeat_at || device.lastSeen)}</td>
       <td>
-        <span className={`dc-status ${dispStatusKey(device.status)}`} style={{ fontSize:'0.7rem' }}>
+        <span className={`dc-status ${dispStatusKey(device.status)}`} style={{ fontSize: '0.7rem' }}>
           <span className="dc-status-dot" />
           {dispStatusLabel(device.status)}
         </span>
-        {String(device.status).toLowerCase() === 'auto_blocked' && (
-          <span className="dc-autoblocked" style={{ marginLeft: 6 }} title="Blocked automatically by the heartbeat sweep">Auto</span>
-        )}
       </td>
+      <td>
+        {usage
+          ? <span className={`dt-usage-pill ${usage.cls}`}>{usage.label}</span>
+          : <span className="dt-usage-none">—</span>}
+      </td>
+      <td className="dt-platform">{platformLabel}</td>
+      <td className="dt-lastseen">{device.last_heartbeat_display || '—'}</td>
+      <td><span className={`dt-risk ${riskClass(risk)}`}>{risk}</span></td>
+      <td className="dt-lic">{licDays != null ? `${licDays}d` : '--'}</td>
+      <td className="dt-location">{location || '—'}</td>
+      <td className="dt-appver">{device.app_version || '—'}</td>
       <td onClick={e => e.stopPropagation()}>
-        {!canEdit
-          ? <span style={{ fontSize:'0.72rem', color:'var(--text-muted)' }}>—</span>
-          : <DeviceAccessButton device={device} busy={busy} onBlock={onBlock} onUnblock={onUnblock} compact />}
+        <div className="dt-actions">
+          <button type="button" className="dt-view-btn" onClick={onRowClick}>View</button>
+          {canEdit && <DeviceAccessButton device={device} busy={busy} onBlock={onBlock} onUnblock={onUnblock} compact />}
+        </div>
       </td>
     </tr>
   );
@@ -518,7 +474,6 @@ export default function DevicePage() {
   const { user: me, accessToken } = useSelector(s => s.auth);
   const canEdit = me?.role === 'superadmin' || me?.role === 'admin';
 
-  const [view,          setView]         = useState('grid');
   const [detailId,      setDetailId]     = useState(
     () => sessionStorage.getItem('deviceDetailId') || null
   );
@@ -847,21 +802,24 @@ export default function DevicePage() {
   const inUse     = bd.in_use ?? {};
   const signals   = bd.signals ?? {};
   const totalCount     = bd.total_devices?.count ?? 0;
-  const inServiceCount = byStatus.in_service_devices ?? 0;
+  const inServiceCount = byStatus.active_devices ?? 0;
 
+  // Fixed 7-key platform breakdown (Devices Rework build guide §3.3). Only Android is split by
+  // device_type (Tizen TVs misreport device_type="android_tv" and Roku is inconsistent, so
+  // device_type is only trustworthy within Android) — platform decides the bucket everywhere
+  // else. Keys are always rendered, even at 0, in this exact declared order.
   const PLATFORM_META = {
-    android: { color: '#3ddc84', icon: '🤖' },
-    ios:     { color: '#e5e7eb', icon: '🍎' },
-    roku:    { color: '#a78bfa', icon: '📺' },
-    tizen:   { color: '#00b4d8', icon: '📺' },
-    firetv:  { color: '#ff9900', icon: '🔥' },
-    windows: { color: '#0078d4', icon: '🖥️' },
-    web:     { color: '#06b6d4', icon: '🌐' },
+    android_tv:      { label: 'Android TV',        color: '#10b981', icon: '📺' },
+    android_mobile:  { label: 'Android Mobile',    color: '#3ddc84', icon: '📱' },
+    android_unknown: { label: 'Android (unknown)', color: '#64748b', icon: '❔' },
+    roku:            { label: 'Roku',              color: '#a78bfa', icon: '📺' },
+    samsung:         { label: 'Samsung (Tizen)',   color: '#00b4d8', icon: '📺' },
+    lg:              { label: 'LG (webOS)',        color: '#ff9900', icon: '📺' },
+    unknown:         { label: 'Unknown',           color: '#475569', icon: '🧩' },
   };
-  const platformStatItems = Object.entries(PB).map(([key, value]) => {
-    const meta = PLATFORM_META[key] || { color: '#64748b', icon: '🧩' };
-    return { label: key.charAt(0).toUpperCase() + key.slice(1), value: value ?? 0, ...meta };
-  });
+  const platformStatItems = Object.keys(PLATFORM_META).map((key) => ({
+    key, value: PB[key] ?? 0, ...PLATFORM_META[key],
+  }));
 
   // Card A — DEVICE STATUS (7 bars, reconciles to total)
   const deviceStatusCard = (
@@ -888,8 +846,8 @@ export default function DevicePage() {
     <div className="device-stats-panel">
       <div className="dsp-title"><span className="dsp-title-icon">🌐</span> Platform Stats</div>
       <div className="dsp-grid">
-        {platformStatItems.map(({ label, value, color, icon }) => (
-          <div className="dsp-item" key={label} style={{ '--dsc': color }}>
+        {platformStatItems.map(({ key, label, value, color, icon }) => (
+          <div className="dsp-item" key={key} style={{ '--dsc': color }}>
             <div className="dsp-icon">{icon}</div>
             <div className="dsp-info">
               <div className="dsp-value">{value.toLocaleString()}</div>
@@ -927,27 +885,61 @@ export default function DevicePage() {
         </>
       )}
 
-      {/* ── Toolbar: tabs left · controls right ── */}
+      {/* ── Toolbar: row 1 = tabs + export · row 2 = search + status filter ── */}
       <div className="device-toolbar">
-        {/* Left: device type tabs */}
-        <div className="filter-tabs">
-          {TYPE_TABS.map(({ key, label }) => {
-            const tc     = TYPE_CONFIG[key];
-            const active = filters.device_type === key;
-            return (
+        <div className="device-toolbar-row">
+          {/* Left: device type tabs */}
+          <div className="filter-tabs">
+            {TYPE_TABS.map(({ key, label }) => {
+              const tc     = TYPE_CONFIG[key];
+              const active = filters.device_type === key;
+              return (
+                <button
+                  key={key || 'all'}
+                  className={`filter-tab${active ? ' active' : ''}`}
+                  onClick={() => dispatch(setDeviceFilters({ device_type: key, page: 1 }))}
+                >
+                  {tc ? tc.icon : '⊞'} {label}
+                  {key === '' && total > 0 && <span className="filter-tab-count">{total}</span>}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Right: export */}
+          <div className="toolbar-export">
+            <div className="dv-export-wrap" ref={exportRef}>
               <button
-                key={key || 'all'}
-                className={`filter-tab${active ? ' active' : ''}`}
-                onClick={() => dispatch(setDeviceFilters({ device_type: key, page: 1 }))}
+                className={`dv-export-btn${exportOpen ? ' open' : ''}`}
+                onClick={() => !exportLoading && setExportOpen(o => !o)}
+                disabled={exportLoading || total === 0}
+                title={total === 0 ? 'No data to export' : `Export all ${total.toLocaleString()} devices`}
               >
-                {tc ? tc.icon : '⊞'} {label}
-                {key === '' && total > 0 && <span className="filter-tab-count">{total}</span>}
+                {exportLoading
+                  ? <><span className="dv-export-spinner" /> Exporting…</>
+                  : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Export <span className="dv-export-caret" style={{ fontSize:'0.68rem', opacity:0.6, transition:'transform 0.18s', display:'inline-block', transform: exportOpen ? 'rotate(180deg)' : 'none' }}>▾</span></>
+                }
               </button>
-            );
-          })}
+              {exportOpen && (
+                <div className="dv-export-dropdown">
+                  <button className="dv-export-option" onClick={() => handleExport('excel')}>
+                    📊 <span><strong>Excel</strong> <span style={{fontSize:'0.7rem',opacity:0.6}}>.xlsx spreadsheet</span></span>
+                  </button>
+                  <button className="dv-export-option" onClick={() => handleExport('pdf')}>
+                    📄 <span><strong>PDF</strong> <span style={{fontSize:'0.7rem',opacity:0.6}}>Printable report</span></span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {exportError && (
+              <span className="dv-export-err">{exportError}</span>
+            )}
+          </div>
         </div>
 
-        {/* Right: search + status + view + export */}
+        {/* Row 2: search + status filter */}
         <div className="toolbar-right">
           <div className="device-search-wrap">
             <SearchIcon />
@@ -976,41 +968,6 @@ export default function DevicePage() {
               <button type="button" className="dv-filter-chip-x" onClick={clearStatusFilter} title="Clear filter">✕</button>
             </span>
           )}
-
-          {/* Export */}
-          <div className="dv-export-wrap" ref={exportRef}>
-            <button
-              className={`dv-export-btn${exportOpen ? ' open' : ''}`}
-              onClick={() => !exportLoading && setExportOpen(o => !o)}
-              disabled={exportLoading || total === 0}
-              title={total === 0 ? 'No data to export' : `Export all ${total.toLocaleString()} devices`}
-            >
-              {exportLoading
-                ? <><span className="dv-export-spinner" /> Exporting…</>
-                : <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                  Export <span className="dv-export-caret" style={{ fontSize:'0.68rem', opacity:0.6, transition:'transform 0.18s', display:'inline-block', transform: exportOpen ? 'rotate(180deg)' : 'none' }}>▾</span></>
-              }
-            </button>
-            {exportOpen && (
-              <div className="dv-export-dropdown">
-                <button className="dv-export-option" onClick={() => handleExport('excel')}>
-                  📊 <span><strong>Excel</strong> <span style={{fontSize:'0.7rem',opacity:0.6}}>.xlsx spreadsheet</span></span>
-                </button>
-                <button className="dv-export-option" onClick={() => handleExport('pdf')}>
-                  📄 <span><strong>PDF</strong> <span style={{fontSize:'0.7rem',opacity:0.6}}>Printable report</span></span>
-                </button>
-              </div>
-            )}
-          </div>
-
-          {exportError && (
-            <span className="dv-export-err">{exportError}</span>
-          )}
-
-          <div className="view-toggle">
-            <button className={`view-btn${view === 'grid' ? ' active' : ''}`} onClick={() => setView('grid')} title="Grid view"><GridIcon /></button>
-            <button className={`view-btn${view === 'list' ? ' active' : ''}`} onClick={() => setView('list')} title="List view"><ListIcon /></button>
-          </div>
         </div>
       </div>
 
@@ -1027,24 +984,6 @@ export default function DevicePage() {
           <span className="device-empty-icon">📭</span>
           No devices match your filters.
         </div>
-      ) : view === 'grid' ? (
-        <>
-          <div className="device-grid">
-            {devices.map(d => (
-              <DeviceCard
-                key={d.device_id || d.id}
-                device={d}
-                canEdit={canEdit}
-                actionLoading={accessBusy ? (accessTarget?.device?.device_id || accessTarget?.device?.id) : null}
-                onCardClick={() => openDetail(d.device_id || d.id)}
-                onBlock={openBlock}
-                onUnblock={openUnblock}
-              />
-            ))}
-          </div>
-          <Pagination current={page} totalPages={totalPages} totalItems={total} pageSize={pageSize}
-            onPage={p => dispatch(setDeviceFilters({ page: p }))} />
-        </>
       ) : (
         <div className="device-table-wrap">
           <div style={{ overflowX: 'auto' }}>
@@ -1052,11 +991,15 @@ export default function DevicePage() {
               <thead>
                 <tr>
                   <th>Device</th>
-                  <th>User</th>
-                  <th>Type</th>
-                  <th>Location</th>
-                  <th>Last Seen</th>
+                  <th>Owner</th>
                   <th>Status</th>
+                  <th>Usage</th>
+                  <th>Platform</th>
+                  <th>Last Seen</th>
+                  <th>Risk</th>
+                  <th>Lic</th>
+                  <th>Location</th>
+                  <th>App Version</th>
                   <th>Actions</th>
                 </tr>
               </thead>

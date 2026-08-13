@@ -509,6 +509,26 @@ export const apiFetchDeviceLoginHistory = async (accessToken, deviceId, params =
   return { items, total: raw.total ?? meta.total ?? items.length, page: raw.page ?? meta.page ?? 1, pageSize: raw.page_size ?? meta.page_size ?? 20 };
 };
 
+// GET /admin/devices/{id}/ownership-history — NEW (Devices Rework build guide §6). One row per
+// OWNERSHIP TENURE (a period, not an event) — current tenure first, then most recently ended;
+// order comes from the API, never re-sort. Until the ownership-history migration runs this
+// returns an empty page for every device (§9) — that's the expected pre-migration state, not
+// an error.
+export const apiFetchDeviceOwnershipHistory = async (accessToken, deviceId, params = {}) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const query = new URLSearchParams();
+  if (params.page)      query.set('page', String(params.page));
+  if (params.page_size) query.set('page_size', String(params.page_size));
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  const res = await request(`${BASE}/admin/devices/${deviceId}/ownership-history${qs}`, {
+    method: 'GET', headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const raw = res.data || res;
+  const items = Array.isArray(raw) ? raw : Array.isArray(raw.data) ? raw.data : [];
+  const meta  = res.meta || raw.meta || {};
+  return { items, total: raw.total ?? meta.total ?? items.length, page: raw.page ?? meta.page ?? 1, pageSize: raw.page_size ?? meta.page_size ?? 20 };
+};
+
 // GET /admin/devices/{id} - full device detail
 export const apiFetchDeviceDetail = async (accessToken, deviceId) => {
   if (!accessToken) throw new Error('Unauthorized');

@@ -200,16 +200,16 @@ const MONITORING_SUB_ITEMS = [
 
 const NAV_ITEMS = [
   { id: 'home', label: 'Dashboard', icon: <HomeIcon />, page: 'home', subItems: DASHBOARD_SUB_ITEMS },
-  { id: 'analytics', label: 'Analytics', icon: <AnalyticsIcon />, page: 'analytics', subItems: ANALYTICS_SUB_ITEMS },
   { id: 'admin_users', label: 'Admin Users', icon: <LockIconForSidebar />, page: 'admin_users' },
   { id: 'app_users', label: 'App Users', icon: <AppUsersIcon />, page: 'app_users' },
-  { id: 'notifications', label: 'Notifications', icon: <NotificationsIcon />, page: 'notifications' },
   { id: 'license', label: 'Licenses', icon: <LicenseIcon />, page: 'license' },
   { id: 'device', label: 'Devices', icon: <DeviceIcon />, page: 'device' },
+  { id: 'notifications', label: 'Notifications', icon: <NotificationsIcon />, page: 'notifications' },
   { id: 'heartbeat', label: 'Heartbeats', icon: <HeartbeatIcon />, page: 'heartbeat' },
   { id: 'plans', label: 'Plans', icon: <PlansIcon />, page: 'plans' },
   { id: 'trial', label: 'System Configuration', icon: <TrialIcon />, page: 'trial' },
   { id: 'security_events', label: 'Security Events', icon: <SecurityEventsIcon />, page: 'security_events' },
+  { id: 'analytics', label: 'Analytics', icon: <AnalyticsIcon />, page: 'analytics', subItems: ANALYTICS_SUB_ITEMS },
   { id: 'risk', label: 'Risk Engine', icon: <RiskEngineIcon />, page: 'risk' },
   { id: 'health', label: 'Health', icon: <HealthIcon />, page: 'health' },
   { id: 'monitoring', label: 'Monitoring', icon: <MonitoringIcon />, page: 'monitoring', subItems: MONITORING_SUB_ITEMS },
