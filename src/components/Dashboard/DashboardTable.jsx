@@ -293,11 +293,11 @@ const LIVE_SECTIONS = [
         totalPath: 'total_devices.count',
         sortDesc: true,
         bars: [
-          { label: 'In service',    path: 'total_devices.by_status.in_service_devices',    tone: 'good',  filter: 'normal' },
+          { label: 'Active',        path: 'total_devices.by_status.active_devices',        tone: 'good',  filter: 'normal' },
           { label: 'Auto-blocked',  path: 'total_devices.by_status.auto_blocked_devices',  tone: 'warn',  filter: 'auto_blocked' },
           { label: 'Admin-blocked', path: 'total_devices.by_status.admin_blocked_devices', tone: 'bad',   filter: 'admin_blocked' },
           { label: 'Risk-blocked',  path: 'total_devices.by_status.risk_blocked_devices',  tone: 'bad',   filter: 'risk_score_blocked' },
-          { label: 'Retired',       path: 'total_devices.by_status.retired_devices',       tone: 'muted', filter: 'retired' },
+          { label: 'Recovery',      path: 'total_devices.by_status.recovery_devices',      tone: 'muted', filter: 'recovery_device' },
           { label: 'Released',      path: 'total_devices.by_status.released_devices',       tone: 'muted', filter: 'admin_released' },
           { label: 'Deleted',       path: 'total_devices.by_status.deleted_devices',       tone: 'muted', filter: 'deleted' },
         ],

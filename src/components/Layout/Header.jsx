@@ -112,11 +112,17 @@ export default function Header({ activePage, dashboardTab, analyticsTab, sidebar
     onNavigate?.('notifications');
   };
 
-  // Clicking a user row marks that user's notifications read — the bell badge drops by their
-  // unread count and the user leaves the list — then opens their notifications.
+  // Clicking a user row marks that user's notifications read and opens their notifications.
+  // Navigation fires immediately so the click feels instant; the badge is corrected to server
+  // truth afterward rather than trusted to the optimistic marked_count math alone — the same
+  // belt-and-suspenders refetch markAllRead already does below, closing the gap where a
+  // missing/short marked_count in the response left the badge never dropping.
   const openUser = (user) => {
-    dispatch(markUserNotificationsRead({ userId: user.user_id }));
     goToNotifications(user);
+    dispatch(markUserNotificationsRead({ userId: user.user_id }))
+      .unwrap()
+      .catch(() => {})
+      .finally(() => dispatch(fetchNotificationUnreadCount()));
   };
 
   // Bell "mark all read" → global read-all (#5), then refresh the bell + badge to server truth.

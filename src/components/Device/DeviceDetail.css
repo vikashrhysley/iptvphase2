@@ -610,6 +610,55 @@
   animation: spin 0.7s linear infinite;
 }
 
+/* ── Ownership History (Devices Rework build guide §6) ──── */
+.dd-empty-section {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.dd-own-list { display: flex; flex-direction: column; gap: 2px; }
+
+.dd-own-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.dd-own-row:last-child { border-bottom: none; }
+.dd-own-row.current { background: var(--accent-glow); border-radius: var(--radius-md); }
+/* Backfilled tenures are inferred (approximate dates), not observed — read visibly softer. */
+.dd-own-row.muted { opacity: 0.65; font-style: italic; }
+
+.dd-own-who { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dd-own-name { font-size: 0.85rem; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dd-own-email { font-size: 0.74rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.dd-own-period { font-size: 0.78rem; color: var(--text-secondary); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.dd-own-status { display: flex; justify-content: flex-end; min-width: 120px; }
+.dd-own-current-badge {
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 16%, transparent);
+  border: 1px solid var(--border-accent);
+  white-space: nowrap;
+}
+.dd-own-reason { font-size: 0.76rem; color: var(--text-muted); white-space: nowrap; text-align: right; }
+
+@media (max-width: 640px) {
+  .dd-own-row { grid-template-columns: 1fr; gap: 4px; }
+  .dd-own-status { justify-content: flex-start; }
+}
+
 @media (max-width: 900px) {
   .dd-hero       { flex-direction: column; }
   .dd-hero-stats { width: 100%; }
