@@ -155,6 +155,9 @@ const appUsersSlice = createSlice({
       plan_status: 'all',
       device_status: 'all',
       trial_used: 'all',
+      // PLAN FUNNEL card click-through — one of the 8 breakdown keys ('' = All).
+      account_state: '',
+      // USAGE card click-through (a stat-card segment).
       segment: '',
       sort_by: 'created_at',
       sort_order: 'desc',
@@ -227,6 +230,7 @@ const appUsersSlice = createSlice({
         plan_status: 'all',
         device_status: 'all',
         trial_used: 'all',
+        account_state: '',
         segment: '',
         sort_by: 'created_at',
         sort_order: 'desc',

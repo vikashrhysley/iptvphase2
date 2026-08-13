@@ -103,7 +103,7 @@
 .su-ctx-text { font-size: 0.9rem; color: var(--text-secondary); }
 .su-ctx-text strong { color: var(--text-primary); font-weight: 800; }
 .su-ctx-sep { margin: 0 8px; color: var(--text-muted); }
-.su-ctx-new { color: #34d399; font-weight: 700; }
+.su-ctx-new { color: #34d399; font-weight: 700; margin-left: 10px; }
 .su-ctx-split { color: var(--text-muted); font-size: 0.86rem; }
 .su-ctx-deleted { color: var(--text-muted); font-size: 0.86rem; }
 .su-ctx-link {
@@ -112,6 +112,23 @@
   font-size: 0.82rem; font-weight: 800; white-space: nowrap;
 }
 .su-ctx-link:hover { text-decoration: underline; }
+
+/* Hero + verified/never-verified split — all three click through to ?account_state= */
+.su-ctx-hero,
+.su-ctx-split-btn {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: var(--font-body);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+.su-ctx-hero:hover,
+.su-ctx-split-btn:hover { color: var(--accent-primary); background: var(--bg-hover); }
+.su-ctx-split-btn.active { color: var(--accent-primary); font-weight: 800; background: var(--accent-glow); }
 
 .su-statcard {
   background: var(--bg-card);
@@ -196,8 +213,8 @@
 .su-stat-row.alert .su-stat-label,
 .su-stat-row.alert .su-stat-val { color: #fbbf24; }
 .su-stat-row.alert:hover { background: rgba(251,191,36,0.08); }
-.su-stat-label { font-size: 0.84rem; color: var(--text-secondary); font-weight: 600; }
-.su-stat-val { font-size: 0.92rem; font-weight: 800; color: var(--text-primary); }
+.su-stat-label { font-size: 0.84rem; color: var(--text-secondary); font-weight: 600; flex-shrink: 0; min-width: 118px; text-align: left; }
+.su-stat-val { font-size: 0.92rem; font-weight: 800; color: var(--text-primary); flex-shrink: 0; text-align: right; min-width: 32px; }
 
 /* The two SAME-set cuts of "Presently using" — grouped so they never read as siblings */
 .su-stat-subgroup {
@@ -309,6 +326,38 @@
   gap: 14px;
   margin-bottom: 20px;
 }
+
+/* App Users — PLAN FUNNEL (70%) / USAGE (30%), one row, equal height, same baseline.
+   USAGE has fewer rows than PLAN FUNNEL; the extra whitespace at its bottom is intentional
+   (build guide §3.1 — do not pad USAGE or shrink PLAN FUNNEL's rows to compensate). */
+.su-cards-app-row {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.su-cards-app-row .su-statcard-funnel { flex: 0 0 70%; min-width: 0; }
+.su-cards-app-row .su-statcard-usage  { flex: 0 0 calc(30% - 16px); min-width: 0; }
+.su-cards-app-row .su-statcard.su-skel.su-statcard-funnel { flex: 0 0 70%; height: 280px; }
+.su-cards-app-row .su-statcard.su-skel.su-statcard-usage  { flex: 0 0 calc(30% - 16px); height: 280px; }
+
+/* Bar meter between label and value — length proportional to the row's share of the card total */
+.su-stat-bar-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 4px;
+  background: var(--border-subtle);
+  overflow: hidden;
+  min-width: 24px;
+}
+.su-stat-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--accent-primary);
+  transition: width 0.5s ease;
+}
+.su-stat-row.alert .su-stat-bar-fill { background: #fbbf24; }
 
 /* ── Base card ───────────────────────────────────────────── */
 .su-card {
@@ -512,6 +561,10 @@
   border-radius: var(--radius-lg);
   overflow: hidden;
   margin-bottom: 16px;
+  /* The app's top bar is fixed (var(--header-height)), so a plain scrollIntoView would land
+     the table right underneath it, hiding the header row. This reserves that space + a
+     little breathing room so the table (and its column headers) end up fully visible. */
+  scroll-margin-top: calc(var(--header-height) + 16px);
 }
 
 .su-table-scroll {
@@ -673,6 +726,11 @@
   background: color-mix(in srgb, var(--text-muted) 18%, transparent);
   color: var(--text-muted);
 }
+.su-plan-state.deleted {
+  background: color-mix(in srgb, var(--text-muted) 18%, transparent);
+  color: var(--text-muted);
+  font-style: italic;
+}
 
 
 /* Click */
@@ -741,6 +799,21 @@
 
 .su-status-pill.unknown {
   color:var(--text-muted);
+}
+
+/* Never-verified accounts — informational, not a security state */
+.su-status-pill.pending {
+  color:#94a3b8;
+  background:rgba(148,163,184,.08);
+  border:1px solid rgba(148,163,184,.2);
+}
+
+/* Self-deleted accounts — terminal state, muted so it doesn't read as an error */
+.su-status-pill.deleted {
+  color:var(--text-muted);
+  background:rgba(148,163,184,.06);
+  border:1px solid var(--border-subtle);
+  font-style: italic;
 }
 
 
@@ -914,6 +987,15 @@
 }
 
 /* ── Responsive ─────────────────────────────────────────── */
+/* PLAN FUNNEL / USAGE: stack full-width below ~900px (build guide §3.1). */
+@media (max-width: 900px) {
+  .su-cards-app-row { flex-direction: column; }
+  .su-cards-app-row .su-statcard-funnel,
+  .su-cards-app-row .su-statcard-usage,
+  .su-cards-app-row .su-statcard.su-skel.su-statcard-funnel,
+  .su-cards-app-row .su-statcard.su-skel.su-statcard-usage { flex: 1 1 100%; height: auto; }
+}
+
 @media (max-width: 760px) {
   .su-page        { padding: 18px; }
   .su-cards-row-3 { grid-template-columns: 1fr; }

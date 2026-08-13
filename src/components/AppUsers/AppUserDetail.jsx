@@ -123,6 +123,8 @@ const statusClass = (s) => {
   if (s === 'blocked') return 'blocked';
   if (s === 'suspended') return 'suspended';
   if (s === 'inactive') return 'inactive';
+  if (s === 'pending') return 'inactive';
+  if (s === 'deleted') return 'inactive';
   return 'unknown';
 };
 

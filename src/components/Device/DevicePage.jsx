@@ -171,13 +171,18 @@ const STATUS_LABELS = {
 /* ── Devices-page stat-card row definitions (from dashboard/stats.devices) ── */
 // Card A — DEVICE STATUS. Seven by_status buckets, always sum to total_devices.count.
 const STATUS_BAR_ROWS = [
-  { key: 'in_service_devices',    label: 'In service',    tone: 'good',  status: 'normal' },
-  { key: 'auto_blocked_devices',  label: 'Auto-blocked',  tone: 'warn',  status: 'auto_blocked' },
-  { key: 'admin_blocked_devices', label: 'Admin-blocked', tone: 'bad',   status: 'admin_blocked' },
-  { key: 'risk_blocked_devices',  label: 'Risk-blocked',  tone: 'bad',   status: 'risk_score_blocked' },
-  { key: 'retired_devices',       label: 'Retired',       tone: 'muted', status: 'retired' },
-  { key: 'released_devices',      label: 'Released',      tone: 'muted', status: 'admin_released' },
-  { key: 'deleted_devices',       label: 'Deleted',       tone: 'muted', status: 'deleted' },
+  { key: 'in_service_devices',    label: 'Active Device',        tone: 'good',  status: 'normal' },
+  {
+    key: 'auto_blocked_devices', label: 'Auto-blocked Device', tone: 'warn', status: 'auto_blocked',
+    tipTitle: 'Counts as auto-blocked', tipItems: ['Missed Heartbeat'],
+  },
+  { key: 'admin_blocked_devices', label: 'Admin-blocked Device', tone: 'bad',   status: 'admin_blocked' },
+  { key: 'risk_blocked_devices',  label: 'Risk-blocked Device',  tone: 'bad',   status: 'risk_score_blocked' },
+  {
+    key: 'retired_devices', label: 'Recovery Device', tone: 'muted', status: 'retired',
+    tipTitle: 'Counts as recovery', tipItems: ['Factory Reset', 'Damage Device', 'Replace Device', 'Lost Device'],
+  },
+  { key: 'deleted_devices',       label: 'Deleted Device',       tone: 'muted', status: 'deleted' },
 ];
 // Card B — IN USE. Three buckets, always sum to in_service_devices.
 const IN_USE_BAR_ROWS = [
@@ -194,12 +199,45 @@ const SIGNAL_TILE_ROWS = [
   { key: 'new_enrollments_7d',  label: 'New (7d)',         icon: '🆕', color: '#34d399', status: 'new_enrollments_7d' },
 ];
 
+// A filled circle with a bold "i" glyph reads far more clearly than a stroked SVG at 14–16px.
+const InfoIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
+    <circle cx="8" cy="8" r="8" opacity="0.18" />
+    <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" strokeWidth="1.3" />
+    <rect x="7.1" y="6.7" width="1.8" height="5.3" rx="0.9" />
+    <circle cx="8" cy="4.3" r="1.05" />
+  </svg>
+);
+
+// A small info icon whose styled popover lists what counts as this status — e.g. "Recovery
+// Device" / "Auto-blocked Device". Pure-CSS hover/focus (:hover, :focus-within) rather than
+// JS-computed positioning: no rect math, no fixed-position containing-block edge cases,
+// nothing that can silently fail. `tabIndex` makes it reachable via keyboard, not just hover.
+function DeviceInfoTip({ title = 'Counts as', items }) {
+  return (
+    <span className="dv-bar-info" onClick={(e) => e.stopPropagation()} tabIndex={0}>
+      <InfoIcon />
+      <span className="dv-bar-info-pop" role="tooltip">
+        <span className="dv-bar-info-pop-title">{title}</span>
+        <span className="dv-bar-info-pop-list">
+          {items.map((item) => <span key={item} className="dv-bar-info-pop-item">{item}</span>)}
+        </span>
+      </span>
+    </span>
+  );
+}
+
 // One horizontal bar for the status / in-use cards. Clickable → filters the list below.
-function DeviceStatBar({ label, value, total, tone, tip, onClick }) {
+// `tipItems`, when present, adds a small info icon next to the label whose own hover
+// (independent of the row's `tip`/title) shows a short list — e.g. what counts as "Recovery".
+function DeviceStatBar({ label, value, total, tone, tip, tipTitle, tipItems, onClick }) {
   const pct = total > 0 && value > 0 ? Math.max((value / total) * 100, value > 0 ? 1.5 : 0) : 0;
   return (
     <button type="button" className="dv-bar-row" onClick={onClick} title={tip ? `${label} — ${tip}` : `Filter to ${label}`}>
-      <span className="dv-bar-label">{label}</span>
+      <span className="dv-bar-label">
+        <span className="dv-bar-label-text">{label}</span>
+        {tipItems?.length > 0 && <DeviceInfoTip title={tipTitle} items={tipItems} />}
+      </span>
       <span className="dv-bar-track">
         <span className={`dv-bar-fill tone-${tone}`} style={{ width: `${pct}%`, minWidth: value > 0 ? 3 : 0 }} />
       </span>
@@ -223,9 +261,60 @@ function DeviceBarCard({ title, icon, headlineLabel, total, rows, source, sort, 
       <div className="dv-bar-list">
         {items.map((r) => (
           <DeviceStatBar key={r.key} label={r.label} value={r.value} total={num(total)} tone={r.tone} tip={r.tip}
-            onClick={() => onFilter(r.status)} />
+            tipTitle={r.tipTitle} tipItems={r.tipItems} onClick={() => onFilter(r.status)} />
         ))}
       </div>
+    </div>
+  );
+}
+
+/* ── Mobile-only swipe carousel (Device Status ↔ Platform Stats) ──────────
+   Scroll-snap does the actual swiping; the dots just mirror scroll position
+   (rAF-throttled so it doesn't fire a state update per pixel). */
+function DeviceSwipeCards({ slides }) {
+  const trackRef = useRef(null);
+  const [active, setActive] = useState(0);
+  const frame = useRef(null);
+
+  const handleScroll = () => {
+    if (frame.current) return;
+    frame.current = requestAnimationFrame(() => {
+      frame.current = null;
+      const el = trackRef.current;
+      if (!el || !el.clientWidth) return;
+      const idx = Math.round(el.scrollLeft / el.clientWidth);
+      setActive((prev) => (prev === idx ? prev : idx));
+    });
+  };
+
+  useEffect(() => () => { if (frame.current) cancelAnimationFrame(frame.current); }, []);
+
+  const goTo = (idx) => {
+    const el = trackRef.current;
+    if (!el) return;
+    el.scrollTo({ left: idx * el.clientWidth, behavior: 'smooth' });
+  };
+
+  return (
+    <div className="device-swipe-group">
+      <div className="device-swipe-track" ref={trackRef} onScroll={handleScroll}>
+        {slides.map((s) => (
+          <div className="device-swipe-slide" key={s.key}>{s.node}</div>
+        ))}
+      </div>
+      {slides.length > 1 && (
+        <div className="device-swipe-dots">
+          {slides.map((s, i) => (
+            <button
+              key={s.key}
+              type="button"
+              className={`device-swipe-dot${i === active ? ' active' : ''}`}
+              aria-label={`Show ${s.key} card`}
+              onClick={() => goTo(i)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -774,6 +863,44 @@ export default function DevicePage() {
     return { label: key.charAt(0).toUpperCase() + key.slice(1), value: value ?? 0, ...meta };
   });
 
+  // Card A — DEVICE STATUS (7 bars, reconciles to total)
+  const deviceStatusCard = (
+    <DeviceBarCard
+      title="Device Status" icon="📊"
+      headlineLabel="Total Devices" total={totalCount}
+      rows={STATUS_BAR_ROWS} source={byStatus} sort
+      onFilter={applyStatusFilter}
+    />
+  );
+
+  // Card B — IN USE RIGHT NOW (3 bars, reconciles to in-service)
+  const inUseCard = (
+    <DeviceBarCard
+      title="In Use Right Now" icon="🟢"
+      headlineLabel="In service" total={inServiceCount}
+      rows={IN_USE_BAR_ROWS} source={inUse}
+      onFilter={applyStatusFilter}
+    />
+  );
+
+  // Platform Stats — unchanged content
+  const platformStatsPanel = (
+    <div className="device-stats-panel">
+      <div className="dsp-title"><span className="dsp-title-icon">🌐</span> Platform Stats</div>
+      <div className="dsp-grid">
+        {platformStatItems.map(({ label, value, color, icon }) => (
+          <div className="dsp-item" key={label} style={{ '--dsc': color }}>
+            <div className="dsp-icon">{icon}</div>
+            <div className="dsp-info">
+              <div className="dsp-value">{value.toLocaleString()}</div>
+              <div className="dsp-label">{label}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
     <div className="device-page">
       <Toast />
@@ -781,39 +908,23 @@ export default function DevicePage() {
       {/* ── Stats ── */}
       {(statsLoading || breakdownLoading) && !breakdown && <div className="device-stats-shimmer" />}
       {(breakdown || !breakdownLoading) && (
-        <div className="device-stats device-stats-3">
-          {/* Card A — DEVICE STATUS (7 bars, reconciles to total) */}
-          <DeviceBarCard
-            title="Device Status" icon="📊"
-            headlineLabel="Total Devices" total={totalCount}
-            rows={STATUS_BAR_ROWS} source={byStatus} sort
-            onFilter={applyStatusFilter}
-          />
-
-          {/* Card B — IN USE RIGHT NOW (3 bars, reconciles to in-service) */}
-          <DeviceBarCard
-            title="In Use Right Now" icon="🟢"
-            headlineLabel="In service" total={inServiceCount}
-            rows={IN_USE_BAR_ROWS} source={inUse}
-            onFilter={applyStatusFilter}
-          />
-
-          {/* Platform Stats — unchanged */}
-          <div className="device-stats-panel">
-            <div className="dsp-title"><span className="dsp-title-icon">🌐</span> Platform Stats</div>
-            <div className="dsp-grid">
-              {platformStatItems.map(({ label, value, color, icon }) => (
-                <div className="dsp-item" key={label} style={{ '--dsc': color }}>
-                  <div className="dsp-icon">{icon}</div>
-                  <div className="dsp-info">
-                    <div className="dsp-value">{value.toLocaleString()}</div>
-                    <div className="dsp-label">{label}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
+        <>
+          {/* Desktop / tablet — three cards side by side, same order as the mobile swipe. */}
+          <div className="device-stats device-stats-3 device-stats-desktop">
+            {platformStatsPanel}
+            {inUseCard}
+            {deviceStatusCard}
           </div>
-        </div>
+
+          {/* Mobile (≤900px) — all three cards swipe together, in this order. */}
+          <div className="device-stats-mobile">
+            <DeviceSwipeCards slides={[
+              { key: 'platform', node: platformStatsPanel },
+              { key: 'inuse', node: inUseCard },
+              { key: 'status', node: deviceStatusCard },
+            ]} />
+          </div>
+        </>
       )}
 
       {/* ── Toolbar: tabs left · controls right ── */}

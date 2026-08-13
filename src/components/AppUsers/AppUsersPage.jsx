@@ -186,6 +186,8 @@ const statusClass = (s) => {
   if (s === 'blocked') return 'blocked';
   if (s === 'suspended') return 'suspended';
   if (s === 'inactive') return 'inactive';
+  if (s === 'pending') return 'pending';
+  if (s === 'deleted') return 'deleted';
   return 'unknown';
 };
 
@@ -251,48 +253,58 @@ function Pagination({ current, totalPages, totalItems, pageSize, onPage }) {
 /* ── Main Page ──────────────────────────────────────────── */
 const SORTABLE = ['active_device_count', 'last_login_at', 'created_at', 'email', 'full_name'];
 
-// Worklist segment → human label (for the active-filter chip).
+// The plan card — data.breakdown, 8 flat rows in exactly the declared API order (build guide
+// §4.1). These do NOT sum to anything: issued_a_plan already contains the six state rows
+// after it, which is exactly why the card renders no heading and no total (§3.1, §9).
+const BREAKDOWN_ROWS = [
+  { key: 'issued_a_plan',     label: 'Issued a plan Users' },
+  { key: 'not_issued_a_plan', label: 'Not issued a plan Users' },
+  { key: 'enabled',           label: 'Enabled Users' },
+  { key: 'blocked',           label: 'Blocked Users' },
+  { key: 'payment_failed',    label: 'Payment failed Users' },
+  { key: 'plan_expired',      label: 'Plan expired Users' },
+  { key: 'cancelled',         label: 'Cancelled Users' },
+  { key: 'deleted',           label: 'Deleted Users' },
+];
+// The hero's verified / never-verified split lives on total_traffic_till_date, not in
+// breakdown — it moved up to the context bar (build guide §2.2).
+const HERO_STATE_LABELS = { verified: 'Verified', never_verified: 'Unverified' };
+const ACCOUNT_STATE_LABELS = {
+  ...HERO_STATE_LABELS,
+  ...BREAKDOWN_ROWS.reduce((m, r) => ({ ...m, [r.key]: r.label }), {}),
+};
+
+// USAGE card — present-tense rows over live, verified accounts whose plan is still on the books.
+const USAGE_ROWS = [
+  { key: 'signed_out', label: 'Logout',     level: 0 },
+  { key: 'signed_in',  label: 'Login',      level: 0 },
+  { key: 'online_now', label: 'Online now', level: 1 },
+  { key: 'idle',       label: 'Idle',       level: 1 },
+];
+// USAGE card's `segment` click-through → human label (for the active-filter chip).
 const SEGMENT_LABELS = {
-  issued_a_plan: 'Issued a plan',
   presently_using: 'Presently using',
-  on_a_plan: 'Enabled',
-  revoked: 'Blocked (licence)',
-  stopped_using: 'Stopped using',
-  never_had_a_plan: 'Not issued a plan',
-  licensed_no_device: 'Licensed, no device',
-  signed_out: 'Signed out',
-  signed_in: 'Signed in',
+  signed_out: 'Logout',
+  signed_in: 'Login',
   online_now: 'Online now',
   idle: 'Idle',
-  expiring_7d: 'Expiring ≤7 days',
-  at_device_limit: 'At device limit',
-  quiet_90d: 'Quiet 90d+ review',
 };
-// Segments whose COUNTER includes deleted accounts the LIST can't show (short by `deleted`).
-const PARTIAL_SEGMENTS = new Set(['issued_a_plan', 'stopped_using']);
 const PLAN_STATE_LABELS = { expired: 'Plan expired', payment_hold: 'Payment failed', cancelled: 'Cancelled' };
 
-// One stat row: label + number. Clickable ones filter the table; `disabled` renders the
-// (deleted) row muted with no interaction; `alert` flags a tripwire (licensed_no_device > 0).
-function StatRow({ label, value, level = 0, onClick, active, disabled, alert }) {
-  const cls = `su-stat-row lvl-${level}${active ? ' active' : ''}${disabled ? ' disabled' : ''}${alert ? ' alert' : ''}`;
-  const body = (
-    <>
-      <span className="su-stat-label">{label}</span>
-      <span className="su-stat-val">{(value ?? 0).toLocaleString()}</span>
-    </>
-  );
-  if (disabled) {
-    return <div className={cls} title="Deleted accounts are hidden from the list by design">{body}</div>;
-  }
+// One stat row: label + proportional bar + number. `alert` flags the not_issued_a_plan tripwire.
+function StatRow({ label, value, level = 0, onClick, active, alert, barPct }) {
+  const cls = `su-stat-row lvl-${level}${active ? ' active' : ''}${alert ? ' alert' : ''}`;
   return (
-    <button type="button" className={cls} onClick={onClick} title="Filter the list by this">{body}</button>
+    <button type="button" className={cls} onClick={onClick} title="Filter the list by this">
+      <span className="su-stat-label">{label}</span>
+      {barPct != null && (
+        <span className="su-stat-bar-track">
+          <span className="su-stat-bar-fill" style={{ width: `${Math.min(100, Math.max(0, barPct))}%` }} />
+        </span>
+      )}
+      <span className="su-stat-val">{(value ?? 0).toLocaleString()}</span>
+    </button>
   );
-}
-
-// A small sub-heading for a grouped cut inside Card 1 (keeps the two 67-cuts from flattening).
-function StatGroup({ children, level = 2 }) {
-  return <div className={`su-stat-grouplabel lvl-${level}`}>{children}</div>;
 }
 
 
@@ -302,6 +314,7 @@ export default function AppUsersPage() {
 
   const [searchInput, setSearchInput] = useState(filters.search || '');
   const debounceRef = useRef(null);
+  const tableRef = useRef(null);
   const [detailUserId, setDetailUserId] = useState(null);
 
   const totalPages = Math.max(1, Math.ceil(total / (pageSize || 1)));
@@ -324,14 +337,15 @@ export default function AppUsersPage() {
     if (filters.status !== 'all') p.status = filters.status;
     if (filters.plan_type && filters.plan_type !== 'all') p.plan_type = filters.plan_type;
     if (filters.plan_status && filters.plan_status !== 'all') p.plan_status = filters.plan_status;
+    if (filters.account_state) p.account_state = filters.account_state;
     if (filters.segment) p.segment = filters.segment;
     if (filters.sort_by) p.sort_by = filters.sort_by;
     if (filters.sort_order) p.sort_order = filters.sort_order;
     p.page = filters.page;
     p.page_size = filters.page_size;
     dispatch(fetchAppUsers(p));
-  }, [dispatch, filters.search, filters.status, filters.plan_type, filters.plan_status, filters.segment,
-    filters.sort_by, filters.sort_order, filters.page, filters.page_size]);
+  }, [dispatch, filters.search, filters.status, filters.plan_type, filters.plan_status, filters.account_state,
+    filters.segment, filters.sort_by, filters.sort_order, filters.page, filters.page_size]);
 
   /* All hooks above — conditional render AFTER */
   if (detailUserId) {
@@ -348,34 +362,32 @@ export default function AppUsersPage() {
   const applyStat = (patch) => {
     setSearchInput('');
     dispatch(setFilters({
-      status: 'all', plan_type: 'all', plan_status: 'all', segment: '', search: '', page: 1,
+      status: 'all', plan_type: 'all', plan_status: 'all', account_state: '', segment: '', search: '', page: 1,
       ...patch,
     }));
+    // Filtering happens above the fold; jump the reader down to the table so the filtered
+    // rows are actually visible instead of silently changing off-screen.
+    tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
   // Whether the current filters equal a given tile's filter (drives the highlight + chip).
   const isActive = (patch) => {
+    if (patch.account_state !== undefined) return filters.account_state === patch.account_state;
     if (patch.segment)     return filters.segment === patch.segment;
-    if (patch.status)      return !filters.segment && filters.status === patch.status;
-    if (patch.plan_type)   return !filters.segment && filters.plan_type === patch.plan_type && filters.plan_status === 'all';
-    if (patch.plan_status) return !filters.segment && filters.plan_status === patch.plan_status && filters.plan_type === 'all';
+    if (patch.plan_type)   return !filters.segment && !filters.account_state && filters.plan_type === patch.plan_type && filters.plan_status === 'all';
+    if (patch.plan_status) return !filters.segment && !filters.account_state && filters.plan_status === patch.plan_status && filters.plan_type === 'all';
     return false;
   };
   const clearAllFilters = () => { setSearchInput(''); dispatch(clearFilters()); };
-  const goLiveStats = () => window.dispatchEvent(new CustomEvent('app:navigate', { detail: { page: 'home' } }));
 
   // Human label for the active worklist filter (shown as a removable chip by the search bar).
   const activeFilterLabel = (() => {
+    if (filters.account_state) return ACCOUNT_STATE_LABELS[filters.account_state] || filters.account_state;
     if (filters.segment) return SEGMENT_LABELS[filters.segment] || filters.segment;
-    if (filters.status === 'blocked') return 'Blocked';
     if (filters.plan_type === 'free') return 'Trial';
     if (filters.plan_type === 'paid') return 'Paid';
     if (filters.plan_status && filters.plan_status !== 'all') return PLAN_STATE_LABELS[filters.plan_status] || filters.plan_status;
     return null;
   })();
-  // The two partial segments show fewer rows than their tile (deleted excluded) — note it on the chip.
-  const deletedCount = stats?.plan_funnel?.issued_a_plan?.stopped_using?.deleted ?? 0;
-  const chipNote = (PARTIAL_SEGMENTS.has(filters.segment) && deletedCount > 0)
-    ? `${deletedCount} deleted not shown` : null;
 
   const handleSort = (field) => {
     if (!SORTABLE.includes(field)) return;
@@ -396,7 +408,6 @@ export default function AppUsersPage() {
       <div className="su-header">
         <div>
           <h1 className="su-title">App Users</h1>
-          <div className="su-subtitle">End-user (subscriber) accounts — paginated list with filtering and sorting.</div>
         </div>
         {users.length > 0 && (
           <ExportButton
@@ -406,107 +417,113 @@ export default function AppUsersPage() {
         )}
       </div>
 
-      {/* ── Stat header: context bar + three worklist cards ── */}
+      {/* ── Stat header: context bar + PLAN FUNNEL / USAGE, 70/30 ── */}
       {statsError ? (
         <div className="su-stats-error">Failed to load stats: {statsError}</div>
       ) : statsLoading && !stats ? (
         <div className="su-stat-skel-wrap">
           <div className="su-context-bar su-skel" />
-          <div className="su-cards-row-3">
-            <div className="su-statcard su-skel" />
-            <div className="su-statcard su-skel" />
-            <div className="su-statcard su-skel" />
+          <div className="su-cards-app-row">
+            <div className="su-statcard su-skel su-statcard-funnel" />
+            <div className="su-statcard su-skel su-statcard-usage" />
           </div>
         </div>
       ) : stats && (() => {
-        const pf = stats.plan_funnel || {};
-        const ip = pf.issued_a_plan || {};
-        const pu = ip.presently_using || {};
-        const bas = pu.by_account_state || {};
-        const bp = pu.by_plan || {};
-        const su = ip.stopped_using || {};
+        // total_traffic_till_date is an OBJECT now — {count, verified, never_verified} —
+        // not a plain number (build guide §2.2, §10 migration checklist).
+        const hero = stats.total_traffic_till_date || {};
+        const count = hero.count ?? 0;
+        const verified = hero.verified ?? 0;
+        const neverVerified = hero.never_verified ?? 0;
+        const bd = stats.breakdown || {};
         const usage = stats.usage || {};
-        const at = stats.attention || {};
-        const listable = pf.listable ?? 0;
-        const verified = pf.verified_users ?? 0;
-        const deleted = su.deleted ?? 0;
-        const newWeek = stats.new_signups_7d ?? 0;
-        const lndAlert = (at.licensed_no_device ?? 0) > 0;
+        const signals = stats.signals || {};
+        const notIssuedAlert = (bd.not_issued_a_plan ?? 0) > 0;
+
+        // Tripwires, free of charge (build guide §2.1). Only the hero split and the usage
+        // identities hold unconditionally — DO NOT assert the breakdown rows against each
+        // other or against the hero: issued_a_plan contains the six state rows after it
+        // (they total 165, not 95), and verified vs. issued_a_plan+not_issued_a_plan can
+        // legitimately drift (an account blocked before it ever activated).
+        if (import.meta.env.DEV) {
+          const heroSum = verified + neverVerified;
+          console.assert(heroSum === count, `[AppUsers] verified+never_verified (${heroSum}) != total_traffic_till_date.count (${count})`);
+          const usageSum = (usage.signed_out ?? 0) + (usage.signed_in ?? 0);
+          console.assert(usageSum === (usage.total ?? 0), `[AppUsers] usage signed_out+signed_in (${usageSum}) != usage.total (${usage.total})`);
+          const signedInSum = (usage.online_now ?? 0) + (usage.idle ?? 0);
+          console.assert(signedInSum === (usage.signed_in ?? 0), `[AppUsers] usage online_now+idle (${signedInSum}) != usage.signed_in (${usage.signed_in})`);
+          if ((signals.licensed_no_device ?? 0) > 0) {
+            console.warn(`[AppUsers] licensed_no_device tripwire is non-zero: ${signals.licensed_no_device}`);
+          }
+        }
 
         return (
           <>
-            {/* Row 1 — context line (not a card) */}
+            {/* Row 1 — context line (not a card). Hero + its verified/never-verified split —
+                all three are independently clickable (build guide §3.3, §4). */}
             <div className="su-context-bar">
               <div className="su-ctx-text">
-                {/* Hero = verified_users (matches the PLAN FUNNEL card total beneath it).
-                    When any are deleted, show the whole identity so the reader sees why the
-                    table below has fewer rows: N verified = M listed + K deleted. */}
-                <strong>{verified.toLocaleString()}</strong> verified users
-                {deleted > 0 && (
-                  <span className="su-ctx-split">
-                    {' = '}{listable.toLocaleString()} listed + <span className="su-ctx-deleted">{deleted.toLocaleString()} deleted</span>
-                  </span>
-                )}
+                <button type="button" className="su-ctx-hero" onClick={() => applyStat({ account_state: '' })} title="Filter: all">
+                  <strong>{count.toLocaleString()}</strong> total traffic till date
+                </button>
                 <span className="su-ctx-sep">·</span>
-                <span className="su-ctx-new">+{newWeek.toLocaleString()} this week</span>
+                <button
+                  type="button"
+                  className={`su-ctx-split-btn${isActive({ account_state: 'verified' }) ? ' active' : ''}`}
+                  onClick={() => applyStat({ account_state: 'verified' })}
+                >
+                  {verified.toLocaleString()} verified
+                </button>
+                <span className="su-ctx-sep">·</span>
+                <button
+                  type="button"
+                  className={`su-ctx-split-btn${isActive({ account_state: 'never_verified' }) ? ' active' : ''}`}
+                  onClick={() => applyStat({ account_state: 'never_verified' })}
+                >
+                  {neverVerified.toLocaleString()} Unverified
+                </button>
               </div>
-              <button type="button" className="su-ctx-link" onClick={goLiveStats}>
-                View full funnel →
-              </button>
             </div>
 
-            {/* Row 2 — three cards; every number filters the table below */}
-            <div className="su-cards-row-3">
-              {/* Card 1 · Plan Funnel */}
-              <div className="su-statcard">
-                <div className="su-statcard-head">
-                  <span className="su-statcard-title">Plan Funnel</span>
-                  {/* verified_users includes deleted → not clickable */}
-                  <span className="su-statcard-total static" title="Includes deleted accounts — not filterable">{verified.toLocaleString()}</span>
-                </div>
-                <StatRow label="Not issued a plan" value={pf.not_issued_a_plan} onClick={() => applyStat({ segment: 'never_had_a_plan' })} active={isActive({ segment: 'never_had_a_plan' })} />
-                <StatRow label="Issued a plan" value={ip.count} onClick={() => applyStat({ segment: 'issued_a_plan' })} active={isActive({ segment: 'issued_a_plan' })} />
-                <StatRow label="Presently using" value={pu.count} level={1} onClick={() => applyStat({ segment: 'presently_using' })} active={isActive({ segment: 'presently_using' })} />
-                {/* Two SAME-set cuts — grouped so they never read as siblings */}
-                <div className="su-stat-subgroup">
-                  <StatGroup>by account state</StatGroup>
-                  <StatRow label="Enabled" value={bas.enabled} level={3} onClick={() => applyStat({ segment: 'on_a_plan' })} active={isActive({ segment: 'on_a_plan' })} />
-                  <StatRow label="Blocked" value={bas.blocked} level={3} onClick={() => applyStat({ segment: 'revoked' })} active={isActive({ segment: 'revoked' })} />
-                  <StatGroup>by plan</StatGroup>
-                  <StatRow label="Trial" value={bp.trial} level={3} onClick={() => applyStat({ plan_type: 'free' })} active={isActive({ plan_type: 'free' })} />
-                  <StatRow label="Paid" value={bp.paid} level={3} onClick={() => applyStat({ plan_type: 'paid' })} active={isActive({ plan_type: 'paid' })} />
-                </div>
-                <StatRow label="Stopped using" value={su.count} level={1} onClick={() => applyStat({ segment: 'stopped_using' })} active={isActive({ segment: 'stopped_using' })} />
-                <StatRow label="Plan expired" value={su.plan_expired} level={2} onClick={() => applyStat({ plan_status: 'expired' })} active={isActive({ plan_status: 'expired' })} />
-                <StatRow label="Payment failed" value={su.payment_failed} level={2} onClick={() => applyStat({ plan_status: 'payment_hold' })} active={isActive({ plan_status: 'payment_hold' })} />
-                <StatRow label="Cancelled" value={su.cancelled} level={2} onClick={() => applyStat({ plan_status: 'cancelled' })} active={isActive({ plan_status: 'cancelled' })} />
-                <StatRow label="Deleted" value={su.deleted} level={2} disabled />
+            {/* Row 2 — two cards, 70/30; every number filters the table below */}
+            <div className="su-cards-app-row">
+              {/* Card A · the plan card — data.breakdown, 8 flat rows. Deliberately NO heading
+                  and NO total (build guide §3.1, §9): the rows overlap (issued_a_plan contains
+                  the six after it), so any number placed above them would be wrong. Bars scale
+                  to `verified`, not `count` — never-verified accounts aren't in this population. */}
+              <div className="su-statcard su-statcard-funnel">
+                {BREAKDOWN_ROWS.map((row) => (
+                  <StatRow
+                    key={row.key}
+                    label={row.label}
+                    value={bd[row.key]}
+                    alert={row.key === 'not_issued_a_plan' ? notIssuedAlert : undefined}
+                    barPct={verified > 0 ? ((bd[row.key] ?? 0) / verified) * 100 : 0}
+                    onClick={() => applyStat({ account_state: row.key })}
+                    active={isActive({ account_state: row.key })}
+                  />
+                ))}
               </div>
 
-              {/* Card 2 · Usage (this IS presently_using expanded) */}
-              <div className="su-statcard">
+              {/* Card B · Usage — data.usage, live verified accounts whose plan is still on the books */}
+              <div className="su-statcard su-statcard-usage">
                 <div className="su-statcard-head">
                   <span className="su-statcard-title">Usage</span>
                   <button type="button" className="su-statcard-total" onClick={() => applyStat({ segment: 'presently_using' })} title="Filter: presently using">
                     {(usage.total ?? 0).toLocaleString()}
                   </button>
                 </div>
-                <StatRow label="Signed out" value={usage.signed_out} onClick={() => applyStat({ segment: 'signed_out' })} active={isActive({ segment: 'signed_out' })} />
-                <StatRow label="Signed in" value={usage.signed_in} onClick={() => applyStat({ segment: 'signed_in' })} active={isActive({ segment: 'signed_in' })} />
-                <StatRow label="Online now" value={usage.online_now} level={1} onClick={() => applyStat({ segment: 'online_now' })} active={isActive({ segment: 'online_now' })} />
-                <StatRow label="Idle" value={usage.idle} level={1} onClick={() => applyStat({ segment: 'idle' })} active={isActive({ segment: 'idle' })} />
-              </div>
-
-              {/* Card 3 · Needs Attention (queues — rows overlap, no total) */}
-              <div className="su-statcard">
-                <div className="su-statcard-head">
-                  <span className="su-statcard-title">Needs Attention</span>
-                </div>
-                <StatRow label="Expiring ≤7 days" value={at.expiring_in_7_days} onClick={() => applyStat({ segment: 'expiring_7d' })} active={isActive({ segment: 'expiring_7d' })} />
-                <StatRow label="Blocked" value={at.blocked} onClick={() => applyStat({ status: 'blocked' })} active={isActive({ status: 'blocked' })} />
-                <StatRow label="At device limit" value={at.at_device_limit} onClick={() => applyStat({ segment: 'at_device_limit' })} active={isActive({ segment: 'at_device_limit' })} />
-                <StatRow label="Quiet 90d+ review" value={at.quiet_90d_review} onClick={() => applyStat({ segment: 'quiet_90d' })} active={isActive({ segment: 'quiet_90d' })} />
-                <StatRow label="Licensed, no device" value={at.licensed_no_device} alert={lndAlert} onClick={() => applyStat({ segment: 'licensed_no_device' })} active={isActive({ segment: 'licensed_no_device' })} />
+                {USAGE_ROWS.map((row) => (
+                  <StatRow
+                    key={row.key}
+                    label={row.label}
+                    value={usage[row.key]}
+                    level={row.level}
+                    barPct={usage.total > 0 ? ((usage[row.key] ?? 0) / usage.total) * 100 : 0}
+                    onClick={() => applyStat({ segment: row.key })}
+                    active={isActive({ segment: row.key })}
+                  />
+                ))}
               </div>
             </div>
           </>
@@ -529,7 +546,6 @@ export default function AppUsersPage() {
           {activeFilterLabel && (
             <div className="su-filter-chip" title="Active filter — click ✕ to clear">
               <span className="su-filter-chip-label">{activeFilterLabel}</span>
-              {chipNote && <span className="su-filter-chip-note">{chipNote}</span>}
               <button type="button" className="su-filter-chip-x" onClick={clearAllFilters} aria-label="Clear filter">✕</button>
             </div>
           )}
@@ -537,12 +553,11 @@ export default function AppUsersPage() {
 
         <div className="su-toolbar-filters">
           <div className="su-filter">
-            <label>Account Status</label>
-            <select className="su-select" value={filters.segment ? 'all' : filters.status}
-              onChange={(e) => dispatch(setFilters({ status: e.target.value, segment: '', page: 1 }))}>
+            <label>Account State</label>
+            <select className="su-select" value={filters.account_state || 'all'}
+              onChange={(e) => dispatch(setFilters({ account_state: e.target.value === 'all' ? '' : e.target.value, segment: '', page: 1 }))}>
               <option value="all">All</option>
-              <option value="active">Active</option>
-              <option value="blocked">Blocked</option>
+              {BREAKDOWN_ROWS.map((row) => <option key={row.key} value={row.key}>{row.label}</option>)}
             </select>
           </div>
 
@@ -571,7 +586,7 @@ export default function AppUsersPage() {
       </div>
 
       {/* Table */}
-      <div className="su-table-wrap">
+      <div className="su-table-wrap" ref={tableRef}>
         {loading && !users.length ? (
           <div className="su-loading-wrap">Loading subscribers…</div>
         ) : error ? (

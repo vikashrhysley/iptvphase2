@@ -52,11 +52,24 @@ function InfoRow({ label, value }) {
   );
 }
 
-function SectionCard({ title, children }) {
+function SectionCard({ title, children, collapsible, defaultOpen = true }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const isOpen = !collapsible || open;
+  const toggle = () => setOpen((o) => !o);
   return (
     <div className="dd-card">
-      <div className="dd-card-title">{title}</div>
-      {children}
+      <div
+        className={`dd-card-title${collapsible ? ' dd-card-title-toggle' : ''}`}
+        onClick={collapsible ? toggle : undefined}
+        role={collapsible ? 'button' : undefined}
+        tabIndex={collapsible ? 0 : undefined}
+        aria-expanded={collapsible ? isOpen : undefined}
+        onKeyDown={collapsible ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } } : undefined}
+      >
+        <span>{title}</span>
+        {collapsible && <span className={`dd-card-caret${isOpen ? ' open' : ''}`}>▾</span>}
+      </div>
+      {isOpen && children}
     </div>
   );
 }
@@ -222,29 +235,18 @@ export default function DeviceDetail({ deviceId, onBack }) {
           {d.activity_summary && (
             <SectionCard title="Activity Summary (7d)">
               <div className="dd-activity-grid">
-                <InfoRow label="Sessions"      value={d.activity_summary.sessions_7d} />
-                <InfoRow label="Watch Hours"   value={d.activity_summary.watch_hours_7d != null ? `${d.activity_summary.watch_hours_7d}h` : '—'} />
-                <InfoRow label="Avg Buffers"   value={d.activity_summary.avg_buffer_count} />
-                <InfoRow label="Last Portal"   value={d.activity_summary.last_portal_url
-                  ? <a href={d.activity_summary.last_portal_url} target="_blank" rel="noreferrer" className="dd-link">{d.activity_summary.last_portal_url}</a>
-                  : '—'} />
+                <InfoRow label="Sessions"           value={d.activity_summary.sessions_7d} />
+                <InfoRow label="Watch Hours"        value={d.activity_summary.watch_hours_7d != null ? `${d.activity_summary.watch_hours_7d}h` : '—'} />
+                <InfoRow label="Last Watched"       value={fmt(d.activity_summary.last_watched_at)} />
+                <InfoRow label="Last Content Title" value={d.activity_summary.last_content_title} />
+                <InfoRow label="Last Content Type"  value={d.activity_summary.last_content_type} />
               </div>
-              {d.activity_summary.stream_quality_breakdown && (
-                <div className="dd-quality-row">
-                  {Object.entries(d.activity_summary.stream_quality_breakdown).map(([q, count]) => (
-                    <div className="dd-quality-chip" key={q}>
-                      <strong>{count}</strong>
-                      <span>{q.toUpperCase()}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
             </SectionCard>
           )}
 
           {/* ── Heartbeat Logs ── */}
           {d.heartbeat_logs?.length > 0 && (
-            <SectionCard title={`Recent Heartbeats (${d.heartbeat_logs.length})`}>
+            <SectionCard title={`Recent Heartbeats (${d.heartbeat_logs.length})`} collapsible defaultOpen={false}>
               <div className="dd-table-scroll">
                 <table className="dd-table">
                   <thead>
@@ -280,7 +282,7 @@ export default function DeviceDetail({ deviceId, onBack }) {
 
           {/* ── Audit Trail ── */}
           {d.audit_trail?.length > 0 && (
-            <SectionCard title={`Audit Trail (${d.audit_trail.length})`}>
+            <SectionCard title={`Audit Trail (${d.audit_trail.length})`} collapsible defaultOpen={false}>
               <div className="dd-table-scroll">
                 <table className="dd-table">
                   <thead>

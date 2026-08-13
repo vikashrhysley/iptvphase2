@@ -1028,6 +1028,51 @@
 /* ── Reconciling stat cards (Device Status / In Use) + Needs Attention ── */
 .device-stats.device-stats-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
+/* Mobile-only swipe layout is hidden until the ≤900px breakpoint takes over below,
+   where it replaces the desktop 3-up grid (kept out of the DOM flow otherwise). */
+.device-stats-mobile { display: none; }
+
+/* Device Status ↔ Platform Stats swipe carousel + dots (mobile only) */
+.device-swipe-group { margin-bottom: 12px; }
+.device-swipe-track {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.device-swipe-track::-webkit-scrollbar { display: none; }
+.device-swipe-slide {
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+  min-width: 0;
+}
+.device-swipe-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.device-swipe-dot {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border-radius: 50%;
+  border: none;
+  background: var(--border-medium);
+  cursor: pointer;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+.device-swipe-dot.active {
+  background: var(--accent-primary);
+  transform: scale(1.3);
+}
+
+/* .device-stats-panel sets overflow:hidden to clip its own ::before gradient bar to the
+   card's rounded corners. The info popover (any row, including ones near the card's bottom
+   edge) needs to escape that or it renders invisibly clipped — so this card opts out. */
+.dv-bar-card { overflow: visible; }
+
 .dv-bar-headline { display: flex; align-items: baseline; gap: 8px; margin: 6px 0 12px; }
 .dv-bar-headline strong {
   font-family: var(--font-display, inherit);
@@ -1041,7 +1086,7 @@
 .dv-bar-list { display: flex; flex-direction: column; gap: 2px; }
 .dv-bar-row {
   display: grid;
-  grid-template-columns: 104px minmax(0, 1fr) 46px;
+  grid-template-columns: 150px minmax(0, 1fr) 46px;
   align-items: center;
   gap: 10px;
   width: 100%;
@@ -1054,7 +1099,105 @@
   transition: background var(--transition-fast);
 }
 .dv-bar-row:hover { background: var(--bg-raised); }
-.dv-bar-label { font-size: 0.8rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Flex wrapper (no overflow clip — the info popover below needs to escape it); the text
+   itself carries the ellipsis truncation so long labels still degrade the same way. */
+.dv-bar-label {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+.dv-bar-label-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Info icon + styled popover (e.g. "what counts as Recovery"). Pure CSS hover/focus — no
+   JS positioning. Anchored to the icon via position:relative; opens below-left of it. */
+.dv-bar-info {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin-left: 5px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  cursor: help;
+  transition: color var(--transition-fast, 0.15s ease);
+}
+.dv-bar-info:hover,
+.dv-bar-info:focus-visible { color: var(--accent-primary); outline: none; }
+
+.dv-bar-info-pop {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  transform: translate(-50%, -6px);
+  min-width: 172px;
+  z-index: 50;
+  padding: 10px 14px 12px;
+  background: var(--bg-raised, #1a2236);
+  border: 1px solid var(--border-medium, rgba(255,255,255,0.14));
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  text-align: left;
+  white-space: normal;
+  cursor: default;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+}
+/* Little arrow pointing back up at the icon */
+.dv-bar-info-pop::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 10px;
+  height: 10px;
+  background: var(--bg-raised, #1a2236);
+  border-left: 1px solid var(--border-medium, rgba(255,255,255,0.14));
+  border-top: 1px solid var(--border-medium, rgba(255,255,255,0.14));
+  border-radius: 2px;
+}
+.dv-bar-info:hover .dv-bar-info-pop,
+.dv-bar-info:focus-visible .dv-bar-info-pop,
+.dv-bar-info:focus-within .dv-bar-info-pop {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+}
+.dv-bar-info-pop-title {
+  display: block;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+}
+.dv-bar-info-pop-list { display: flex; flex-direction: column; gap: 6px; }
+.dv-bar-info-pop-item {
+  position: relative;
+  padding-left: 14px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+.dv-bar-info-pop-item::before {
+  content: '';
+  position: absolute;
+  left: 1px;
+  top: 6px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+}
+
 .dv-bar-track { height: 9px; border-radius: 999px; background: color-mix(in srgb, var(--text-primary) 8%, transparent); overflow: hidden; }
 .dv-bar-fill { display: block; height: 100%; border-radius: 999px; transition: width 0.35s ease; }
 .dv-bar-fill.tone-good  { background: #34d399; }
@@ -1086,5 +1229,6 @@
 .dv-filter-chip-x:hover { background: color-mix(in srgb, var(--accent-primary) 25%, transparent); }
 
 @media (max-width: 900px) {
-  .device-stats.device-stats-3 { grid-template-columns: 1fr; }
+  .device-stats-desktop { display: none; }
+  .device-stats-mobile  { display: block; margin-bottom: 22px; }
 }

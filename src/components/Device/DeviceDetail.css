@@ -239,6 +239,23 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 
+/* Collapsible section header (e.g. Recent Heartbeats) — click to open/close */
+.dd-card-title-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+}
+.dd-card-title-toggle:hover { color: var(--text-secondary); }
+.dd-card-caret {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  transition: transform var(--transition-fast, 0.15s ease);
+  transform: rotate(-90deg);
+}
+.dd-card-caret.open { transform: rotate(0deg); }
+
 /* ── Info rows ── */
 .dd-info-row {
   display: flex;

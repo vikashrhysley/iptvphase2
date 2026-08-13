@@ -418,7 +418,7 @@
 
 .ls-bar-row {
   display: grid;
-  grid-template-columns: 118px minmax(0, 1fr) 46px;
+  grid-template-columns: 150px minmax(0, 1fr) 46px;
   align-items: center;
   gap: 10px;
   padding: 3px 0;
@@ -431,6 +431,10 @@
 .ls-bar-click:hover .ls-bar-label { color: var(--text-primary); }
 .ls-chip-click { cursor: pointer; }
 .ls-chip-click:hover { filter: brightness(1.15); }
+.ls-hero-click { cursor: pointer; transition: color var(--transition-fast); }
+.ls-hero-click:hover { color: var(--stat-accent, var(--accent-primary)); }
+.ls-group-scale-click { cursor: pointer; transition: color var(--transition-fast); }
+.ls-group-scale-click:hover { color: var(--stat-accent, var(--accent-primary)); }
 
 .ls-bar-row:hover {
   background: color-mix(in srgb, var(--stat-accent, var(--accent-primary)) 7%, transparent);
@@ -493,7 +497,7 @@
 
 @media (max-width: 520px) {
   .ls-bar-row {
-    grid-template-columns: 96px minmax(0, 1fr) 40px;
+    grid-template-columns: 120px minmax(0, 1fr) 40px;
   }
 }
 
