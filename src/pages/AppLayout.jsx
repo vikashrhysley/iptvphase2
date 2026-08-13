@@ -7,6 +7,7 @@ import useNotificationPolling from '../hooks/useNotificationPolling';
 import useProfileRefresh from '../hooks/useProfileRefresh';
 import { refreshCurrentUser } from '../store/slices/authSlice';
 import { setDeviceFilters } from '../store/slices/deviceSlice';
+import { setFilters as setAppUsersFilters } from '../store/slices/appUsersSlice';
 import { canAccessPage, firstAccessiblePage } from '../utils/pageAccess';
 
 const DashboardTable     = React.lazy(() => import('../components/Dashboard/DashboardTable'));
@@ -164,11 +165,19 @@ export default function AppLayout() {
   // optionally targeting a record (planId → open that plan on the Plans page).
   useEffect(() => {
     const onNavIntent = (e) => {
-      const { page, planId, deviceStatus } = e.detail || {};
+      const { page, planId, deviceStatus, accountState } = e.detail || {};
       if (!page) return;
       if (planId) sessionStorage.setItem('openPlanId', planId);
       // A device-status filter carried from the dashboard cards → seed the Devices list filter.
       if (deviceStatus) dispatch(setDeviceFilters({ status: deviceStatus, current_session: false, page: 1 }));
+      // An account_state filter carried from the Live Stats app_users tiles → seed the App
+      // Users PLAN FUNNEL filter (build guide §13 — dashboard deep links always use account_state).
+      if (accountState) {
+        dispatch(setAppUsersFilters({
+          account_state: accountState === 'all' ? '' : accountState,
+          segment: '', status: 'all', plan_type: 'all', plan_status: 'all', search: '', page: 1,
+        }));
+      }
       applyPage(page);
       window.history.pushState({ appPage: page }, '', window.location.pathname);
     };

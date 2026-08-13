@@ -1177,7 +1177,11 @@ export const apiFetchAppUsers = async (accessToken, params = {}) => {
   if (params.plan_type)    query.set('plan_type', params.plan_type);
   // Backend filters on the plan's `state` field, so the query key is plan_state.
   if (params.plan_status)  query.set('plan_state', params.plan_status);
-  // Worklist segment (one of the 8 stat-card segments). Composes (AND) with the above.
+  // The PLAN FUNNEL card's click-through — one of the 8 breakdown keys, or a roll-up
+  // (all | verified | live | issued_a_plan | stopped_using). Reaches never-verified and
+  // deleted rows, unlike `segment`. Composes (AND) with every other filter.
+  if (params.account_state) query.set('account_state', params.account_state);
+  // The USAGE card's click-through (one of the 8 stat-card segments). Composes (AND) with the above.
   if (params.segment)      query.set('segment', params.segment);
   if (params.device_status) query.set('device_status', params.device_status);
   if (params.country_code) query.set('country_code', params.country_code);

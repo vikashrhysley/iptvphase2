@@ -184,7 +184,12 @@ const LIVE_SECTIONS = [
     label: 'App Users',
     accent: 'var(--accent-secondary)',
     source: 'app_users',
-    hero: { label: 'Verified Users', path: 'total_users_ever.verified_users.count' },
+    // Live Stats keeps its nested funnel shape on purpose (App Users Stats build guide §11 —
+    // "deliberately unchanged"). Only the navigation is new: every tile here deep-links to the
+    // App Users worklist with the matching ?account_state= filter (guide §13). Dashboard tiles
+    // always use account_state, never segment — see §13.1.
+    filterPage: 'app_users',
+    hero: { label: 'Verified Users(OTP)', path: 'total_users_ever.verified_users.count', filter: 'verified' },
     chips: [
       { label: 'Signup 24h', path: 'growth.new_signups_24h' },
       { label: 'Signup 7d', path: 'growth.new_signups_7d' },
@@ -194,18 +199,20 @@ const LIVE_SECTIONS = [
         label: 'Total Traffic Till Date',
         // Part-to-whole: verified + never-verified sum to the lifetime total.
         totalPath: 'total_users_ever.count',
+        totalFilter: 'all',
         bars: [
-          { label: 'Verified Users', path: 'total_users_ever.verified_users.count', tone: 'good' },
-          { label: 'Never Verified', path: 'total_users_ever.never_verified', tone: 'warn' },
+          { label: 'Verified Users(OTP)', path: 'total_users_ever.verified_users.count', tone: 'good', filter: 'verified' },
+          { label: 'Unverified user (OTP)', path: 'total_users_ever.never_verified', tone: 'warn', filter: 'never_verified' },
         ],
       },
       {
         label: 'Verified Users',
         // Part-to-whole: issued-a-plan + not-issued-a-plan sum to the verified total.
         totalPath: 'total_users_ever.verified_users.count',
+        totalFilter: 'verified',
         bars: [
-          { label: 'Issued A Plan', path: 'total_users_ever.verified_users.issued_a_plan', tone: 'good' },
-          { label: 'Not Issued A Plan', path: 'total_users_ever.verified_users.not_issued_a_plan', tone: 'warn' },
+          { label: 'Issued A Plan', path: 'total_users_ever.verified_users.issued_a_plan', tone: 'good', filter: 'issued_a_plan' },
+          { label: 'Not Issued A Plan', path: 'total_users_ever.verified_users.not_issued_a_plan', tone: 'warn', filter: 'not_issued_a_plan' },
         ],
       },
       {
@@ -213,20 +220,24 @@ const LIVE_SECTIONS = [
         // Part-to-whole: enabled + blocked make up the presently-using users, and adding
         // stopped gives the issued-a-plan total.
         totalPath: 'total_users_ever.verified_users.issued_a_plan.count',
+        totalFilter: 'issued_a_plan',
         bars: [
-          { label: 'Enabled Users', path: 'total_users_ever.verified_users.issued_a_plan.presently_using.by_account_state.enabled_users', tone: 'good' },
-          { label: 'Blocked Users', path: 'total_users_ever.verified_users.issued_a_plan.presently_using.by_account_state.blocked_users', tone: 'bad' },
-          { label: 'Stopped Users', path: 'total_users_ever.verified_users.issued_a_plan.stopped_using.count', tone: 'warn' },
+          { label: 'Enabled Users', path: 'total_users_ever.verified_users.issued_a_plan.presently_using.by_account_state.enabled_users', tone: 'good', filter: 'enabled' },
+          // Dashboard's "Blocked Users" counts revoked licences; account_state=blocked counts blocked
+          // ACCOUNTS. They pair 1:1 through the block↔revoke cascade in every normal state (guide §13.2).
+          { label: 'Blocked Users', path: 'total_users_ever.verified_users.issued_a_plan.presently_using.by_account_state.blocked_users', tone: 'bad', filter: 'blocked' },
+          { label: 'Stopped Users', path: 'total_users_ever.verified_users.issued_a_plan.stopped_using.count', tone: 'warn', filter: 'stopped_using' },
         ],
       },
       {
         label: 'Stopped Using',
         // Part-to-whole: plan-expired + payment-failed + deleted sum to the stopped count.
         totalPath: 'total_users_ever.verified_users.issued_a_plan.stopped_using.count',
+        totalFilter: 'stopped_using',
         bars: [
-          { label: 'Plan Expired', path: 'total_users_ever.verified_users.issued_a_plan.stopped_using.plan_expired_users', tone: 'warn' },
-          { label: 'Payment Failed', path: 'total_users_ever.verified_users.issued_a_plan.stopped_using.payment_failed_users', tone: 'bad' },
-          { label: 'Deleted Users', path: 'total_users_ever.verified_users.issued_a_plan.stopped_using.deleted_users', tone: 'muted' },
+          { label: 'Plan Expired', path: 'total_users_ever.verified_users.issued_a_plan.stopped_using.plan_expired_users', tone: 'warn', filter: 'plan_expired' },
+          { label: 'Payment Failed', path: 'total_users_ever.verified_users.issued_a_plan.stopped_using.payment_failed_users', tone: 'bad', filter: 'payment_failed' },
+          { label: 'Deleted Users', path: 'total_users_ever.verified_users.issued_a_plan.stopped_using.deleted_users', tone: 'muted', filter: 'deleted' },
         ],
       },
     ],
@@ -257,16 +268,6 @@ const LIVE_SECTIONS = [
           { label: 'Payment Failed', path: 'total_licenses_ever.by_status.payment_failed_licenses', tone: 'warn'  },
           { label: 'Cancelled',      path: 'total_licenses_ever.by_status.cancelled_licenses',      tone: 'muted' },
           { label: 'Deleted',        path: 'total_licenses_ever.by_status.deleted_licenses',        tone: 'muted' },
-        ],
-      },
-      {
-        // Kept separate: 48h/7d/30d are overlapping windows over active licences and do not sum
-        // to anything — no totalPath, so they scale to their own peak, not the status total.
-        label: 'Licenses Expiring Soon',
-        bars: [
-          { label: 'Expiring 48h', path: 'expiring_soon.expiring_48h', tone: 'warn' },
-          { label: 'Expiring 7d',  path: 'expiring_soon.expiring_7d',  tone: 'warn' },
-          { label: 'Expiring 30d', path: 'expiring_soon.expiring_30d', tone: 'warn' },
         ],
       },
     ],
@@ -706,14 +707,21 @@ function MetricBar({ label, value, max, tone, onClick }) {
   );
 }
 
-// Navigate to another page with a device status filter applied (handled in AppLayout).
-const navigateWithFilter = (page, status) =>
-  window.dispatchEvent(new CustomEvent('app:navigate', { detail: { page, deviceStatus: status } }));
+// Navigate to another page with a filter applied (handled in AppLayout). The Devices page
+// reads `deviceStatus`; the App Users page reads `accountState` (its PLAN FUNNEL click-through
+// — see the App Users Stats build guide §13, "always account_state, never segment").
+const navigateWithFilter = (page, filter) => {
+  const detail = { page };
+  if (page === 'app_users') detail.accountState = filter;
+  else detail.deviceStatus = filter;
+  window.dispatchEvent(new CustomEvent('app:navigate', { detail }));
+};
 
 // A full-width Live Stats row: hero figure and chips on the left, bar charts on the right.
 export function MetricSectionCard({ section }) {
   const { label, accent, hero, chips, groups, filterPage } = section;
   const onFilter = (filter) => filterPage && filter && navigateWithFilter(filterPage, filter);
+  const heroClickable = filterPage && hero.filter;
 
   return (
     <section className="ls-card" style={{ '--stat-accent': accent }}>
@@ -724,7 +732,15 @@ export function MetricSectionCard({ section }) {
         </div>
 
         <div className="ls-hero-label">{hero.label}</div>
-        <div className="ls-hero-value">{formatMetricValue(hero.value, hero.suffix)}</div>
+        <div
+          className={`ls-hero-value${heroClickable ? ' ls-hero-click' : ''}`}
+          onClick={heroClickable ? () => onFilter(hero.filter) : undefined}
+          role={heroClickable ? 'button' : undefined}
+          tabIndex={heroClickable ? 0 : undefined}
+          title={heroClickable ? `${hero.label}: click to filter` : undefined}
+        >
+          {formatMetricValue(hero.value, hero.suffix)}
+        </div>
 
         {chips.length > 0 && (
           <div className="ls-chips">
@@ -748,11 +764,19 @@ export function MetricSectionCard({ section }) {
       </header>
 
       <div className="ls-card-charts">
-        {groups.map(group => (
+        {groups.map(group => {
+          const totalClickable = filterPage && group.totalFilter;
+          return (
           <div className="ls-group" key={group.label}>
             <div className="ls-group-head">
               <span className="ls-group-label">{group.label}</span>
-              <span className="ls-group-scale">
+              <span
+                className={`ls-group-scale${totalClickable ? ' ls-group-scale-click' : ''}`}
+                onClick={totalClickable ? () => onFilter(group.totalFilter) : undefined}
+                role={totalClickable ? 'button' : undefined}
+                tabIndex={totalClickable ? 0 : undefined}
+                title={totalClickable ? 'Click to filter' : undefined}
+              >
                 {(group.total != null ? group.total : group.max).toLocaleString()}
               </span>
             </div>
@@ -768,7 +792,8 @@ export function MetricSectionCard({ section }) {
               />
             ))}
           </div>
-        ))}
+          );
+        })}
       </div>
     </section>
   );
