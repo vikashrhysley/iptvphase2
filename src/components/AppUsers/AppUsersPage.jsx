@@ -315,7 +315,13 @@ export default function AppUsersPage() {
   const [searchInput, setSearchInput] = useState(filters.search || '');
   const debounceRef = useRef(null);
   const tableRef = useRef(null);
-  const [detailUserId, setDetailUserId] = useState(null);
+  // Open a specific user when navigated here with intent (e.g. from the Device Detail page's
+  // Current Owner card) — same sessionStorage pending-open pattern as the Plans page.
+  const [detailUserId, setDetailUserId] = useState(() => {
+    const pending = sessionStorage.getItem('openUserId');
+    if (pending) { sessionStorage.removeItem('openUserId'); return pending; }
+    return null;
+  });
 
   const totalPages = Math.max(1, Math.ceil(total / (pageSize || 1)));
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import toast from 'react-hot-toast';
 import { fetchDeviceDetail, clearDeviceDetail, fetchDeviceOwnershipHistory } from '../../store/slices/deviceSlice';
 import DeviceActivity    from './DeviceActivity';
 import DeviceLoginHistory from './DeviceLoginHistory';
@@ -9,6 +10,12 @@ import './DeviceDetail.css';
 const BackIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
     <polyline points="15 18 9 12 15 6" />
+  </svg>
+);
+const CopyIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
   </svg>
 );
 
@@ -36,11 +43,40 @@ const relTime = (iso) => {
   if (m > 0) return `${m}m ago`;
   return 'Just now';
 };
-const riskClass  = (s) => s >= 70 ? 'high' : s >= 30 ? 'med' : 'low';
-const statusCls  = (s) => ({ active:'active', inactive:'inactive', blocked:'blocked', suspended:'suspended', revoked:'revoked' }[s] || 'unknown');
-const sevCls     = (s) => ({ critical:'critical', warning:'warning', info:'info', success:'success' }[s] || 'info');
+
+const copyText = (text, label) => {
+  if (!text || !navigator.clipboard) return;
+  navigator.clipboard.writeText(text).then(() => toast.success(`${label} copied`)).catch(() => {});
+};
 
 const PLATFORM_ICONS = { android:'🤖', firetv:'🔥', ios:'🍎', roku:'📺', samsung:'📺' };
+
+// Device Info build guide §4a — Status labels must match the Device Status card on Device
+// Management exactly (same vocabulary used in DevicePage.jsx's STATUS_MAP).
+const STATUS_LABELS = {
+  normal:             { label: 'Active',        cls: 'in-service' },
+  auto_blocked:       { label: 'Auto-blocked',  cls: 'auto-blocked' },
+  admin_blocked:      { label: 'Admin-blocked', cls: 'blocked' },
+  risk_score_blocked: { label: 'Risk-blocked',  cls: 'blocked' },
+  recovery_device:    { label: 'Recovery',      cls: 'out-service' },
+  admin_released:     { label: 'Released',      cls: 'out-service' },
+};
+const statusLabel = (s) => STATUS_LABELS[s]?.label || s || '—';
+const statusCls   = (s) => STATUS_LABELS[s]?.cls || 'unknown';
+
+const USAGE_LABELS = { online_now: 'Online now', logged_in_idle: 'Idle', logged_out: 'Signed out' };
+const usageLabel = (s) => USAGE_LABELS[s] || '—';
+
+const riskClass = (score) => score >= 70 ? 'high' : score >= 30 ? 'med' : 'low';
+
+// status_reason (§4a): only shown when there's something to say — a bare "note" and/or the
+// resolved actor name, joined with the relative change time when known.
+const statusNote = (sr) => {
+  if (!sr || (!sr.note && !sr.changed_by_name)) return null;
+  const parts = [sr.note, sr.changed_by_name || 'System'].filter(Boolean);
+  if (sr.changed_at) parts.push(relTime(sr.changed_at));
+  return parts.join(' · ');
+};
 
 // Ownership History reason codes → plain English (Devices Rework build guide §6.3.4).
 // Backfilled rows are inferred, not observed (an approximate started_at / ended_at) — render
@@ -56,6 +92,13 @@ const END_REASON_LABELS = {
   backfill_detached: 'Recorded before ownership tracking',
 };
 const isBackfilledTenure = (entry) => entry.start_reason === 'backfill' || entry.end_reason === 'backfill_detached';
+
+// Audit Trail (§6): actions arrive as raw strings (e.g. "device.admin_blocked") — humanize
+// without a full per-action phrase map, per the guide's explicit fallback.
+const humanizeAction = (action) => {
+  if (!action) return 'Unknown action';
+  return action.replace(/^device\./, '').replace(/_/g, ' ');
+};
 
 /* ── Reusable row ───────────────────────────────────────── */
 function InfoRow({ label, value }) {
@@ -107,13 +150,26 @@ export default function DeviceDetail({ deviceId, onBack }) {
     return () => dispatch(clearDeviceDetail());
   }, [dispatch, deviceId]);
 
-  const devName = d ? `${d.device_brand || ''} ${d.device_model || d.device_name || ''}`.trim() : '';
+  // GET /admin/devices/{id} response is reshaped to one key per card (Device Detail build
+  // guide §2/§3) — device / risk / owner / network / heartbeat, plus the unchanged blocks.
+  const dev        = d?.device || {};
+  const risk       = d?.risk || {};
+  const owner      = d?.owner || null;
+  const network    = d?.network || {};
+  const heartbeat  = d?.heartbeat || {};
+  const riskScore  = risk.score ?? 0;
 
-  if (showActivity && d)     return <DeviceActivity    deviceId={d.device_id||d.id} deviceName={devName} onBack={() => setShowActivity(false)} />;
-  if (showLoginHistory && d) return <DeviceLoginHistory deviceId={d.device_id||d.id} deviceName={devName} onBack={() => setShowLoginHistory(false)} />;
+  const devName = dev.device_name || '';
 
-  const name = devName;
+  if (showActivity && d)     return <DeviceActivity    deviceId={dev.device_id} deviceName={devName} onBack={() => setShowActivity(false)} />;
+  if (showLoginHistory && d) return <DeviceLoginHistory deviceId={dev.device_id} deviceName={devName} onBack={() => setShowLoginHistory(false)} />;
+
   const initials = (n) => n ? n.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) : '?';
+
+  const openOwner = () => {
+    if (!owner?.user_id) return;
+    window.dispatchEvent(new CustomEvent('app:navigate', { detail: { page: 'app_users', userId: owner.user_id } }));
+  };
 
   return (
     <div className="dd-page">
@@ -154,95 +210,81 @@ export default function DeviceDetail({ deviceId, onBack }) {
 
       {d && !detailLoading && (
         <>
-          {/* ── Hero ── */}
-          <div className="dd-hero">
-            <div className="dd-hero-avatar">
-              {PLATFORM_ICONS[d.platform] || '📱'}
+          {/* ── Header stat tiles (§4f) — License Left removed, no license data on this page ── */}
+          <div className="dd-hero-stats dd-stat-strip">
+            <div className="dd-hero-stat">
+              <strong>{heartbeat.success_rate_7d != null ? `${heartbeat.success_rate_7d}%` : '—'}</strong>
+              <span>HB Success 7d</span>
             </div>
-            <div className="dd-hero-body">
-              <div className="dd-hero-name">{name || d.device_name || '—'}</div>
-              <div className="dd-hero-sub">{d.platform_display || d.platform} · {d.os_version}</div>
-              {(d.device_id || d.id) && (
-                <div className="dd-hero-id">
-                  <span className="dd-hero-id-label">Device ID</span>
-                  <span className="dd-hero-id-val" title={d.device_id || d.id}>{d.device_id || d.id}</span>
+            <div className="dd-hero-stat">
+              <strong>{heartbeat.miss_count ?? 0}</strong>
+              <span>Missed HBs</span>
+            </div>
+            <div className="dd-hero-stat">
+              <strong>{d.activity_summary?.sessions_7d ?? '—'}</strong>
+              <span>Sessions 7d</span>
+            </div>
+          </div>
+
+          {/* ── Device Info — the ONE hero card (§2, §4a) ── */}
+          <div className="dd-idcard">
+            <div className="dd-idcard-body">
+              <div className="dd-idrail">
+                <div className="dd-avatar">{PLATFORM_ICONS[dev.platform] || '📱'}</div>
+              </div>
+              <div className="dd-idmain">
+                <div className="dd-idtitle-row">
+                  <div>
+                    <div className="dd-idtitle">{dev.device_name || '—'}</div>
+                    <div className="dd-idsubtitle">{dev.os_version || '—'}</div>
+                  </div>
+                  <span className={`dd-risk-badge ${riskClass(riskScore)}`}>Risk {riskScore}</span>
                 </div>
-              )}
-              <div className="dd-hero-badges">
-                <span className={`dd-status-pill ${statusCls(d.status)}`}>{d.status}</span>
-                {d.is_online && <span className="dd-badge online">● Online</span>}
-                {!d.is_online && <span className="dd-badge offline">○ Offline</span>}
-                {d.push_enabled && <span className="dd-badge push">Push On</span>}
-                <span className={`dd-risk-badge ${riskClass(d.risk_score ?? 0)}`}>Risk {d.risk_score ?? 0}</span>
-              </div>
-            </div>
-            <div className="dd-hero-stats">
-              <div className="dd-hero-stat">
-                <strong>{d.heartbeat_success_rate_7d != null ? `${d.heartbeat_success_rate_7d}%` : '—'}</strong>
-                <span>HB Success 7d</span>
-              </div>
-              <div className="dd-hero-stat">
-                <strong>{d.heartbeat_miss_count ?? 0}</strong>
-                <span>Missed HBs</span>
-              </div>
-              <div className="dd-hero-stat">
-                <strong>{d.license_days_remaining != null ? `${d.license_days_remaining}d` : '—'}</strong>
-                <span>License Left</span>
-              </div>
-              <div className="dd-hero-stat">
-                <strong>{d.activity_summary?.sessions_7d ?? '—'}</strong>
-                <span>Sessions 7d</span>
+                <div className="dd-idrecord">
+                  <div className="dd-info-row">
+                    <span className="dd-info-key">Device ID</span>
+                    <span className="dd-info-val dd-idcopy-val">
+                      <span className="dd-mono">{dev.device_id || '—'}</span>
+                      {dev.device_id && (
+                        <button type="button" className="dd-idcopy" title="Copy device ID"
+                          onClick={() => copyText(dev.device_id, 'Device ID')}>
+                          <CopyIcon />
+                        </button>
+                      )}
+                    </span>
+                  </div>
+                  <div className="dd-info-row dd-status-info-row">
+                    <span className="dd-info-key">Status</span>
+                    <span className="dd-info-val">
+                      <span className={`dd-status-pill ${statusCls(dev.status)}`}>{statusLabel(dev.status)}</span>
+                    </span>
+                  </div>
+                  {statusNote(dev.status_reason) && (
+                    <div className="dd-status-note">{statusNote(dev.status_reason)}</div>
+                  )}
+                  <InfoRow label="Activity"      value={usageLabel(dev.usage_state)} />
+                  <InfoRow label="Virtual MAC"   value={dev.virtual_mac ? <span className="dd-mono">{dev.virtual_mac}</span> : '—'} />
+                  <InfoRow label="Brand"         value={dev.device_brand} />
+                  <InfoRow label="Model"         value={dev.device_model} />
+                  <InfoRow label="OS Version"    value={dev.os_version} />
+                  <InfoRow label="Registered By" value={dev.registered_by} />
+                  <InfoRow label="Enrolled"      value={fmtDate(dev.enrolled_at)} />
+                  <InfoRow label="Activation"    value={dev.activation_type} />
+                </div>
               </div>
             </div>
           </div>
 
-          {/* ── Row 1: Device Info + License ── */}
+          {/* ── Row 1: Risk + Current Owner ── */}
           <div className="dd-grid-2">
-            <SectionCard title="Device Info">
-              <InfoRow label="Activation"    value={d.activation_type} />
-              <InfoRow label="Brand"         value={d.device_brand} />
-              <InfoRow label="Model"         value={d.device_model} />
-              <InfoRow label="OS Version"    value={d.os_version} />
-              <InfoRow label="App Version"   value={d.app_version} />
-              <InfoRow label="Device Type"   value={d.device_type?.replace(/_/g,' ')} />
-              <InfoRow label="Virtual MAC"   value={<span style={{fontFamily:'monospace',fontSize:'0.8rem'}}>{d.virtual_mac || '—'}</span>} />
-              <InfoRow label="Device ID"     value={<span style={{fontFamily:'monospace',fontSize:'0.8rem',overflowWrap:'anywhere'}}>{d.device_id || d.id || '—'}</span>} />
-              <InfoRow label="Enrolled"      value={fmtDate(d.enrolled_at)} />
-            </SectionCard>
-
-            <SectionCard title="License">
-              <InfoRow label="Status"     value={<span className={`dd-status-pill ${statusCls(d.license_status)}`}>{d.license_status || '—'}</span>} />
-              <InfoRow label="Plan"       value={d.license_plan_type} />
-              <InfoRow label="Started"    value={fmtDate(d.enrolled_at)} />
-              <InfoRow label="Expires"    value={fmtDate(d.license_expires_at)} />
-              <InfoRow label="Days Left"  value={d.license_days_remaining != null ? `${d.license_days_remaining} days` : '—'} />
-              <InfoRow label="Active"     value={d.license_is_active ? '✅ Yes' : '❌ No'} />
-            </SectionCard>
-          </div>
-
-          {/* ── Row 2: Location + User ── */}
-          <div className="dd-grid-2">
-            <SectionCard title="Location & Network">
-              <InfoRow label="City"         value={d.last_seen_city} />
-              <InfoRow label="Country"      value={d.last_seen_country} />
-              <InfoRow label="Last IP"      value={<span style={{fontFamily:'monospace',fontSize:'0.8rem'}}>{d.last_seen_ip || '—'}</span>} />
-              <InfoRow label="Last Seen"    value={relTime(d.last_heartbeat_at)} />
-              <InfoRow label="Days Since HB" value={d.days_since_heartbeat != null ? `${d.days_since_heartbeat}d` : '—'} />
-              <InfoRow label="Push Token"   value={d.push_token_updated_at ? fmtDate(d.push_token_updated_at) : '—'} />
-            </SectionCard>
-
-            <SectionCard title="User Profile">
-              <div className="dd-user-hero">
-                <div className="dd-user-avatar">{initials(d.user_full_name)}</div>
-                <div>
-                  <div className="dd-user-name">{d.user_full_name || '—'}</div>
-                  <div className="dd-user-email">{d.user_email || '—'}</div>
-                </div>
+            <SectionCard title="Risk">
+              <div className="dd-risk-score">
+                <span className={`dd-risk-score-val ${riskClass(riskScore)}`}>{riskScore}</span>
+                <span className="dd-risk-score-label">Risk Score</span>
               </div>
-              <InfoRow label="User ID" value={<span style={{fontFamily:'monospace',fontSize:'0.78rem',overflowWrap:'anywhere'}}>{d.user_id || '—'}</span>} />
-              {d.risk_flags && (
+              {risk.flags && Object.keys(risk.flags).length > 0 && (
                 <div className="dd-risk-flags">
-                  {Object.entries(d.risk_flags).map(([k, v]) => (
+                  {Object.entries(risk.flags).map(([k, v]) => (
                     <span key={k} className={`dd-flag-chip ${v ? 'on' : 'off'}`}>
                       {k.replace(/_/g,' ')}
                     </span>
@@ -250,22 +292,56 @@ export default function DeviceDetail({ deviceId, onBack }) {
                 </div>
               )}
             </SectionCard>
+
+            <SectionCard title="Current Owner">
+              {owner ? (
+                <>
+                  <div className="dd-user-hero dd-owner-click" onClick={openOwner} role="button" tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openOwner(); } }}>
+                    <div className="dd-user-avatar">{initials(owner.full_name)}</div>
+                    <div>
+                      {owner.full_name && <div className="dd-user-name">{owner.full_name}</div>}
+                      <div className="dd-user-email">{owner.email || '—'}</div>
+                    </div>
+                  </div>
+                  <div className="dd-info-row">
+                    <span className="dd-info-key">User ID</span>
+                    <span className="dd-info-val dd-idcopy-val">
+                      <span className="dd-mono dd-link" onClick={openOwner}>{owner.user_id}</span>
+                      <button type="button" className="dd-idcopy" title="Copy user ID"
+                        onClick={(e) => { e.stopPropagation(); copyText(owner.user_id, 'User ID'); }}>
+                        <CopyIcon />
+                      </button>
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <div className="dd-empty-section">No current owner</div>
+              )}
+            </SectionCard>
           </div>
 
-          {/* ── Activity Summary ── */}
-          {d.activity_summary && (
-            <SectionCard title="Activity Summary (7d)">
-              <div className="dd-activity-grid">
+          {/* ── Location & Network (§4d) ── */}
+          <div className="dd-grid-2">
+            <SectionCard title="Location & Network">
+              <InfoRow label="Location"  value={network.location_display} />
+              <InfoRow label="Last IP"   value={network.ip ? <span className="dd-mono">{network.ip}</span> : '—'} />
+              <InfoRow label="Last Seen" value={network.last_seen?.display} />
+            </SectionCard>
+
+            {/* ── Activity Summary — unchanged (§4g) ── */}
+            {d.activity_summary && (
+              <SectionCard title="Activity Summary (7d)">
                 <InfoRow label="Sessions"           value={d.activity_summary.sessions_7d} />
                 <InfoRow label="Watch Hours"        value={d.activity_summary.watch_hours_7d != null ? `${d.activity_summary.watch_hours_7d}h` : '—'} />
                 <InfoRow label="Last Watched"       value={fmt(d.activity_summary.last_watched_at)} />
                 <InfoRow label="Last Content Title" value={d.activity_summary.last_content_title} />
                 <InfoRow label="Last Content Type"  value={d.activity_summary.last_content_type} />
-              </div>
-            </SectionCard>
-          )}
+              </SectionCard>
+            )}
+          </div>
 
-          {/* ── Heartbeat Logs ── */}
+          {/* ── Heartbeat Logs — unchanged (§4h) ── */}
           {d.heartbeat_logs?.length > 0 && (
             <SectionCard title={`Recent Heartbeats (${d.heartbeat_logs.length})`} collapsible defaultOpen={false}>
               <div className="dd-table-scroll">
@@ -301,37 +377,35 @@ export default function DeviceDetail({ deviceId, onBack }) {
             </SectionCard>
           )}
 
-          {/* ── Audit Trail ── */}
+          {/* ── Audit Trail — reshaped: actor + changed_fields, not severity (§6) ── */}
           {d.audit_trail?.length > 0 && (
             <SectionCard title={`Audit Trail (${d.audit_trail.length})`} collapsible defaultOpen={false}>
-              <div className="dd-table-scroll">
-                <table className="dd-table">
-                  <thead>
-                    <tr>
-                      <th>Time</th>
-                      <th>Action</th>
-                      <th>Severity</th>
-                      <th>IP</th>
-                      <th>Notes</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {d.audit_trail.map((a) => (
-                      <tr key={a.id}>
-                        <td className="dd-mono">{fmt(a.created_at)}</td>
-                        <td className="dd-action">{a.action}</td>
-                        <td><span className={`dd-sev-pill ${sevCls(a.severity)}`}>{a.severity}</span></td>
-                        <td className="dd-mono">{a.ip_address || '—'}</td>
-                        <td className="dd-notes">{a.notes || '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="dd-audit-list">
+                {d.audit_trail.map((a) => (
+                  <div className="dd-audit-row" key={a.id}>
+                    <div className="dd-audit-head">
+                      <span className="dd-audit-actor">{a.actor || 'System'}</span>
+                      <span className="dd-audit-action">{humanizeAction(a.action)}</span>
+                      <span className="dd-audit-time">{fmt(a.created_at)}{a.ip_address ? ` · ${a.ip_address}` : ''}</span>
+                    </div>
+                    {a.changed_fields?.length > 0 && (
+                      <div className="dd-audit-diffs">
+                        {a.changed_fields.map((c, i) => (
+                          <div key={i} className="dd-audit-diff">
+                            <span className="dd-audit-diff-field">{c.field}:</span>{' '}
+                            {String(c.from ?? '—')} <span className="dd-audit-arrow">→</span> {String(c.to ?? '—')}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {a.notes && <div className="dd-audit-notes">{a.notes}</div>}
+                  </div>
+                ))}
               </div>
             </SectionCard>
           )}
 
-          {/* ── Ownership History — NEW, bottom of page (Devices Rework build guide §5, §6) ── */}
+          {/* ── Ownership History — bottom of page (Devices Rework build guide §5, §6) ── */}
           <SectionCard title="Ownership History" collapsible defaultOpen={false}>
             {ownershipHistoryLoading ? (
               <div className="dd-empty-section">Loading ownership history…</div>

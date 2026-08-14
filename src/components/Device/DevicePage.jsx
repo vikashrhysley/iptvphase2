@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import toast from 'react-hot-toast';
 import {
-  fetchDevices, fetchDeviceStats, fetchDeviceBreakdown,
+  fetchDevices, fetchDeviceStats,
   clearToast, setDeviceFilters, clearDeviceFilters, clearDeviceDetail,
   invalidateDevices, patchDeviceInList,
 } from '../../store/slices/deviceSlice';
@@ -30,14 +30,17 @@ const ChevRight   = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="
 // to 'recovery_device'; account deletion now DETACHES the device (status returns to 'normal')
 // instead of setting 'deleted' — that value only remains on legacy/historical rows.
 // STATE (this) and PRESENCE (online-now) are different axes — never conflate them.
+// Labels per Admin Devices List build guide §3d — must match STATUS_FILTERS/STATUS_LABELS/
+// STATUS_BAR_ROWS exactly, since the same statuses are named all over this page.
 const STATUS_MAP = {
-  normal:             { label: 'Active',               cls: 'in-service' },   // green
-  auto_blocked:       { label: 'Auto-blocked',         cls: 'auto-blocked' }, // amber (user can clear)
-  admin_blocked:      { label: 'Blocked',              cls: 'blocked' },      // red
-  risk_score_blocked: { label: 'Blocked · High risk',  cls: 'blocked' },      // red
-  admin_released:     { label: 'Released',             cls: 'out-service' },  // grey
-  recovery_device:    { label: 'Recovery',             cls: 'out-service' },  // grey
-  deleted:            { label: 'Deleted',              cls: 'out-service' },  // grey — legacy rows only
+  normal:             { label: 'Active',         cls: 'in-service' },   // green
+  auto_blocked:       { label: 'Auto-blocked',   cls: 'auto-blocked' }, // amber (user can clear)
+  admin_blocked:      { label: 'Admin-blocked',  cls: 'blocked' },      // red
+  risk_score_blocked: { label: 'Risk-blocked',   cls: 'blocked' },      // red
+  admin_released:     { label: 'Released',       cls: 'out-service' },  // grey
+  recovery_device:    { label: 'Recovery',       cls: 'out-service' },  // grey
+  // Legacy only — excluded from new /admin/devices rows, but kept as a non-crashing fallback.
+  deleted:            { label: 'Deleted',        cls: 'out-service' },  // grey
 };
 // The three blocked states are the only ones with an Unblock action.
 const isBlockedStatus = (s) => {
@@ -176,31 +179,24 @@ const STATUS_LABELS = {
   new_enrollments_24h: 'New (24h)', new_enrollments_7d: 'New (7d)',
 };
 
-/* ── Devices-page stat-card row definitions (from dashboard/stats.devices) ── */
-// Card A — DEVICE STATUS. Seven by_status buckets, mutually exclusive, always sum to total
-// (Devices Rework build guide §3.1). Render all seven, including zeros — Deleted Device is
-// expected to read 0 post-migration (account deletion now detaches the device instead of
-// deleting it) but the bucket stays for historical rows.
+/* ── Devices-page stat-card row definitions (from GET /admin/devices/stats) ── */
+// Card A — DEVICE STATUS. Six by_status buckets, mutually exclusive, always sum to stats.total
+// (Device Center Stats Cards build guide §4). `deleted` is GONE from the response entirely —
+// self-delete now returns a device to `normal` instead — so there is no row for it any more,
+// not even a permanent 0. Every remaining key equals the row's own ?status= filter value.
 const STATUS_BAR_ROWS = [
-  { key: 'active_devices', label: 'Active Device', tone: 'good', status: 'normal' },
+  { key: 'normal', label: 'Active Device', tone: 'good', status: 'normal' },
   {
-    key: 'recovery_devices', label: 'Recovery Device', tone: 'muted', status: 'recovery_device',
+    key: 'recovery_device', label: 'Recovery Device', tone: 'muted', status: 'recovery_device',
     tipTitle: 'Counts as recovery', tipItems: ['Factory Reset', 'Damage Device', 'Replace Device', 'Lost Device'],
   },
-  { key: 'deleted_devices', label: 'Deleted Device', tone: 'muted', status: 'deleted' },
   {
-    key: 'auto_blocked_devices', label: 'Auto-blocked Device', tone: 'warn', status: 'auto_blocked',
+    key: 'auto_blocked', label: 'Auto-blocked Device', tone: 'warn', status: 'auto_blocked',
     tipTitle: 'Counts as auto-blocked', tipItems: ['Missed Heartbeat'],
   },
-  { key: 'admin_blocked_devices', label: 'Admin-blocked Device', tone: 'bad', status: 'admin_blocked' },
-  { key: 'risk_blocked_devices',  label: 'Risk-blocked Device',  tone: 'bad', status: 'risk_score_blocked' },
-  { key: 'released_devices', label: 'Released Device', tone: 'muted', status: 'admin_released' },
-];
-// Card B — IN USE. Three buckets, always sum to active_devices.
-const IN_USE_BAR_ROWS = [
-  { key: 'online_now',     label: 'Online now', tone: 'good',  status: 'online_now',     tip: 'Being used right now' },
-  { key: 'logged_in_idle', label: 'Idle',       tone: 'warn',  status: 'logged_in_idle', tip: 'Signed in, but the app has gone quiet' },
-  { key: 'logged_out',     label: 'Signed out', tone: 'muted', status: 'logged_out',     tip: 'Healthy, nobody signed in' },
+  { key: 'admin_blocked',      label: 'Admin-blocked Device', tone: 'bad', status: 'admin_blocked' },
+  { key: 'risk_score_blocked', label: 'Risk-blocked Device',  tone: 'bad', status: 'risk_score_blocked' },
+  { key: 'admin_released',     label: 'Released Device',      tone: 'muted', status: 'admin_released' },
 ];
 // Card C — NEEDS ATTENTION. Signals overlap each other and the partition — tiles, no total bar.
 const SIGNAL_TILE_ROWS = [
@@ -242,10 +238,16 @@ function DeviceInfoTip({ title = 'Counts as', items }) {
 // One horizontal bar for the status / in-use cards. Clickable → filters the list below.
 // `tipItems`, when present, adds a small info icon next to the label whose own hover
 // (independent of the row's `tip`/title) shows a short list — e.g. what counts as "Recovery".
-function DeviceStatBar({ label, value, total, tone, tip, tipTitle, tipItems, onClick }) {
+// `level` indents a row under its parent (e.g. Online now / Idle under Logged in) — the
+// indentation itself is what tells the admin it's a breakdown OF the parent, not a sibling
+// (Device Center Stats Cards build guide §3). A row with no `onClick` (the Logged in parent —
+// there's no single ?status= bucket for a roll-up) renders as an inert div, not a button, so it
+// doesn't invite a click that would do nothing.
+function DeviceStatBar({ label, value, total, tone, tip, tipTitle, tipItems, level = 0, onClick }) {
   const pct = total > 0 && value > 0 ? Math.max((value / total) * 100, value > 0 ? 1.5 : 0) : 0;
-  return (
-    <button type="button" className="dv-bar-row" onClick={onClick} title={tip ? `${label} — ${tip}` : `Filter to ${label}`}>
+  const cls = `dv-bar-row${level > 0 ? ` lvl-${level}` : ''}`;
+  const content = (
+    <>
       <span className="dv-bar-label">
         <span className="dv-bar-label-text">{label}</span>
         {tipItems?.length > 0 && <DeviceInfoTip title={tipTitle} items={tipItems} />}
@@ -254,6 +256,14 @@ function DeviceStatBar({ label, value, total, tone, tip, tipTitle, tipItems, onC
         <span className={`dv-bar-fill tone-${tone}`} style={{ width: `${pct}%`, minWidth: value > 0 ? 3 : 0 }} />
       </span>
       <span className="dv-bar-value">{Number(value || 0).toLocaleString()}</span>
+    </>
+  );
+  if (!onClick) {
+    return <div className={`${cls} dv-bar-row-static`}>{content}</div>;
+  }
+  return (
+    <button type="button" className={cls} onClick={onClick} title={tip ? `${label} — ${tip}` : `Filter to ${label}`}>
+      {content}
     </button>
   );
 }
@@ -273,7 +283,7 @@ function DeviceBarCard({ title, icon, headlineLabel, total, rows, source, sort, 
       <div className="dv-bar-list">
         {items.map((r) => (
           <DeviceStatBar key={r.key} label={r.label} value={r.value} total={num(total)} tone={r.tone} tip={r.tip}
-            tipTitle={r.tipTitle} tipItems={r.tipItems} onClick={() => onFilter(r.status)} />
+            tipTitle={r.tipTitle} tipItems={r.tipItems} level={r.level} onClick={() => onFilter(r.status)} />
         ))}
       </div>
     </div>
@@ -375,9 +385,12 @@ function Pagination({ current, totalPages, totalItems, pageSize, onPage }) {
 }
 
 /* ── Device Table Row ───────────────────────────────────── */
-// Columns per the Devices Rework build guide §4.2 — Device / Owner / Status / Usage /
-// Platform / Last Seen / Risk / Licence / Location / App version / Actions. `platform_display`
-// and `last_heartbeat_display` are pre-formatted by the API — never re-derived here (§4.2, §10).
+// Columns per the Admin Devices List build guide §2/§3 — the row is trimmed to exactly 13
+// fields. Device / Registered by / Current user / Device Status / Activity / Risk Score /
+// Last Seen / App Version / Location / Actions. Platform is icon selection ONLY (never
+// printed as text, §3a) and LIC is gone entirely (§3j — no license data is fetched per row
+// any more). `last_active_display` and `location_display` are pre-formatted by the API —
+// never re-derived here (§3g, §3i).
 const USAGE_META = {
   online_now:     { label: 'Online now', cls: 'online' },
   logged_in_idle: { label: 'Idle',       cls: 'idle' },
@@ -385,61 +398,57 @@ const USAGE_META = {
 };
 const riskClass = (score) => (score >= 90 ? 'crit' : score >= 70 ? 'high' : 'ok');
 
+// Icon selection only (§3a) — device_type/device_brand/device_model are no longer sent, so the
+// row icon is picked from `platform` alone now, not the device-type filter's TYPE_CONFIG.
+const PLATFORM_ICON_META = {
+  android: { icon: '🤖', bg: 'rgba(61,220,132,0.1)' },
+  roku:    { icon: '📺', bg: 'rgba(167,139,250,0.1)' },
+  samsung: { icon: '📺', bg: 'rgba(0,180,216,0.1)' },
+  lg:      { icon: '📺', bg: 'rgba(255,153,0,0.1)' },
+};
+const DEFAULT_PLATFORM_ICON = { icon: '📦', bg: 'rgba(100,116,139,0.1)' };
+
 function DeviceTableRow({ device, canEdit, actionLoading, onRowClick, onBlock, onUnblock }) {
   const id   = device.device_id || device.id;
-  const tc   = TYPE_CONFIG[device.device_type || device.type] || TYPE_CONFIG.phone;
   const busy = actionLoading === id;
+  const pIcon = PLATFORM_ICON_META[device.platform] || DEFAULT_PLATFORM_ICON;
 
-  const platformLabel = device.platform_display || device.platform || 'Unknown';
-  // Device name: device_name, else brand+model, else "{Platform} Device" (§4.2).
-  const name = device.device_name
-    || (device.device_brand ? `${device.device_brand} ${device.device_model || ''}`.trim() : null)
-    || `${platformLabel} Device`;
-  const os = device.os_version || device.os || '—';
+  // Device name: device_name, else "Device" (no brand/model/platform label sent to fall back
+  // through any more — platform is icon-only, §3a).
+  const name = device.device_name || 'Device';
+  const os = device.os_version || '—';
 
-  // Owner — user_id (and user_email) is null ONLY because the owning account was deleted, on
-  // purpose (§4.3). A detached row shows the snapshot last_known_email, greyed + a chip —
-  // never rendered as if it were the current owner.
-  const detached = !device.user_email && !!device.last_known_email;
-  const location = device.last_seen_city
-    ? `${device.last_seen_city}${device.last_seen_country ? ', ' + device.last_seen_country : ''}`
-    : (device.last_seen_country || null);
+  const usage = USAGE_META[device.usage_state];
+  const risk  = device.risk_score ?? 0;
 
-  const usage   = USAGE_META[device.usage_state];
-  const risk    = device.risk_score ?? 0;
-  const licDays = device.active_license?.days_remaining;
+  // Copy button only makes sense when there's an actual email to copy.
+  const emailCell = (email) => email ? (
+    <div className="dt-owner">
+      <span>{email}</span>
+      <button type="button" className="dt-copy-btn" onClick={(e) => copyToClipboard(e, email)} title="Copy email">
+        <CopyIcon />
+      </button>
+    </div>
+  ) : <span className="dt-owner-none">—</span>;
 
   return (
-    <tr className={`dt-row${detached ? ' dt-row-detached' : ''}`} onClick={onRowClick} style={{ cursor: 'pointer' }}>
+    <tr className="dt-row" onClick={onRowClick} style={{ cursor: 'pointer' }}>
       <td>
-        <div className="dt-type-cell" style={{ '--type-bg': tc.bg }}>
-          <div className="dt-type-icon">{tc.icon}</div>
+        <div className="dt-type-cell" style={{ '--type-bg': pIcon.bg }}>
+          <div className="dt-type-icon">{pIcon.icon}</div>
           <div>
             <div className="dt-device-name">{name}</div>
             <div className="dt-device-os">{os}</div>
           </div>
         </div>
       </td>
-      <td>
-        {device.user_email ? (
-          <div className="dt-owner">
-            <span>{device.user_email}</span>
-            <button type="button" className="dt-copy-btn" onClick={(e) => copyToClipboard(e, device.user_email)} title="Copy email">
-              <CopyIcon />
-            </button>
-          </div>
-        ) : detached ? (
-          <div className="dt-owner dt-owner-detached" title="The owning account was deleted">
-            <span>{device.last_known_email}</span>
-            <span className="dt-detached-chip">detached</span>
-            <button type="button" className="dt-copy-btn" onClick={(e) => copyToClipboard(e, device.last_known_email)} title="Copy email">
-              <CopyIcon />
-            </button>
-          </div>
-        ) : (
-          <span className="dt-owner-none">—</span>
-        )}
-      </td>
+      {/* Registered by — who ENROLLED the hardware, permanent, present even when nobody
+          currently owns the account. Never the same question as Current user (§1, §3b). */}
+      <td>{emailCell(device.registered_email)}</td>
+      {/* Current user — who is logged in RIGHT NOW. "—" means nobody is, NOT "no owner" — do
+          not fall back to registered_email here, that would misrepresent an idle device as
+          having an active session (§3c). */}
+      <td>{emailCell(device.current_user_email)}</td>
       <td>
         <span className={`dc-status ${dispStatusKey(device.status)}`} style={{ fontSize: '0.7rem' }}>
           <span className="dc-status-dot" />
@@ -451,12 +460,10 @@ function DeviceTableRow({ device, canEdit, actionLoading, onRowClick, onBlock, o
           ? <span className={`dt-usage-pill ${usage.cls}`}>{usage.label}</span>
           : <span className="dt-usage-none">—</span>}
       </td>
-      <td className="dt-platform">{platformLabel}</td>
-      <td className="dt-lastseen">{device.last_heartbeat_display || '—'}</td>
       <td><span className={`dt-risk ${riskClass(risk)}`}>{risk}</span></td>
-      <td className="dt-lic">{licDays != null ? `${licDays}d` : '--'}</td>
-      <td className="dt-location">{location || '—'}</td>
+      <td className="dt-lastseen" title={device.last_active_at || undefined}>{device.last_active_display || '—'}</td>
       <td className="dt-appver">{device.app_version || '—'}</td>
+      <td className="dt-location">{device.location_display || '—'}</td>
       <td onClick={e => e.stopPropagation()}>
         <div className="dt-actions">
           <button type="button" className="dt-view-btn" onClick={onRowClick}>View</button>
@@ -470,7 +477,7 @@ function DeviceTableRow({ device, canEdit, actionLoading, onRowClick, onBlock, o
 /* ── Main Page ──────────────────────────────────────────── */
 export default function DevicePage() {
   const dispatch = useDispatch();
-  const { devices, total, page, pageSize, loading, error, actionLoading, stats, statsLoading, breakdown, breakdownLoading, filters, detailError } = useSelector(s => s.devices);
+  const { devices, total, page, pageSize, loading, error, actionLoading, stats, statsLoading, filters, detailError } = useSelector(s => s.devices);
   const { user: me, accessToken } = useSelector(s => s.auth);
   const canEdit = me?.role === 'superadmin' || me?.role === 'admin';
 
@@ -491,9 +498,10 @@ export default function DevicePage() {
   const totalPages  = Math.max(1, Math.ceil(total / (pageSize || 20)));
 
   /* All hooks first */
+  // Single source of truth for all three stat cards — total, by_status and usage are all on
+  // this one response now (Device Center Stats Cards build guide §2), so there's nothing else
+  // to fetch for them.
   useEffect(() => { dispatch(fetchDeviceStats()); }, [dispatch]);
-  // The reconciling status/in-use/signals breakdown for the three cards (shared dashboard source).
-  useEffect(() => { dispatch(fetchDeviceBreakdown()); }, [dispatch]);
 
   // Click a card bucket → filter the list below in place (pass the ?status= value straight through).
   const applyStatusFilter = (status) => dispatch(setDeviceFilters({ status, current_session: false, page: 1 }));
@@ -795,14 +803,25 @@ export default function DevicePage() {
     }
   };
 
-  /* Stats cards — the three reconciling cards read from the shared dashboard breakdown */
+  /* Stats cards — all three now read from the single GET /admin/devices/stats response
+     (Device Center Stats Cards build guide §2): stats.stats for Device Status + Active
+     Devices, stats.platform_breakdown for Platform Stats. No client-side reconciliation —
+     the backend guarantees stats.total == sum(by_status) and by_status.normal ==
+     usage.logged_in.total + usage.logged_out. */
+  const st       = stats?.stats ?? {};
+  const byStatus = st.by_status ?? {};
+  const usage    = st.usage ?? {};
+  const loggedIn = usage.logged_in ?? {};
+  const totalCount  = st.total ?? 0;
+  const normalCount = byStatus.normal ?? 0;
   const PB = stats?.platform_breakdown ?? {};
-  const bd        = breakdown ?? {};
-  const byStatus  = bd.total_devices?.by_status ?? {};
-  const inUse     = bd.in_use ?? {};
-  const signals   = bd.signals ?? {};
-  const totalCount     = bd.total_devices?.count ?? 0;
-  const inServiceCount = byStatus.active_devices ?? 0;
+
+  if (import.meta.env.DEV && stats) {
+    const statusSum = STATUS_BAR_ROWS.reduce((sum, r) => sum + Number(byStatus[r.key] ?? 0), 0);
+    console.assert(statusSum === totalCount, `[Devices] by_status sum (${statusSum}) != stats.total (${totalCount})`);
+    const usageSum = Number(loggedIn.total ?? 0) + Number(usage.logged_out ?? 0);
+    console.assert(usageSum === normalCount, `[Devices] usage.logged_in.total + usage.logged_out (${usageSum}) != by_status.normal (${normalCount})`);
+  }
 
   // Fixed 7-key platform breakdown (Devices Rework build guide §3.3). Only Android is split by
   // device_type (Tizen TVs misreport device_type="android_tv" and Roku is inconsistent, so
@@ -821,7 +840,7 @@ export default function DevicePage() {
     key, value: PB[key] ?? 0, ...PLATFORM_META[key],
   }));
 
-  // Card A — DEVICE STATUS (7 bars, reconciles to total)
+  // Card A — DEVICE STATUS (6 bars, reconciles to stats.total)
   const deviceStatusCard = (
     <DeviceBarCard
       title="Device Status" icon="📊"
@@ -831,14 +850,32 @@ export default function DevicePage() {
     />
   );
 
-  // Card B — IN USE RIGHT NOW (3 bars, reconciles to in-service)
+  // Card B — ACTIVE DEVICES (IN SERVICE RIGHT NOW). Two-level tree, not three flat siblings
+  // (build guide §3): Logged in is a parent row with its own count; Online now / Idle are its
+  // children, indented; Logged out is a sibling of Logged in, not nested under it. The headline
+  // (by_status.normal) is the SAME field as the Device Status card's Active Device row.
   const inUseCard = (
-    <DeviceBarCard
-      title="In Use Right Now" icon="🟢"
-      headlineLabel="In service" total={inServiceCount}
-      rows={IN_USE_BAR_ROWS} source={inUse}
-      onFilter={applyStatusFilter}
-    />
+    <div className="device-stats-panel dv-bar-card">
+      <div className="dsp-title"><span className="dsp-title-icon">🟢</span> Active Devices (In Service Right Now)</div>
+      <div className="dv-bar-headline">
+        <strong>{normalCount.toLocaleString()}</strong>
+        <span>In service</span>
+      </div>
+      <div className="dv-bar-list">
+        {/* No single ?status= bucket represents "logged in" as a whole — it's online_now + idle
+            — so this row has no onClick and renders as an inert div (see DeviceStatBar). */}
+        <DeviceStatBar label="Logged in" value={loggedIn.total} total={normalCount} tone="good" />
+        <DeviceStatBar label="Online now" value={loggedIn.online_now} total={loggedIn.total} tone="good" level={1}
+          tip="Heartbeat within the last few minutes — genuinely in use right now"
+          onClick={() => applyStatusFilter('online_now')} />
+        <DeviceStatBar label="Idle" value={loggedIn.idle} total={loggedIn.total} tone="warn" level={1}
+          tip="Session open but heartbeat stale or missing — not proof of current use"
+          onClick={() => applyStatusFilter('logged_in_idle')} />
+        <DeviceStatBar label="Logged out" value={usage.logged_out} total={normalCount} tone="muted"
+          tip="No session — resting state after logout"
+          onClick={() => applyStatusFilter('logged_out')} />
+      </div>
+    </div>
   );
 
   // Platform Stats — unchanged content
@@ -864,8 +901,8 @@ export default function DevicePage() {
       <Toast />
 
       {/* ── Stats ── */}
-      {(statsLoading || breakdownLoading) && !breakdown && <div className="device-stats-shimmer" />}
-      {(breakdown || !breakdownLoading) && (
+      {statsLoading && !stats && <div className="device-stats-shimmer" />}
+      {(stats || !statsLoading) && (
         <>
           {/* Desktop / tablet — three cards side by side, same order as the mobile swipe. */}
           <div className="device-stats device-stats-3 device-stats-desktop">
@@ -991,15 +1028,14 @@ export default function DevicePage() {
               <thead>
                 <tr>
                   <th>Device</th>
-                  <th>Owner</th>
-                  <th>Status</th>
-                  <th>Usage</th>
-                  <th>Platform</th>
+                  <th>Registered by</th>
+                  <th>Current user</th>
+                  <th>Device Status</th>
+                  <th>Activity</th>
+                  <th>Risk Score</th>
                   <th>Last Seen</th>
-                  <th>Risk</th>
-                  <th>Lic</th>
-                  <th>Location</th>
                   <th>App Version</th>
+                  <th>Location</th>
                   <th>Actions</th>
                 </tr>
               </thead>

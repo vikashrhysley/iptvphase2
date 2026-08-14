@@ -8,6 +8,10 @@ import useProfileRefresh from '../hooks/useProfileRefresh';
 import { refreshCurrentUser } from '../store/slices/authSlice';
 import { setDeviceFilters } from '../store/slices/deviceSlice';
 import { setFilters as setAppUsersFilters } from '../store/slices/appUsersSlice';
+import { setLicenseFilters } from '../store/slices/licenseSlice';
+import { setFilters as setAdminUsersFilters } from '../store/slices/adminUsersSlice';
+import { setLogFilters as setHeartbeatLogFilters } from '../store/slices/heartbeatSlice';
+import { setAuditFilters } from '../store/slices/auditSlice';
 import { canAccessPage, firstAccessiblePage } from '../utils/pageAccess';
 
 const DashboardTable     = React.lazy(() => import('../components/Dashboard/DashboardTable'));
@@ -165,9 +169,12 @@ export default function AppLayout() {
   // optionally targeting a record (planId → open that plan on the Plans page).
   useEffect(() => {
     const onNavIntent = (e) => {
-      const { page, planId, deviceStatus, accountState } = e.detail || {};
+      const { page, planId, userId, deviceStatus, accountState, licenseStatus, adminRole, heartbeatStatus, auditSeverity } = e.detail || {};
       if (!page) return;
       if (planId) sessionStorage.setItem('openPlanId', planId);
+      // A specific user_id carried from the Device Detail page's Current Owner card → open that
+      // user directly on the App Users page, same pending-open pattern as planId above.
+      if (userId) sessionStorage.setItem('openUserId', userId);
       // A device-status filter carried from the dashboard cards → seed the Devices list filter.
       if (deviceStatus) dispatch(setDeviceFilters({ status: deviceStatus, current_session: false, page: 1 }));
       // An account_state filter carried from the Live Stats app_users tiles → seed the App
@@ -177,6 +184,32 @@ export default function AppLayout() {
           account_state: accountState === 'all' ? '' : accountState,
           segment: '', status: 'all', plan_type: 'all', plan_status: 'all', search: '', page: 1,
         }));
+      }
+      // A license-status filter carried from the Live Stats licenses card → seed the Licenses
+      // list filter. 'all' (the hero) clears it back to the unfiltered list.
+      if (licenseStatus) {
+        dispatch(setLicenseFilters({
+          status: licenseStatus === 'all' ? '' : licenseStatus,
+          plan_filter: '', search: '', page: 1,
+        }));
+      }
+      // A role filter carried from the Live Stats admins card → seed the Admin Users list
+      // filter. adminUsersSlice already uses the string 'all' as its own "no filter" sentinel,
+      // so — unlike the other slices above — it needs no conversion.
+      if (adminRole) {
+        dispatch(setAdminUsersFilters({ role: adminRole, status: 'all', page: 1 }));
+      }
+      // A status filter carried from the Live Stats heartbeat card → seed the Heartbeats log
+      // filter. 'all' (the hero) clears it back to the unfiltered list.
+      if (heartbeatStatus) {
+        dispatch(setHeartbeatLogFilters({
+          status: heartbeatStatus === 'all' ? '' : heartbeatStatus,
+          user_email: '', page: 1,
+        }));
+      }
+      // A severity filter carried from the Live Stats audit card → seed the Audit Logs filter.
+      if (auditSeverity) {
+        dispatch(setAuditFilters({ severity: auditSeverity, entity_type: '', search: '', page: 1 }));
       }
       applyPage(page);
       window.history.pushState({ appPage: page }, '', window.location.pathname);
