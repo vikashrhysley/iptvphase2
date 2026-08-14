@@ -248,7 +248,12 @@ const LIVE_SECTIONS = [
     label: 'Licenses',
     accent: 'var(--accent-success)',
     source: 'licenses',
-    hero: { label: 'Total Licenses Ever', path: 'total_licenses_ever.count' },
+    // Clicking the hero or a bar navigates to the Licenses page with that ?status= filter
+    // applied — same deep-link pattern as App Users (?account_state=) and Devices (?status=).
+    // The three "Expiring" chips have no matching filter on that page (the 48h/7d/30d window
+    // comes from a separate, unwired endpoint) — left as plain figures, not clickable.
+    filterPage: 'license',
+    hero: { label: 'Total Licenses Ever', path: 'total_licenses_ever.count', filter: 'all' },
     chips: [
       { label: 'Expiring 48h', path: 'expiring_soon.expiring_48h' },
       { label: 'Expiring 7d', path: 'expiring_soon.expiring_7d' },
@@ -261,12 +266,15 @@ const LIVE_SECTIONS = [
         // bucket is drawn (including zero rows and Cancelled, which the old nested layout hid).
         label: 'Total Licenses Ever',
         totalPath: 'total_licenses_ever.count',
+        totalFilter: 'all',
         bars: [
-          { label: 'Active',         path: 'total_licenses_ever.by_status.active_licenses',         tone: 'good'  },
-          { label: 'Blocked',        path: 'total_licenses_ever.by_status.blocked_licenses',        tone: 'bad'   },
-          { label: 'Plan Expired',   path: 'total_licenses_ever.by_status.plan_expired_licenses',   tone: 'muted' },
-          { label: 'Payment Failed', path: 'total_licenses_ever.by_status.payment_failed_licenses', tone: 'warn'  },
-          { label: 'Cancelled',      path: 'total_licenses_ever.by_status.cancelled_licenses',      tone: 'muted' },
+          { label: 'Active',         path: 'total_licenses_ever.by_status.active_licenses',         tone: 'good',  filter: 'active' },
+          { label: 'Blocked',        path: 'total_licenses_ever.by_status.blocked_licenses',        tone: 'bad',   filter: 'revoked' },
+          { label: 'Plan Expired',   path: 'total_licenses_ever.by_status.plan_expired_licenses',   tone: 'muted', filter: 'expired' },
+          { label: 'Payment Failed', path: 'total_licenses_ever.by_status.payment_failed_licenses', tone: 'warn',  filter: 'inactive_due_to_payment' },
+          { label: 'Cancelled',      path: 'total_licenses_ever.by_status.cancelled_licenses',      tone: 'muted', filter: 'cancelled' },
+          // Deleted licences aren't a listable status on this page (LicenceStatusBars treats
+          // them the same way — non-filterable), so this row is deliberately left unclickable.
           { label: 'Deleted',        path: 'total_licenses_ever.by_status.deleted_licenses',        tone: 'muted' },
         ],
       },
@@ -278,28 +286,29 @@ const LIVE_SECTIONS = [
     label: 'Devices',
     accent: 'var(--accent-primary)',
     source: 'devices',
-    // Clicking a bar/chip navigates to the Devices page with that ?status= filter applied.
+    // Clicking a bar navigates to the Devices page with that ?status= filter applied.
     filterPage: 'device',
-    hero: { label: 'Total Devices', path: 'total_devices.count' },
-    chips: [
-      { label: 'Blocked', path: 'total_devices.blocked_count', filter: 'blocked' },
-      { label: 'Out of Service', path: 'total_devices.out_of_service_count', filter: 'out_of_service' },
-    ],
+    // data.devices is now flat — just { total, by_status } (Device Center Stats Cards build
+    // guide §6). No total_devices wrapper, no usage/logged-in split, no platform breakdown
+    // (those live only on the Device Management page's own /admin/devices/stats), and no
+    // blocked_count/out_of_service_count roll-ups — hence no chips here any more.
+    hero: { label: 'Total Devices', path: 'total' },
+    chips: [],
     groups: [
       {
-        // One flat status partition — the seven by_status buckets ALWAYS sum to count. Every
-        // bucket is drawn (including zeros), sorted largest-first, scaled against the total.
+        // One flat status partition — the six by_status buckets ALWAYS sum to total (no
+        // `deleted` key any more — self-delete now returns a device to `normal`, so there is
+        // no row for it, not even a permanent zero). Sorted largest-first, scaled to the total.
         label: 'Total Devices',
-        totalPath: 'total_devices.count',
+        totalPath: 'total',
         sortDesc: true,
         bars: [
-          { label: 'Active',        path: 'total_devices.by_status.active_devices',        tone: 'good',  filter: 'normal' },
-          { label: 'Auto-blocked',  path: 'total_devices.by_status.auto_blocked_devices',  tone: 'warn',  filter: 'auto_blocked' },
-          { label: 'Admin-blocked', path: 'total_devices.by_status.admin_blocked_devices', tone: 'bad',   filter: 'admin_blocked' },
-          { label: 'Risk-blocked',  path: 'total_devices.by_status.risk_blocked_devices',  tone: 'bad',   filter: 'risk_score_blocked' },
-          { label: 'Recovery',      path: 'total_devices.by_status.recovery_devices',      tone: 'muted', filter: 'recovery_device' },
-          { label: 'Released',      path: 'total_devices.by_status.released_devices',       tone: 'muted', filter: 'admin_released' },
-          { label: 'Deleted',       path: 'total_devices.by_status.deleted_devices',       tone: 'muted', filter: 'deleted' },
+          { label: 'Active',        path: 'by_status.normal',              tone: 'good',  filter: 'normal' },
+          { label: 'Auto-blocked',  path: 'by_status.auto_blocked',        tone: 'warn',  filter: 'auto_blocked' },
+          { label: 'Admin-blocked', path: 'by_status.admin_blocked',       tone: 'bad',   filter: 'admin_blocked' },
+          { label: 'Risk-blocked',  path: 'by_status.risk_score_blocked',  tone: 'bad',   filter: 'risk_score_blocked' },
+          { label: 'Recovery',      path: 'by_status.recovery_device',     tone: 'muted', filter: 'recovery_device' },
+          { label: 'Released',      path: 'by_status.admin_released',      tone: 'muted', filter: 'admin_released' },
         ],
       },
     ],
@@ -310,14 +319,19 @@ const LIVE_SECTIONS = [
     label: 'Admins',
     accent: 'var(--accent-success)',
     source: 'admins',
-    hero: { label: 'Total Admins', path: 'total_admins' },
+    // Clicking the hero or a bar navigates to the Admin Users page with that ?role= filter
+    // applied — same deep-link pattern as App Users, Devices and Licenses.
+    filterPage: 'admin_users',
+    hero: { label: 'Total Admins', path: 'total_admins', filter: 'all' },
     groups: [
       {
         label: 'By Role',
+        totalPath: 'total_admins',
+        totalFilter: 'all',
         bars: [
-          { label: 'Superadmin', path: 'superadmin' },
-          { label: 'Admin', path: 'admin' },
-          { label: 'Viewer', path: 'viewer' },
+          { label: 'Superadmin', path: 'superadmin', filter: 'superadmin' },
+          { label: 'Admin', path: 'admin', filter: 'admin' },
+          { label: 'Viewer', path: 'viewer', filter: 'viewer' },
         ],
       },
     ],
@@ -328,7 +342,13 @@ const LIVE_SECTIONS = [
     label: 'Heartbeat',
     accent: 'var(--accent-warning)',
     source: 'heartbeat',
-    hero: { label: 'Success Rate 24h', path: 'success_rate_pct', suffix: '%' },
+    // Clicking the hero or a bar navigates to the Heartbeats page with that ?status= filter
+    // applied — same deep-link pattern as App Users, Devices, Licenses and Admins. The Heartbeats
+    // page's log filter only understands success/failed/blocked/expired (its own status dropdown),
+    // so the three time-windowed chips (Total 24h, Beats Last Hour, Failed Last Hour) have no
+    // matching filter and are left as plain figures, not clickable.
+    filterPage: 'heartbeat',
+    hero: { label: 'Success Rate 24h', path: 'success_rate_pct', suffix: '%', filter: 'all' },
     chips: [
       { label: 'Total 24h', path: 'total_24h' },
       { label: 'Beats Last Hour', path: 'beats_last_hour' },
@@ -338,10 +358,12 @@ const LIVE_SECTIONS = [
       {
         label: 'Last 24 Hours',
         bars: [
-          { label: 'Success', path: 'success_24h', tone: 'good' },
-          { label: 'Failed', path: 'failed_24h', tone: 'bad' },
-          { label: 'Blocked', path: 'blocked_24h', tone: 'bad' },
-          { label: 'Expired', path: 'expired_24h', tone: 'warn' },
+          { label: 'Success', path: 'success_24h', tone: 'good', filter: 'success' },
+          { label: 'Failed', path: 'failed_24h', tone: 'bad', filter: 'failed' },
+          { label: 'Blocked', path: 'blocked_24h', tone: 'bad', filter: 'blocked' },
+          { label: 'Expired', path: 'expired_24h', tone: 'warn', filter: 'expired' },
+          // Risky Active Devices is a separate table on that page (fed by its own endpoint,
+          // no status filter applies), so this row is deliberately left unclickable.
           { label: 'Risky Active Devices', path: 'risky_active_devices', tone: 'warn' },
         ],
       },
@@ -386,13 +408,16 @@ const LIVE_SECTIONS = [
     label: 'Audit',
     accent: '#94a3b8',
     source: 'audit',
-    hero: { label: 'Warning Events 24h', path: 'warning_events_24h' },
+    // Clicking the hero or a bar navigates to the Audit Logs page with that ?severity= filter
+    // applied — same deep-link pattern as App Users, Devices, Licenses, Admins and Heartbeat.
+    filterPage: 'audit',
+    hero: { label: 'Warning Events 24h', path: 'warning_events_24h', filter: 'warning' },
     groups: [
       {
         label: 'Events (24h)',
         bars: [
-          { label: 'Critical', path: 'critical_events_24h', tone: 'bad' },
-          { label: 'Warning', path: 'warning_events_24h', tone: 'warn' },
+          { label: 'Critical', path: 'critical_events_24h', tone: 'bad', filter: 'critical' },
+          { label: 'Warning', path: 'warning_events_24h', tone: 'warn', filter: 'warning' },
         ],
       },
     ],
@@ -713,6 +738,10 @@ function MetricBar({ label, value, max, tone, onClick }) {
 const navigateWithFilter = (page, filter) => {
   const detail = { page };
   if (page === 'app_users') detail.accountState = filter;
+  else if (page === 'license') detail.licenseStatus = filter;
+  else if (page === 'admin_users') detail.adminRole = filter;
+  else if (page === 'heartbeat') detail.heartbeatStatus = filter;
+  else if (page === 'audit') detail.auditSeverity = filter;
   else detail.deviceStatus = filter;
   window.dispatchEvent(new CustomEvent('app:navigate', { detail }));
 };

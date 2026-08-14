@@ -445,27 +445,6 @@
 }
 .dt-copy-btn:hover { color: var(--accent-primary); background: var(--bg-hover); }
 .dt-copy-btn:focus-visible { outline: none; color: var(--accent-primary); }
-.dt-owner-detached {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--text-muted);
-  font-style: italic;
-}
-.dt-detached-chip {
-  font-size: 0.6rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 1px 7px;
-  border-radius: 999px;
-  color: var(--text-muted);
-  background: rgba(148,163,184,0.1);
-  border: 1px solid rgba(148,163,184,0.25);
-  white-space: nowrap;
-}
-/* The whole row reads muted when the owning account is gone. */
-.dt-row-detached td { opacity: 0.82; }
 
 /* Usage column — usage_state pill (§4.4): online_now is the ONE live device among many rows
    a single user can own; idle/signed-out/— are all "not right now". */
@@ -483,7 +462,6 @@
 .dt-usage-pill.out    { color: #94a3b8; background: rgba(148,163,184,0.1); }
 .dt-usage-none { color: var(--text-muted); font-size: 0.8rem; }
 
-.dt-platform,
 .dt-lastseen,
 .dt-location,
 .dt-appver { font-size: 0.8rem; color: var(--text-secondary); white-space: nowrap; }
@@ -503,8 +481,6 @@
 .dt-risk.ok   { color: #34d399; background: rgba(16,185,129,0.1); }
 .dt-risk.high { color: #fbbf24; background: rgba(251,191,36,0.12); }
 .dt-risk.crit { color: #f87171; background: rgba(239,68,68,0.12); }
-
-.dt-lic { font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 .dt-actions { display: flex; align-items: center; gap: 8px; }
 .dt-view-btn {
@@ -1001,6 +977,14 @@
   transition: background var(--transition-fast);
 }
 .dv-bar-row:hover { background: var(--bg-raised); }
+/* Indentation is load-bearing here — it's what shows Online now / Idle are a breakdown OF
+   Logged in, not three equal siblings (Device Center Stats Cards build guide §3). */
+.dv-bar-row.lvl-1 { padding-left: 22px; }
+.dv-bar-row.lvl-1 .dv-bar-label-text { font-size: 0.78rem; }
+/* A row with no single filter bucket (the Logged in parent) — same layout, no hover/click affordance. */
+.dv-bar-row-static { cursor: default; }
+.dv-bar-row-static:hover { background: none; }
+.dv-bar-row-static .dv-bar-label-text { font-weight: 700; }
 /* Flex wrapper (no overflow clip — the info popover below needs to escape it); the text
    itself carries the ellipsis truncation so long labels still degrade the same way. */
 .dv-bar-label {
