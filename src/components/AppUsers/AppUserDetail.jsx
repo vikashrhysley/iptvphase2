@@ -805,28 +805,43 @@ function SectionCard({ title, children }) {
 // is either occupied by a device (assignment "assigned") or free ("not_assigned") — that is
 // the ONLY state a seat has now. `assigned` ≠ "in use": a dark/logged-out device still holds
 // its seat, so liveness is shown separately from is_logged_in + last_successful_heartbeat_at.
-const SEAT_LIVE_WINDOW_MS = 10 * 60 * 1000; // heartbeat within 10 min = "live"
 
 const formatMac = (mac) => String(mac || '').toUpperCase() || '—';
 
-const compactAge = (ms) => {
-  const s = Math.max(0, Math.floor(ms / 1000));
-  const m = Math.floor(s / 60); if (m < 60) return `${m}m`;
-  const h = Math.floor(m / 60); if (h < 24) return `${h}h`;
-  const d = Math.floor(h / 24); return `${d}d`;
+// A device that isn't in service (status != normal) falls back to its own status badge —
+// usage_state doesn't apply to a device that's blocked/recovering/released (MAC Seat Card
+// build guide — Liveness Labels §"Label mapping").
+const DEVICE_STATUS_LABELS = {
+  auto_blocked: 'Auto-blocked',
+  admin_blocked: 'Admin-blocked',
+  risk_score_blocked: 'Risk-blocked',
+  recovery_device: 'Recovery',
+  admin_released: 'Released',
+};
+const DEVICE_STATUS_TONE = {
+  auto_blocked: 'dark',
+  admin_blocked: 'blocked',
+  risk_score_blocked: 'blocked',
+  recovery_device: 'out',
+  admin_released: 'out',
 };
 
-// Liveness for an occupied seat's device — report only what's provable (never infer).
+// Liveness for an occupied seat's device — usage_state and last_seen_display come straight off
+// the API now (same classification/threshold as the device list row and detail page), never
+// re-derived from is_logged_in + last_successful_heartbeat_at client-side.
 const seatLiveness = (dev) => {
   if (!dev) return null;
-  if (dev.status && String(dev.status).toLowerCase() !== 'normal') {
-    return { tone: 'blocked', label: '● Blocked' };
+  const status = dev.status ? String(dev.status).toLowerCase() : null;
+  if (status && status !== 'normal') {
+    return { tone: DEVICE_STATUS_TONE[status] || 'blocked', label: `● ${DEVICE_STATUS_LABELS[status] || status}` };
   }
-  if (!dev.is_logged_in) return { tone: 'out', label: '○ Logged out' };
-  const hb = dev.last_successful_heartbeat_at ? new Date(dev.last_successful_heartbeat_at).getTime() : NaN;
-  const ageMs = Number.isNaN(hb) ? Infinity : Date.now() - hb;
-  if (ageMs < SEAT_LIVE_WINDOW_MS) return { tone: 'live', label: `● Live · seen ${compactAge(ageMs)} ago` };
-  return { tone: 'dark', label: Number.isNaN(hb) ? '⚠ Dark' : `⚠ Dark ${compactAge(ageMs)}` };
+  const seen = dev.last_seen_display ? ` · seen ${dev.last_seen_display}` : '';
+  if (dev.usage_state === 'online_now')     return { tone: 'live', label: `● Online now${seen}` };
+  if (dev.usage_state === 'logged_in_idle') return { tone: 'idle', label: `⚠ Logged in, sitting idle${seen}` };
+  // logged_out ≠ idle: the device signed out but still holds its seat — kept visibly distinct
+  // from the idle case per the guide (wording deliberately left to us, so long as it's distinct).
+  if (dev.usage_state === 'logged_out')     return { tone: 'out',  label: `○ Logged out, seat held${seen}` };
+  return { tone: 'out', label: '— No activity data' };
 };
 
 function SeatRow({ seat }) {
