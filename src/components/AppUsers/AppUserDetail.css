@@ -852,6 +852,7 @@
   white-space: nowrap;
 }
 .udd-live.live    { color: #34d399; background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.22); }
+.udd-live.idle,
 .udd-live.dark    { color: #fbbf24; background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.24); }
 .udd-live.out     { color: #94a3b8; background: rgba(148,163,184,0.08); border: 1px solid rgba(148,163,184,0.2); }
 .udd-live.blocked { color: #f87171; background: rgba(239,68,68,0.08);  border: 1px solid rgba(239,68,68,0.25); }
