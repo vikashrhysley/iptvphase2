@@ -16,6 +16,8 @@ import {
 } from '../../store/slices/notificationsSlice';
 import './NotificationsPage.css';
 
+import { isPermissionDenied } from '../../services/permissionErrors';
+import { AccessDenied } from '../../components/common/PermissionDenied';
 const CATEGORIES = ['USER', 'DEVICE', 'LICENSING', 'SUBSCRIPTION', 'RECOVERY', 'SECURITY', 'SYSTEM', 'PAYMENT'];
 const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
 
@@ -66,7 +68,7 @@ function NotificationDetailModal({ onClose }) {
         {detailLoading ? (
           <div className="nt-empty">Loading…</div>
         ) : detailError ? (
-          <div className="nt-error">{detailError}</div>
+(isPermissionDenied(detailError) ? <AccessDenied message={detailError} compact /> : <div className="nt-error">{detailError}</div>)
         ) : !detail ? (
           <div className="nt-empty">No detail.</div>
         ) : (
@@ -125,7 +127,7 @@ function UserGroupsView() {
       {userGroupsLoading && !userGroups.length ? (
         <div className="nt-empty">Loading…</div>
       ) : userGroupsError ? (
-        <div className="nt-error">{userGroupsError}</div>
+(isPermissionDenied(userGroupsError) ? <AccessDenied message={userGroupsError} /> : <div className="nt-error">{userGroupsError}</div>)
       ) : userGroups.length === 0 ? (
         <div className="nt-empty">No notification activity yet.</div>
       ) : (
@@ -234,7 +236,7 @@ function UserHistoryView() {
       {userHistoryLoading && !userHistory.length ? (
         <div className="nt-empty">Loading notifications…</div>
       ) : userHistoryError ? (
-        <div className="nt-error">{userHistoryError}</div>
+(isPermissionDenied(userHistoryError) ? <AccessDenied message={userHistoryError} compact /> : <div className="nt-error">{userHistoryError}</div>)
       ) : userHistory.length === 0 ? (
         <div className="nt-empty">No notifications for this user.</div>
       ) : (

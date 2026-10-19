@@ -152,7 +152,8 @@ export default function Header({ activePage, dashboardTab, analyticsTab, sidebar
       </div>
       <div className="header-right">
 <span className={`role-badge ${user?.role}`}>
-          {user?.role === 'superadmin' ? 'Super Admin' : user?.role}
+          {/* role is null for portal-made roles — role_display is the label (guide C9) */}
+          {user?.role_display || (user?.role === 'superadmin' ? 'Super Admin' : user?.role)}
         </span>
 
         {/* Theme toggle */}

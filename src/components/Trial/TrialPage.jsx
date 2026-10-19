@@ -7,6 +7,8 @@ import {
   clearToast,
 } from '../../store/slices/trialSlice';
 import './TrialPage.css';
+import { isPermissionDenied } from '../../services/permissionErrors';
+import { AccessDenied } from '../common/PermissionDenied';
 
 const buildForm = (cfg) => {
   const ts = cfg.trial_settings || cfg;
@@ -35,7 +37,6 @@ const SaveIcon    = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="
 const RefreshIcon = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>;
 const PlusIcon    = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
 const MinusIcon   = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="5" y1="12" x2="19" y2="12"/></svg>;
-const LockIcon    = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
 const EditIcon    = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
 const ShieldIcon  = () => <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>;
 
@@ -46,7 +47,8 @@ function Toast() {
   useEffect(() => {
     if (toast) { const t = setTimeout(() => dispatch(clearToast()), 3500); return () => clearTimeout(t); }
   }, [toast, dispatch]);
-  if (!toast) return null;
+  // A refused save (403) is explained by the global pop-up — don't repeat it as a toast.
+  if (!toast || (toast.type !== 'success' && isPermissionDenied(toast.msg))) return null;
   return (
     <div className={`toast ${toast.type === 'success' ? 'success' : 'error'}`}>
       {toast.type === 'success' ? '✓' : '✕'} {toast.msg}
@@ -190,14 +192,11 @@ function SysConfigRow({ item, isSaving, onSave }) {
 function SystemConfigPanel() {
   const dispatch = useDispatch();
   const { systemConfig, systemConfigLoading, systemConfigError, systemConfigSaving } = useSelector(s => s.trial);
-  const { user: me } = useSelector(s => s.auth);
-  const isSuperAdmin = me?.role === 'superadmin';
 
+  // Every admin sees the panel; the backend answers system_config · View with data or a 403.
   useEffect(() => {
-    if (isSuperAdmin) dispatch(fetchSystemConfig());
-  }, [dispatch, isSuperAdmin]);
-
-  if (!isSuperAdmin) return null;
+    dispatch(fetchSystemConfig());
+  }, [dispatch]);
 
   return (
     <div className="tp-section tp-section-wide">
@@ -211,7 +210,9 @@ function SystemConfigPanel() {
       {systemConfigLoading ? (
         <div className="tp-sc-state">Loading configuration…</div>
       ) : systemConfigError ? (
-        <div className="tp-sc-state error">⚠️ {systemConfigError}</div>
+        isPermissionDenied(systemConfigError)
+          ? <AccessDenied message={systemConfigError} compact />
+          : <div className="tp-sc-state error">⚠️ {systemConfigError}</div>
       ) : systemConfig.length === 0 ? (
         <div className="tp-sc-state">No system configuration entries found.</div>
       ) : (
@@ -248,9 +249,6 @@ function SystemConfigPanel() {
 export default function TrialPage() {
   const dispatch = useDispatch();
   const { config, loading, saving, error } = useSelector(s => s.trial);
-  const { user: me } = useSelector(s => s.auth);
-  const isSuperAdmin = me?.role === 'superadmin';
-
   const [formDraft,   setFormDraft]   = useState(null);
   const [dirty,       setDirty]       = useState(false);
   const [changeNote,  setChangeNote]  = useState('');
@@ -288,37 +286,32 @@ export default function TrialPage() {
           <h1 className="tp-page-title">System Configuration</h1>
           <p className="tp-page-sub">Configure trial limits, device policies, and runtime settings for the platform.</p>
         </div>
-        {isSuperAdmin && (
-          <div className="tp-header-actions">
-            {dirty && (
-              <>
-                <input
-                  className="tp-change-note-input"
-                  type="text"
-                  placeholder="Change note (optional)…"
-                  value={changeNote}
-                  onChange={e => setChangeNote(e.target.value)}
-                  maxLength={500}
-                  disabled={saving}
-                />
-                <button className="tp-btn tp-btn-ghost" onClick={handleReset} disabled={saving}>Reset</button>
-              </>
-            )}
-            <button className="tp-btn tp-btn-save" onClick={handleSave} disabled={saving || !dirty}>
-              {saving ? <span className="tp-spinner" /> : <><SaveIcon /> Save Changes</>}
-            </button>
-          </div>
-        )}
-      </div>
-
-      {!isSuperAdmin && (
-        <div className="tp-readonly-notice">
-          <LockIcon /> You have read-only access. Only Super Admins can modify trial & grace policies.
+        {/* Always visible — the backend gates saving on system_config · Act. */}
+        <div className="tp-header-actions">
+          {dirty && (
+            <>
+              <input
+                className="tp-change-note-input"
+                type="text"
+                placeholder="Change note (optional)…"
+                value={changeNote}
+                onChange={e => setChangeNote(e.target.value)}
+                maxLength={500}
+                disabled={saving}
+              />
+              <button className="tp-btn tp-btn-ghost" onClick={handleReset} disabled={saving}>Reset</button>
+            </>
+          )}
+          <button className="tp-btn tp-btn-save" onClick={handleSave} disabled={saving || !dirty}>
+            {saving ? <span className="tp-spinner" /> : <><SaveIcon /> Save Changes</>}
+          </button>
         </div>
-      )}
+      </div>
 
       {loading ? (
         <div className="tp-loading"><div className="tp-loader" /> Loading policy configuration…</div>
+      ) : error && isPermissionDenied(error) ? (
+        <AccessDenied message={error} />
       ) : error ? (
         <div className="tp-error">
           <span>⚠️ {error}</span>
@@ -359,28 +352,28 @@ export default function TrialPage() {
                 description="Number of days a new user gets for free trial access."
                 value={form.trial_duration_days}
                 onChange={v => handleChange('trial_duration_days', v)}
-                min={1} max={90} disabled={!isSuperAdmin}
+                min={1} max={90}
               />
               <DayStepper
                 label="Extension Length"
                 description="Days added each time a trial is extended."
                 value={form.trial_extension_days}
                 onChange={v => handleChange('trial_extension_days', v)}
-                min={1} max={60} disabled={!isSuperAdmin}
+                min={1} max={60}
               />
               <DayStepper
                 label="Max Extensions"
                 description="Maximum number of times a trial can be extended."
                 value={form.max_trial_extensions}
                 onChange={v => handleChange('max_trial_extensions', v)}
-                min={0} max={10} disabled={!isSuperAdmin}
+                min={0} max={10}
               />
               <DayStepper
                 label="Reminder Before Expiry"
                 description="Days before expiry to send a reminder notification."
                 value={form.trial_reminder_days}
                 onChange={v => handleChange('trial_reminder_days', v)}
-                min={1} max={30} disabled={!isSuperAdmin}
+                min={1} max={30}
               />
             </div>
           </div>
@@ -394,23 +387,21 @@ export default function TrialPage() {
                 description="Days after trial expiry before access is fully revoked."
                 value={form.grace_period_days}
                 onChange={v => handleChange('grace_period_days', v)}
-                min={0} max={30} disabled={!isSuperAdmin}
+                min={0} max={30}
               />
             </div>
-            {isSuperAdmin && (
-              <div className="tp-toggle-row">
-                <div>
-                  <div className="tp-toggle-label">Auto-Convert After Trial</div>
-                  <div className="tp-toggle-desc">Automatically convert trial accounts to paid plans when the trial ends.</div>
-                </div>
-                <button
-                  className={`tp-toggle ${form.trial_auto_convert ? 'on' : 'off'}`}
-                  onClick={() => handleChange('trial_auto_convert', !form.trial_auto_convert)}
-                >
-                  <span className="tp-toggle-knob" />
-                </button>
+            <div className="tp-toggle-row">
+              <div>
+                <div className="tp-toggle-label">Auto-Convert After Trial</div>
+                <div className="tp-toggle-desc">Automatically convert trial accounts to paid plans when the trial ends.</div>
               </div>
-            )}
+              <button
+                className={`tp-toggle ${form.trial_auto_convert ? 'on' : 'off'}`}
+                onClick={() => handleChange('trial_auto_convert', !form.trial_auto_convert)}
+              >
+                <span className="tp-toggle-knob" />
+              </button>
+            </div>
           </div>
 
           {/* ── Device Limits ── */}
@@ -422,7 +413,7 @@ export default function TrialPage() {
                 description="Maximum number of devices a trial user can register."
                 value={form.max_devices_per_trial}
                 onChange={v => handleChange('max_devices_per_trial', v)}
-                min={1} max={20} disabled={!isSuperAdmin}
+                min={1} max={20}
               />
             </div>
             <div className="tp-toggle-row" style={{ marginTop: 16 }}>
@@ -437,16 +428,14 @@ export default function TrialPage() {
                 <span className="tp-policy-readonly">
                   {form.device_limit_policy === 'hard_block' ? '🔒 Hard Block' : '⚠️ Soft Warn'}
                 </span>
-                {isSuperAdmin && (
-                  <div className="tp-policy-hint">Edit via System Configuration table below</div>
-                )}
+                <div className="tp-policy-hint">Edit via System Configuration table below</div>
               </div>
             </div>
           </div>
         </>
       )}
 
-      {/* ── System Config Panel (superadmin only) ── */}
+      {/* ── System Config Panel ── */}
       <SystemConfigPanel />
     </div>
   );

@@ -5,6 +5,8 @@ import {
   setAuditFilters, clearAuditFilters, clearAuditDetail,
 } from '../../store/slices/auditSlice';
 import { apiFetchAuditLogs } from '../../services/api';
+import { isPermissionDenied } from '../../services/permissionErrors';
+import { AccessDenied } from '../common/PermissionDenied';
 import './AuditPage.css';
 import {Offcanvas} from "react-bootstrap"
 
@@ -23,12 +25,6 @@ const NetworkIcon = () => (
 const ChevLeft  = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>;
 const ChevRight = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>;
 const CloseIcon = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
-const ShieldOffIcon = () => (
-  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-    <line x1="4.5" y1="4.5" x2="19.5" y2="19.5"/>
-  </svg>
-);
 const LogIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -568,8 +564,7 @@ function DetailDrawer({ onClose }) {
 export default function AuditPage() {
   const dispatch = useDispatch();
   const { filters, selectedLog } = useSelector(s => s.audit);
-  const { accessToken, user: me } = useSelector(s => s.auth);
-  const isSuperAdmin = me?.role === 'superadmin';
+  const { accessToken } = useSelector(s => s.auth);
 
   const CLIENT_PAGE_SIZE   = 10;   // rows shown per page
   const SERVER_PAGE_SIZE   = 100;  // backend caps page_size at 100
@@ -620,7 +615,6 @@ export default function AuditPage() {
   // Fetch all pages (100 at a time — backend max) whenever the server-side filters
   // change, so client-side search covers every record it pulled.
   useEffect(() => {
-    if (!isSuperAdmin) return;
     let cancelled = false;
     (async () => {
       setListLoading(true);
@@ -650,7 +644,7 @@ export default function AuditPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [accessToken, isSuperAdmin,
+  }, [accessToken,
       filters.entity_type, filters.severity, filters.date_from, filters.date_to, filters.ip_address]);
 
   // Reset to first page whenever the search / role or a server filter changes.
@@ -687,15 +681,11 @@ export default function AuditPage() {
   const hasFilters = searchInput.trim() || roleFilter || filters.actor_email || filters.actor_role || filters.entity_type ||
                      filters.severity || filters.date_from || filters.date_to || filters.ip_address;
 
-  // ── Access denied ──────────────────────────────────────────────────────────
-  if (!isSuperAdmin) {
+  // ── Access denied — the backend refused audit_logs · View (no role check here) ──
+  if (isPermissionDenied(listError)) {
     return (
       <div className="audit-page">
-        <div className="al-access-denied">
-          <div className="al-access-icon"><ShieldOffIcon /></div>
-          <div className="al-access-title">Access Restricted</div>
-          <div className="al-access-sub">Audit logs are only accessible to Super Admins.</div>
-        </div>
+        <AccessDenied message={listError} />
       </div>
     );
   }

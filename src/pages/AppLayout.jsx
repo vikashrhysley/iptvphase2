@@ -12,7 +12,6 @@ import { setLicenseFilters } from '../store/slices/licenseSlice';
 import { setFilters as setAdminUsersFilters } from '../store/slices/adminUsersSlice';
 import { setLogFilters as setHeartbeatLogFilters } from '../store/slices/heartbeatSlice';
 import { setAuditFilters } from '../store/slices/auditSlice';
-import { canAccessPage, firstAccessiblePage } from '../utils/pageAccess';
 
 const DashboardTable     = React.lazy(() => import('../components/Dashboard/DashboardTable'));
 const DevicePage         = React.lazy(() => import('../components/Device/DevicePage'));
@@ -81,7 +80,6 @@ class PageErrorBoundary extends React.Component {
 
 export default function AppLayout() {
   const dispatch = useDispatch();
-  const user = useSelector((s) => s.auth.user);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [activePage, setActivePage] = useState(
@@ -102,8 +100,8 @@ export default function AppLayout() {
 
   // Client-side polling for the notification bell (unread-count + summary), paused on hidden tabs.
   useNotificationPolling();
-  // Keep role + permissions fresh (on focus + interval) so page gating reflects permission
-  // edits without a manual reload.
+  // Keep the admin's own profile (role_display + the "My access" list) fresh on focus + interval.
+  // It is display-only — access itself is decided by the backend on every call.
   useProfileRefresh();
 
   const mainLeft = collapsed ? 'var(--sidebar-collapsed)' : 'var(--sidebar-width)';
@@ -112,22 +110,12 @@ export default function AppLayout() {
     setActivePage(page);
     sessionStorage.setItem('activePage', page);
     setMobileNavOpen(false);
-    // Navigating is a natural checkpoint to re-sync this admin's permissions, so a page they
-    // were just granted/removed appears or disappears immediately as they move around.
+    // Navigating is a natural checkpoint to re-sync this admin's profile (display only).
     dispatch(refreshCurrentUser());
   };
 
-  // Page-level enforcement: once the profile has loaded, if the active page isn't permitted for
-  // this user (e.g. a Manager whose sessionStorage still points at RBAC from a prior superadmin
-  // session, or a page they've lost access to), redirect them to their first accessible page.
-  // Skipped while the profile is loading (user null) so the reload window doesn't misfire.
-  useEffect(() => {
-    if (!user) return;
-    if (canAccessPage(user, activePage)) return;
-    const target = firstAccessiblePage(user);
-    setActivePage(target);
-    sessionStorage.setItem('activePage', target);
-  }, [user, activePage]);
+  // No client-side page gating or redirect (Roles & Permissions build guide B3): every page
+  // renders, and one whose main GET is refused shows the inline locked state itself.
 
   // ── Browser back/forward integration ──────────────────────────────
   // Navigation is state-based (activePage), so without this the URL never changes and

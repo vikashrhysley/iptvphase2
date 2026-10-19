@@ -6,6 +6,8 @@ import {
   AMOUNT_MAX, isAmountInputAllowed, isIntegerInputAllowed,
   blockNonNumericKeys, blockIntegerKeys, validateAmount, validateInteger,
 } from './planFormFields';
+import { isPermissionDenied } from '../../services/permissionErrors';
+import { AccessDenied } from '../common/PermissionDenied';
 import './PlansPage.css';
 
 /* ── Icons ─────────────────────────────────────────────── */
@@ -269,7 +271,8 @@ function CreatePlanModal({ onClose, hasActiveTrial }) {
           </div>
         </div>
 
-        {(localError || createError) && (
+        {/* A refused create (403) is explained by the global pop-up — don't repeat it here. */}
+        {(localError || (createError && !isPermissionDenied(createError))) && (
           <div className="pp-modal-error">{localError || createError}</div>
         )}
         {createSuccess && (
@@ -341,8 +344,6 @@ function PlanCard({ plan, onClick }) {
 export default function PlansPage() {
   const dispatch = useDispatch();
   const { plans, loading, error } = useSelector((s) => s.plans);
-  const { user: me } = useSelector((s) => s.auth);
-  const isSuperAdmin = me?.role === 'superadmin';
   // Open a specific plan when navigated here with intent (e.g. from the license popup).
   const [detailPlanId, setDetailPlanId] = useState(() => {
     const pending = sessionStorage.getItem('openPlanId');
@@ -394,11 +395,10 @@ export default function PlansPage() {
           <h1 className="pp-title">Subscription Plans</h1>
           <div className="pp-subtitle">Plan definitions, pricing and active license counts.</div>
         </div>
-        {isSuperAdmin && (
-          <button className="pp-create-btn" onClick={() => setShowCreate(true)}>
-            <PlusIcon /> Create Plan
-          </button>
-        )}
+        {/* Always visible — the backend gates it on subscription_plans · Act. */}
+        <button className="pp-create-btn" onClick={() => setShowCreate(true)}>
+          <PlusIcon /> Create Plan
+        </button>
       </div>
 
       {/* ── Summary stats ── */}
@@ -475,7 +475,7 @@ export default function PlansPage() {
       {loading ? (
         <div className="pp-loading">Loading plans…</div>
       ) : error ? (
-        <div className="pp-error">{error}</div>
+        isPermissionDenied(error) ? <AccessDenied message={error} /> : <div className="pp-error">{error}</div>
       ) : plans.length === 0 ? (
         <div className="pp-empty">No subscription plans found.</div>
       ) : filteredPlans.length === 0 ? (

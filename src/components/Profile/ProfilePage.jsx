@@ -268,8 +268,9 @@ export default function ProfilePage() {
 
   const role = profile.role || 'admin';
   const permissions = Array.isArray(profile.permissions) ? profile.permissions : [];
+  // /auth/me permission items carry only read (View) and write (Act) now.
   const enabledPermissions = permissions.reduce((sum, item) => (
-    sum + ['read', 'write', 'delete', 'execute'].filter(action => item[action]).length
+    sum + ['read', 'write'].filter(action => item[action]).length
   ), 0);
 
   return (
@@ -363,10 +364,8 @@ export default function ProfilePage() {
               <thead>
                 <tr>
                   <th>Module</th>
-                  <th>Read</th>
-                  <th>Write</th>
-                  <th>Delete</th>
-                  <th>Execute</th>
+                  <th>View</th>
+                  <th>Act</th>
                 </tr>
               </thead>
               <tbody>
@@ -380,8 +379,6 @@ export default function ProfilePage() {
                     </td>
                     <td><PermissionMark allowed={item.read} /></td>
                     <td><PermissionMark allowed={item.write} /></td>
-                    <td><PermissionMark allowed={item.delete} /></td>
-                    <td><PermissionMark allowed={item.execute} /></td>
                   </tr>
                 ))}
               </tbody>

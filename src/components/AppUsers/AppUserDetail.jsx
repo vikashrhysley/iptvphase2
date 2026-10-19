@@ -11,6 +11,8 @@ import UserActivityPage from './UserActivityPage';
 import UserLoginHistory from './UserLoginHistory';
 import './AppUserDetail.css';
 
+import { isPermissionDenied } from '../../services/permissionErrors';
+import { AccessDenied } from '../../components/common/PermissionDenied';
 /* ── Icons ─────────────────────────────────────────────── */
 const BackIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -292,7 +294,7 @@ function LicenseDetailModal({ items, onClose }) {
         ) : loading ? (
           <div className="udd-empty-section">Loading license…</div>
         ) : error ? (
-          <div className="udd-modal-error">{error}</div>
+(isPermissionDenied(error) ? <AccessDenied message={error} compact /> : <div className="udd-modal-error">{error}</div>)
         ) : !lic ? (
           <div className="udd-empty-section">No license found.</div>
         ) : (
@@ -484,7 +486,7 @@ function SubscriptionDetailModal({ items, onClose }) {
         ) : loading ? (
           <div className="udd-empty-section">Loading subscription…</div>
         ) : error ? (
-          <div className="udd-modal-error">{error}</div>
+(isPermissionDenied(error) ? <AccessDenied message={error} compact /> : <div className="udd-modal-error">{error}</div>)
         ) : !sub ? (
           <div className="udd-empty-section">No subscription found.</div>
         ) : (
@@ -756,7 +758,7 @@ function ChangelogModal({ title, items = [], idKey, fetcher, variant, onClose })
         ) : loading ? (
           <div className="udd-empty-section">Loading history…</div>
         ) : error ? (
-          <div className="udd-modal-error">{error}</div>
+(isPermissionDenied(error) ? <AccessDenied message={error} compact /> : <div className="udd-modal-error">{error}</div>)
         ) : entries.length === 0 ? (
           <div className="udd-empty-section">No history found.</div>
         ) : (
@@ -968,7 +970,7 @@ function MacSeatsBlock({ userId }) {
       {loading ? (
         <div className="udd-empty-section">Loading seats…</div>
       ) : error ? (
-        <div className="udd-modal-error">{error}</div>
+(isPermissionDenied(error) ? <AccessDenied message={error} compact /> : <div className="udd-modal-error">{error}</div>)
       ) : noLicence ? (
         <div className="udd-empty-section">No plan — no MAC seats issued.</div>
       ) : seats.length === 0 ? (
@@ -1216,6 +1218,7 @@ export default function AppUserDetail({ userId, onBack }) {
   // user is gone (navigate back), anything else is a hard error. account status flips
   // optimistically via patchSelectedUser so the banner/button update without a reload.
   const handleAccessError = (err, close) => {
+    if (isPermissionDenied(err)) return;   // the global pop-up already explained it
     if (err?.status === 409) {
       toast(err.message || 'The account state changed — refreshing.', { icon: 'ℹ️' });
       close();
@@ -1333,7 +1336,7 @@ export default function AppUserDetail({ userId, onBack }) {
       )}
 
       {detailError && !detailLoading && (
-        <div className="udd-error">{detailError}</div>
+(isPermissionDenied(detailError) ? <AccessDenied message={detailError} /> : <div className="udd-error">{detailError}</div>)
       )}
 
       {u && !detailLoading && (

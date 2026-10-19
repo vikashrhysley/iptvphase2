@@ -9,6 +9,7 @@ import AppLayout from './pages/AppLayout';
 import './App.css';
 import './styles/global.css';
 import { Toaster } from "react-hot-toast";
+import { PermissionDeniedDialog } from './components/common/PermissionDenied';
 
 
 function AppRoot() {
@@ -37,6 +38,7 @@ function AppContent() {
   return (
     <>
       <AppRoot />
+      <PermissionDeniedDialog />
       <Toaster
         position="top-center"
         toastOptions={{

@@ -2,7 +2,6 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { logoutUser } from '../../store/slices/authSlice';
-import { canAccessPage } from '../../utils/pageAccess';
 import { useTheme } from '../../context/ThemeContext';
 import logoDark from '../../assets/vodeonai-logo-trimmed-dark.png';
 import logoLight from '../../assets/vodeonai-logo-trimmed-light.png';
@@ -214,8 +213,8 @@ const NAV_ITEMS = [
   { id: 'health', label: 'Health', icon: <HealthIcon />, page: 'health' },
   { id: 'monitoring', label: 'Monitoring', icon: <MonitoringIcon />, page: 'monitoring', subItems: MONITORING_SUB_ITEMS },
   { id: 'infra', label: 'Infra', icon: <InfraIcon />, page: 'infra', subItems: INFRA_SUB_ITEMS },
-  { id: 'audit', label: 'Audit Logs', icon: <AuditIcon />, page: 'audit', superadminOnly: true },
-  { id: 'rbac', label: 'RBAC', icon: <RbacIcon />, page: 'rbac', superadminOnly: true },
+  { id: 'audit', label: 'Audit Logs', icon: <AuditIcon />, page: 'audit' },
+  { id: 'rbac', label: 'Roles & Permissions', icon: <RbacIcon />, page: 'rbac' },
 ];
 
 const roleLabel = (role) => {
@@ -269,12 +268,9 @@ export default function Sidebar({
 
   const profileUser = user || {};
 
-  // Page-level access control lives in ../../utils/pageAccess (shared with the app layout so
-  // the sidebar and the rendered page can never disagree). It maps each page key to the RBAC
-  // module name(s) that grant it, and fails CLOSED while the profile is still loading so a
-  // reload never briefly shows a gated user the full admin nav.
+  // Every nav entry stays visible for every admin (Roles & Permissions build guide B3). Access is
+  // decided by the backend per call: a refused page renders an inline locked state instead.
   const profileLoaded = !!user;
-  const canSeePage = (item) => canAccessPage(user, item.page);
 
   // Until the profile lands, show a neutral loading identity instead of the null-user fallbacks
   // (which resolve to "AD" / "Admin" and read as if an admin is signed in).
@@ -310,7 +306,7 @@ export default function Sidebar({
         </div>
 
         <nav className="sidebar-nav">
-          {NAV_ITEMS.filter(canSeePage).map(item => (
+          {NAV_ITEMS.map(item => (
             <div className="nav-group" key={item.id}>
               <button
                 className={`nav-item${activePage === item.page ? ' active' : ''}`}

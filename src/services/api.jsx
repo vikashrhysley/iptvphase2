@@ -1,5 +1,6 @@
 // src/services/api.js
 // Real API — https://iptvapp.studyineurope.xyz/api/v1
+import { handleForbidden } from './permissionErrors';
 
 const ORIGIN = import.meta.env.VITE_API_ORIGIN || '';
 const BASE = `${ORIGIN}/api/v1`;
@@ -86,6 +87,13 @@ const request = async (url, options = {}) => {
     const err = new Error(apiMsg || statusMsg || `Request failed (${res.status})`);
     err.status = res.status;       // let callers branch on 400 / 403 / 404
     err.data = data?.data ?? data; // raw payload for callers that need detail
+    err.code = data?.error?.code || data?.code || null;
+    // 403 never means the session is bad (only 401 does): no redirect, no logout. Actions get
+    // the global pop-up; reads are rendered inline by the page (see permissionErrors.js).
+    if (res.status === 403) {
+      err.permissionDenied = true;
+      err.popupShown = handleForbidden({ method: restOptions.method, message: err.message, code: err.code });
+    }
     throw err;
   }
   return data;
@@ -606,6 +614,77 @@ export const apiUnblockDevice = async (accessToken, deviceId, reason) => {
   return res.data || res;
 };
 
+// ── Force logout (remote sign-out) — Remote Device Logout build guide ──
+// Signing out is NOT blocking: device status, account, licence and subscription are untouched.
+// Needs devices · Act (403 INSUFFICIENT_PERMISSIONS otherwise — shown by the global pop-up).
+// Every logout endpoint returns the same shape: { logout_type, logout_status, results[],
+// fully_enforced, warnings[], notifications, message, ... }.
+
+// POST /admin/devices/logout/preview — read-only check of 1–100 IDs. Never fails for a bad ID;
+// each item carries result: will_logout | already_logged_out | not_found | invalid_id.
+export const apiPreviewDeviceLogout = async (accessToken, deviceIds) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/devices/logout/preview`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ device_ids: deviceIds }),
+  });
+  const raw = res.data || res;
+  return { items: Array.isArray(raw.items) ? raw.items : [], summary: raw.summary || {} };
+};
+
+// POST /admin/devices/logout — sign out 1–100 devices. Pass userId only in "By user" mode: the
+// backend then rejects the call if a device changed owner since the list loaded.
+export const apiLogoutDevices = async (accessToken, deviceIds, { userId, reason } = {}) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const body = { device_ids: deviceIds };
+  if (userId) body.user_id = userId;
+  if (reason?.trim()) body.reason = reason.trim();
+  const res = await request(`${BASE}/admin/devices/logout`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(body),
+  });
+  return res.data || res;
+};
+
+// POST /admin/devices/{id}/logout — single device. Idempotent: an already signed-out device
+// returns 200 with logout_status "none".
+export const apiLogoutDevice = async (accessToken, deviceId, reason) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const body = reason?.trim() ? { reason: reason.trim() } : {};
+  const res = await request(`${BASE}/admin/devices/${deviceId}/logout`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(body),
+  });
+  return res.data || res;
+};
+
+// GET /admin/app-users/{id}/logged-in-devices — signed-in, non-archived devices, most recently
+// active first. Returns { user_id, email, devices[] }.
+export const apiFetchUserLoggedInDevices = async (accessToken, userId) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const res = await request(`${BASE}/admin/app-users/${userId}/logged-in-devices`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const raw = res.data || res;
+  return { ...raw, devices: Array.isArray(raw.devices) ? raw.devices : [] };
+};
+
+// POST /admin/app-users/{id}/logout-all — sign out every signed-in device of one user.
+export const apiLogoutAllUserDevices = async (accessToken, userId, reason) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const body = reason?.trim() ? { reason: reason.trim() } : {};
+  const res = await request(`${BASE}/admin/app-users/${userId}/logout-all`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(body),
+  });
+  return res.data || res;
+};
+
 // Keep alias for backward compat
 export const apiFetchDevices = apiFetchAdminDevices;
 
@@ -1004,6 +1083,7 @@ export const apiFetchAdminUsers = async (accessToken, params = {}) => {
   if (!accessToken) throw new Error('Unauthorized');
 
   const query = new URLSearchParams();
+  if (params.search) query.set('search', params.search);
   if (params.role) query.set('role', params.role);
   if (params.status) query.set('status', params.status);
   if (params.page) query.set('page', params.page);
@@ -1403,7 +1483,7 @@ export const apiPatchRbacRolePermissions = async (accessToken, roleId, { add, re
   const res = await request(`${BASE}/admin/rbac/roles/${roleId}/permissions`, {
     method: 'PATCH',
     headers: { Authorization: `Bearer ${accessToken}` },
-    body: JSON.stringify({ add, remove }),
+    body: JSON.stringify({ mode: 'merge', add, remove }),
   });
   return res.data || res;
 };
@@ -1440,13 +1520,15 @@ export const apiDeleteRbacModule = async (accessToken, moduleId) => {
   return { ...(res.data || res), id: moduleId };
 };
 
-// POST /admin/rbac/modules — register a new RBAC module
-export const apiCreateRbacModule = async (accessToken, { name, display_name, available_actions, description }) => {
+// PATCH /admin/rbac/modules/{id} — edit a module's label / description (built-ins included).
+// There is no "create module": a module made in the portal gates nothing (guide C8).
+export const apiPatchRbacModule = async (accessToken, moduleId, { display_name, description }) => {
   if (!accessToken) throw new Error('Unauthorized');
-  const body = { name, display_name, available_actions };
-  if (description?.trim()) body.description = description.trim();
-  const res = await request(`${BASE}/admin/rbac/modules`, {
-    method: 'POST',
+  const body = {};
+  if (display_name !== undefined) body.display_name = display_name;
+  if (description !== undefined) body.description = description;
+  const res = await request(`${BASE}/admin/rbac/modules/${moduleId}`, {
+    method: 'PATCH',
     headers: { Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify(body),
   });

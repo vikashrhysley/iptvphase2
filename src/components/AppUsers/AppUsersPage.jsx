@@ -5,6 +5,8 @@ import AppUserDetail from './AppUserDetail';
 import './AppUsersPage.css';
 import { Button } from 'react-bootstrap';
 import { SquareArrowRightExit } from 'lucide-react';
+import { isPermissionDenied } from '../../services/permissionErrors';
+import { AccessDenied } from '../../components/common/PermissionDenied';
 /* ── Export helpers ─────────────────────────────────────── */
 const EXPORT_COLS = ['Name', 'Email', 'Phone', 'Country', 'Status', 'Email Verified', 'Trial Used', 'Active Devices', 'Subscriptions', 'Last Login', 'Registered'];
 
@@ -425,7 +427,7 @@ export default function AppUsersPage() {
 
       {/* ── Stat header: context bar + PLAN FUNNEL / USAGE, 70/30 ── */}
       {statsError ? (
-        <div className="su-stats-error">Failed to load stats: {statsError}</div>
+(isPermissionDenied(statsError) ? <AccessDenied message={statsError} compact /> : <div className="su-stats-error">Failed to load stats: {statsError}</div>)
       ) : statsLoading && !stats ? (
         <div className="su-stat-skel-wrap">
           <div className="su-context-bar su-skel" />
@@ -596,7 +598,7 @@ export default function AppUsersPage() {
         {loading && !users.length ? (
           <div className="su-loading-wrap">Loading subscribers…</div>
         ) : error ? (
-          <div className="su-error-wrap">{error}</div>
+(isPermissionDenied(error) ? <AccessDenied message={error} /> : <div className="su-error-wrap">{error}</div>)
         ) : (
           <div className="su-table-scroll">
             <table className="su-table">

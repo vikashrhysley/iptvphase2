@@ -14,6 +14,8 @@ import { SquareArrowRightExit, Pencil } from "lucide-react"
 import { Button } from 'react-bootstrap';
 import { Copy, Check } from "lucide-react";
 
+import { isPermissionDenied } from '../../services/permissionErrors';
+import { AccessDenied } from '../../components/common/PermissionDenied';
 /* ── Icons ─────────────────────────────────────────────── */
 const SearchIcon = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>;
 const EditIcon = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>;
@@ -89,47 +91,44 @@ const exportToCSV = (licenses) => {
   URL.revokeObjectURL(url);
 };
 
-const exportToPDF = (licenses) => {
-  const now = new Date().toLocaleString('en-US', { dateStyle: 'full', timeStyle: 'short' });
-  const rows = licenses.map(l => `<tr>
-    <td>${l.user_email || '—'}</td>
-    <td>${l.user_full_name || '—'}</td>
-    <td>${l.device_name || '—'}</td>
-    <td>${l.device_platform || '—'}</td>
-    <td>${l.plan_name || l.plan_type || '—'}</td>
-    <td>${l.status || '—'}</td>
-    <td>${l.expiry_display || fmtDate(l.expires_at)}</td>
-    <td>${l.days_remaining != null ? l.days_remaining + 'd' : '—'}</td>
-    <td>${l.auto_renew ? 'Yes' : 'No'}</td>
-    <td>${l.reminder_sent ? 'Yes' : 'No'}</td>
-    <td>${fmtDate(l.created_at)}</td>
-  </tr>`).join('');
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-<title>License Export</title><style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111;background:#fff;padding:20px;font-size:11px}
-h1{font-size:16px;margin-bottom:3px;color:#0f172a}
-.meta{font-size:11px;color:#64748b;margin-bottom:14px}
-table{width:100%;border-collapse:collapse}
-th{background:#f1f5f9;border:1px solid #cbd5e1;padding:6px 8px;text-align:left;font-weight:700;white-space:nowrap;font-size:10px;text-transform:uppercase;letter-spacing:.04em}
-td{border:1px solid #e2e8f0;padding:5px 8px;vertical-align:top}
-tr:nth-child(even) td{background:#f8fafc}
-@media print{body{padding:8px}@page{margin:1cm}}
-</style></head><body>
-<h1>License Center Export</h1>
-<p class="meta">Generated: ${now} — ${licenses.length} record(s) on this page</p>
-<table><thead><tr>
-<th>User Email</th><th>User Name</th><th>Device</th><th>Platform</th>
-<th>Plan</th><th>Status</th><th>Expiry</th><th>Days Left</th>
-<th>Auto-Renew</th><th>Reminder</th><th>Issued</th>
-</tr></thead><tbody>${rows}</tbody></table>
-</body></html>`;
-  const win = window.open('', '_blank');
-  if (!win) { alert('Please allow pop-ups to export PDF.'); return; }
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  setTimeout(() => win.print(), 400);
+// Generates and downloads a real .pdf — no popup window or print dialog, which used to
+// freeze the portal tab (the about:blank popup shares its renderer) and allowed HTML injection.
+const exportToPDF = async (licenses) => {
+  const { jsPDF } = await import('jspdf');
+  const { default: autoTable } = await import('jspdf-autotable');
+
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+
+  doc.setFontSize(15); doc.setTextColor(30, 30, 60);
+  doc.text('License Center Export', pageW / 2, 14, { align: 'center' });
+  doc.setFontSize(9); doc.setTextColor(120);
+  doc.text(`Generated: ${new Date().toLocaleString()} · ${licenses.length} record(s) on this page`, pageW / 2, 20, { align: 'center' });
+
+  autoTable(doc, {
+    startY: 26,
+    head: [['User Email', 'User Name', 'Device', 'Platform', 'Plan', 'Status', 'Expiry', 'Days Left', 'Auto-Renew', 'Reminder', 'Issued']],
+    body: licenses.map(l => [
+      l.user_email || '—',
+      l.user_full_name || '—',
+      l.device_name || '—',
+      l.device_platform || '—',
+      l.plan_name || l.plan_type || '—',
+      l.status || '—',
+      l.expiry_display || fmtDate(l.expires_at),
+      l.days_remaining != null ? `${l.days_remaining}d` : '—',
+      l.auto_renew ? 'Yes' : 'No',
+      l.reminder_sent ? 'Yes' : 'No',
+      fmtDate(l.created_at),
+    ]),
+    theme: 'striped',
+    headStyles: { fillColor: [30, 30, 60], textColor: 255, fontSize: 7, fontStyle: 'bold' },
+    bodyStyles: { fontSize: 7, textColor: [40, 40, 80] },
+    alternateRowStyles: { fillColor: [245, 246, 250] },
+    margin: { left: 8, right: 8 },
+  });
+
+  doc.save(`licenses_${new Date().toISOString().slice(0, 10)}.pdf`);
 };
 
 /* ── Export Dropdown ─────────────────────────────────────── */
@@ -152,7 +151,7 @@ function ExportDropdown({ licenses }) {
           <button className="lc-export-item" onClick={() => { exportToCSV(licenses); setOpen(false); }}>
             <ExcelIcon /> Excel (CSV)
           </button>
-          <button className="lc-export-item" onClick={() => { exportToPDF(licenses); setOpen(false); }}>
+          <button className="lc-export-item" onClick={() => { exportToPDF(licenses).catch(err => console.error('[License] PDF export failed', err)); setOpen(false); }}>
             <PdfIcon /> PDF
           </button>
         </div>
@@ -168,7 +167,8 @@ function Toast() {
   useEffect(() => {
     if (toast) { const t = setTimeout(() => dispatch(clearToast()), 3200); return () => clearTimeout(t); }
   }, [toast, dispatch]);
-  if (!toast) return null;
+  // A refused action (403) is explained by the global pop-up — don't repeat it as a toast.
+  if (!toast || (toast.type !== 'success' && isPermissionDenied(toast.msg))) return null;
   return (
     <div className={`lc-toast ${toast.type}`}>
       {toast.type === 'success' ? <CheckIcon /> : <XIcon />} {toast.msg}
@@ -309,8 +309,6 @@ function SortTh({ field, sortBy, sortOrder, onSort, children }) {
 export default function LicensePage() {
   const dispatch = useDispatch();
   const { licenses, total, page, pageSize, loading, error, stats, statsLoading, actionLoading, filters } = useSelector(s => s.licenses);
-  const { user: me } = useSelector(s => s.auth);
-  const canEdit = me?.role === 'superadmin' || me?.role === 'admin';
 
   const [searchInput, setSearchInput] = useState(filters.search || '');
   const [detailLicenseId, setDetailLicenseId] = useState(null);
@@ -449,7 +447,7 @@ export default function LicensePage() {
         {loading && !licenses.length ? (
           <div className="lc-loading">Loading licenses…</div>
         ) : error ? (
-          <div className="lc-error">{error}</div>
+(isPermissionDenied(error) ? <AccessDenied message={error} /> : <div className="lc-error">{error}</div>)
         ) : (
           <div className="lc-table-scroll">
             <table className="lc-table">
@@ -559,7 +557,7 @@ export default function LicensePage() {
                     </tr>
                   );
                 }) : (
-                  <tr><td colSpan={canEdit ? 11 : 10} className="lc-empty">No licenses found.</td></tr>
+                  <tr><td colSpan={7} className="lc-empty">No licenses found.</td></tr>
                 )}
               </tbody>
             </table>

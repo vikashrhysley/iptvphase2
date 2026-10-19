@@ -3,6 +3,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { fetchLicenseDetail, clearDetail } from '../../store/slices/licenseSlice';
 import './LicenseDetail.css';
 
+import { isPermissionDenied } from '../../services/permissionErrors';
+import { AccessDenied } from '../../components/common/PermissionDenied';
 /* ── Icons ─────────────────────────────────────────────── */
 const BackIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -85,7 +87,7 @@ export default function LicenseDetail({ licenseId, onBack }) {
       )}
 
       {detailError && !detailLoading && (
-        <div className="ld-error">{detailError}</div>
+(isPermissionDenied(detailError) ? <AccessDenied message={detailError} /> : <div className="ld-error">{detailError}</div>)
       )}
 
       {L && !detailLoading && (
