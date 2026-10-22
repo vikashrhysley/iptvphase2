@@ -11,13 +11,15 @@ const request = async (url, options = {}) => {
   const fullUrl = url.startsWith('/') && !url.startsWith(ORIGIN) && ORIGIN
     ? `${ORIGIN}${url}`
     : url;
+  // Multipart uploads (FormData) must let the browser set Content-Type with its boundary.
+  const isFormBody = typeof FormData !== 'undefined' && restOptions.body instanceof FormData;
 
   let res;
   try {
     res = await fetch(fullUrl, {
       ...restOptions,
       headers: {
-        'Content-Type': 'application/json',
+        ...(isFormBody ? {} : { 'Content-Type': 'application/json' }),
         'Accept':       'application/json',
         ...extraHeaders,
       },
@@ -2185,5 +2187,198 @@ export const apiMarkUserNotificationsRead = async (accessToken, userId, category
     method: 'PATCH',
     headers: { Authorization: `Bearer ${accessToken}` },
   });
+  return res.data ?? res;
+};
+
+// ─────────────────────────────────────────────────────────
+// GET HELP SUPPORT CONSOLE APIs  (§24 — /admin/support/*)
+// ─────────────────────────────────────────────────────────
+// Every /admin/support/* route is in the Get Help (support_tickets) module: GET needs View,
+// everything else needs Act. /admin/support/settings is in System Configuration instead.
+// Mutations accept an optional expected_version; a stale one returns 409 SUPPORT_TICKET_CONFLICT.
+
+const supportRequest = async (accessToken, path, { method = 'GET', body, headers } = {}) => {
+  if (!accessToken) throw new Error('Unauthorized');
+  const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
+  return request(`${BASE}/admin/support${path}`, {
+    method,
+    headers: { Authorization: `Bearer ${accessToken}`, ...headers },
+    ...(body === undefined ? {} : { body: isForm ? body : JSON.stringify(body) }),
+  });
+};
+
+const supportTicketPath = (ticketNumber) => `/tickets/${encodeURIComponent(ticketNumber)}`;
+const supportList = (res) => {
+  const raw = res?.data ?? res;
+  if (Array.isArray(raw)) return raw;
+  if (Array.isArray(raw?.data)) return raw.data;
+  if (Array.isArray(raw?.items)) return raw.items;
+  return [];
+};
+
+// Signed attachment links come back relative ("/api/v1/support/attachments/…") — prefix the API origin.
+export const supportAttachmentHref = (url) => {
+  if (!url) return '#';
+  return url.startsWith('/') && ORIGIN ? `${ORIGIN}${url}` : url;
+};
+
+// GET /admin/support/tickets — the queue (view, filters, search, sort, pagination)
+export const apiFetchSupportTickets = async (accessToken, params = {}) => {
+  const res = await supportRequest(accessToken, `/tickets${cleanParams(params)}`);
+  const items = supportList(res);
+  const meta = res.meta || res.data?.meta || {};
+  return {
+    items,
+    total:      meta.total       ?? items.length,
+    page:       meta.page        ?? params.page ?? 1,
+    pageSize:   meta.page_size   ?? params.page_size ?? 25,
+    totalPages: meta.total_pages ?? 1,
+  };
+};
+
+// GET /admin/support/tickets/summary — KPI strip counts
+export const apiFetchSupportSummary = async (accessToken) => {
+  const res = await supportRequest(accessToken, '/tickets/summary');
+  return res.data ?? res;
+};
+
+// POST /admin/support/tickets/bulk — { ticket_numbers[1–100], action, assignee_id?, status?, priority?, resolution_code? }
+// Returns one { ticket_number, ok, error } per ticket (each processed on its own).
+export const apiBulkSupportTickets = async (accessToken, body) => {
+  const res = await supportRequest(accessToken, '/tickets/bulk', { method: 'POST', body });
+  return supportList(res);
+};
+
+// GET /admin/support/tickets/{no} — ticket + thread + 360° context. Opening it as a write-capable
+// admin moves a new ticket to open and clears the unread marker.
+export const apiFetchSupportTicket = async (accessToken, ticketNumber) => {
+  const res = await supportRequest(accessToken, supportTicketPath(ticketNumber));
+  return res.data ?? res;
+};
+
+// GET /admin/support/tickets/{no}/messages — thread only (internal notes included)
+export const apiFetchSupportMessages = async (accessToken, ticketNumber) => {
+  const res = await supportRequest(accessToken, `${supportTicketPath(ticketNumber)}/messages`);
+  return supportList(res);
+};
+
+// GET /admin/support/tickets/{no}/audit-logs — activity timeline, oldest first
+export const apiFetchSupportTicketAudit = async (accessToken, ticketNumber) => {
+  const res = await supportRequest(accessToken, `${supportTicketPath(ticketNumber)}/audit-logs`);
+  return supportList(res);
+};
+
+// GET /admin/support/assignees — admins a ticket can be assigned to [{ id, name, email, role }]
+export const apiFetchSupportAssignees = async (accessToken) => {
+  const res = await supportRequest(accessToken, '/assignees');
+  return supportList(res);
+};
+
+// POST /admin/support/tickets/{no}/reply — emailed from the support address.
+// The Idempotency-Key header makes a double-click / retry send exactly one email.
+export const apiReplySupportTicket = async (accessToken, ticketNumber, body, idempotencyKey) => {
+  const res = await supportRequest(accessToken, `${supportTicketPath(ticketNumber)}/reply`, {
+    method: 'POST',
+    body,
+    headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {},
+  });
+  return res.data ?? res;
+};
+
+// POST /admin/support/tickets/{no}/notes — internal note { body, mentions[] }; never shown to the user
+export const apiAddSupportNote = async (accessToken, ticketNumber, body) => {
+  const res = await supportRequest(accessToken, `${supportTicketPath(ticketNumber)}/notes`, { method: 'POST', body });
+  return res.data ?? res;
+};
+
+// POST /admin/support/tickets/{no}/messages/{id}/retry — re-send a reply whose email failed
+export const apiRetrySupportMessage = async (accessToken, ticketNumber, messageId) => {
+  const res = await supportRequest(accessToken, `${supportTicketPath(ticketNumber)}/messages/${encodeURIComponent(messageId)}/retry`, { method: 'POST' });
+  return res.data ?? res;
+};
+
+// POST /admin/support/attachments — multipart field "file"; returns { id, file_name, mime_type, size_bytes }
+export const apiUploadSupportAttachment = async (accessToken, file) => {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await supportRequest(accessToken, '/attachments', { method: 'POST', body: form });
+  return res.data ?? res;
+};
+
+// PATCH /admin/support/tickets/{no}/status — { status, resolution_code?, message?, expected_version }
+export const apiUpdateSupportStatus = async (accessToken, ticketNumber, body) => {
+  const res = await supportRequest(accessToken, `${supportTicketPath(ticketNumber)}/status`, { method: 'PATCH', body });
+  return res.data ?? res;
+};
+
+// PATCH /admin/support/tickets/{no}/priority — { priority, expected_version }; SLA deadlines re-computed
+export const apiUpdateSupportPriority = async (accessToken, ticketNumber, body) => {
+  const res = await supportRequest(accessToken, `${supportTicketPath(ticketNumber)}/priority`, { method: 'PATCH', body });
+  return res.data ?? res;
+};
+
+// PATCH /admin/support/tickets/{no}/assign — { assignee_id: id | "me" | null, expected_version }
+export const apiAssignSupportTicket = async (accessToken, ticketNumber, body) => {
+  const res = await supportRequest(accessToken, `${supportTicketPath(ticketNumber)}/assign`, { method: 'PATCH', body });
+  return res.data ?? res;
+};
+
+// POST /admin/support/tickets/{no}/approve — { notes?, device_id?, max_devices?, expected_version }
+export const apiApproveSupportTicket = async (accessToken, ticketNumber, body) => {
+  const res = await supportRequest(accessToken, `${supportTicketPath(ticketNumber)}/approve`, { method: 'POST', body });
+  return res.data ?? res;
+};
+
+// POST /admin/support/tickets/{no}/reject — { notes (required, emailed to the user), expected_version }
+export const apiRejectSupportTicket = async (accessToken, ticketNumber, body) => {
+  const res = await supportRequest(accessToken, `${supportTicketPath(ticketNumber)}/reject`, { method: 'POST', body });
+  return res.data ?? res;
+};
+
+// GET /admin/support/canned-responses?ticket_type=&include_inactive= — raw templates
+export const apiFetchCannedResponses = async (accessToken, params = {}) => {
+  const res = await supportRequest(accessToken, `/canned-responses${cleanParams(params)}`);
+  return supportList(res);
+};
+
+// GET /admin/support/tickets/{no}/canned-responses — this ticket's templates, placeholders filled
+export const apiFetchTicketCannedResponses = async (accessToken, ticketNumber) => {
+  const res = await supportRequest(accessToken, `${supportTicketPath(ticketNumber)}/canned-responses`);
+  return supportList(res);
+};
+
+// POST /admin/support/canned-responses — { title, body, ticket_type?, category?, is_active }
+export const apiCreateCannedResponse = async (accessToken, data) => {
+  const res = await supportRequest(accessToken, '/canned-responses', { method: 'POST', body: data });
+  return res.data ?? res;
+};
+
+// PATCH /admin/support/canned-responses/{id} — partial update
+export const apiUpdateCannedResponse = async (accessToken, id, data) => {
+  const res = await supportRequest(accessToken, `/canned-responses/${encodeURIComponent(id)}`, { method: 'PATCH', body: data });
+  return res.data ?? res;
+};
+
+// DELETE /admin/support/canned-responses/{id}
+export const apiDeleteCannedResponse = async (accessToken, id) => {
+  const res = await supportRequest(accessToken, `/canned-responses/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  return res.data ?? res;
+};
+
+// GET /admin/support/analytics — date_from, date_to (default last 30 days), ticket_type, category, priority, assignee_id
+export const apiFetchSupportAnalytics = async (accessToken, params = {}) => {
+  const res = await supportRequest(accessToken, `/analytics${cleanParams(params)}`);
+  return res.data ?? res;
+};
+
+// GET /admin/support/settings — effective settings (System Configuration · View)
+export const apiFetchSupportSettings = async (accessToken) => {
+  const res = await supportRequest(accessToken, '/settings');
+  return res.data ?? res;
+};
+
+// PATCH /admin/support/settings — partial update (System Configuration · Act); returns merged settings
+export const apiUpdateSupportSettings = async (accessToken, data) => {
+  const res = await supportRequest(accessToken, '/settings', { method: 'PATCH', body: data });
   return res.data ?? res;
 };

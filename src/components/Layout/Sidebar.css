@@ -457,3 +457,32 @@
     flex: 1;
   }
 }
+
+/* Get Help unread badge — count pill when expanded, a dot on the icon when collapsed. */
+.nav-icon { position: relative; }
+.nav-count {
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--accent-primary);
+  color: var(--bg-deep);
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.nav-dot {
+  position: absolute;
+  top: -3px;
+  right: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--bg-deep);
+}
+[data-theme="light"] .nav-count { color: #ffffff; }
