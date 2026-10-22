@@ -20,9 +20,10 @@ export const fetchAdminUsersStats = createAsyncThunk(
       return rejectWithValue(err.message);
     }
   },
-  { condition: (_, { getState }) => {
+  // Cached after the first load; pass { force: true } to refetch after a create/update.
+  { condition: (arg, { getState }) => {
     const { statsLoading, stats } = getState().adminUsers;
-    return !statsLoading && !stats;
+    return !statsLoading && (arg?.force || !stats);
   }}
 );
 
@@ -57,10 +58,13 @@ export const fetchAdminUserDetail = createAsyncThunk(
 
 export const updateAdminUser = createAsyncThunk(
   'adminUsers/updateUser',
-  async ({ userId, data }, { getState, rejectWithValue }) => {
+  async ({ userId, data }, { getState, rejectWithValue, dispatch }) => {
     try {
       const { accessToken } = getState().auth;
-      return await apiUpdateAdminUser(accessToken, userId, data);
+      const result = await apiUpdateAdminUser(accessToken, userId, data);
+      // Role/status changes move the stat card counts.
+      dispatch(fetchAdminUsersStats({ force: true }));
+      return result;
     } catch (err) {
       return rejectWithValue(err.message);
     }

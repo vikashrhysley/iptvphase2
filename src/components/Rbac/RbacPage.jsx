@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useDispatch, useSelector } from 'react-redux';
+import toast from 'react-hot-toast';
 import { refreshCurrentUser } from '../../store/slices/authSlice';
 import {
   fetchRbacRoles,
@@ -9,20 +10,35 @@ import {
   fetchRoleDetail,
   updateRbacRole,
   deleteRbacRole,
-  patchRolePermissions,
+  putRolePermissions,
   assignRbacRole,
-  createRbacModule,
+  updateRbacModule,
   deleteRbacModule,
-  fetchAssignableRoles,
   clearCreateError,
   clearUpdateError,
+  clearSaveError,
   clearDeleteError,
   clearAssignError,
-  clearCreateModuleError,
+  clearUpdateModuleError,
   clearDeleteModuleError,
   clearRoleDetail,
 } from '../../store/slices/rbacSlice';
+import { apiFetchAdminUsers } from '../../services/api';
+import { isPermissionDenied } from '../../services/permissionErrors';
+import { AccessDenied } from '../common/PermissionDenied';
+import {
+  VIEW, ACT, BUILT_IN_MODULES, isActOnly, isSuperadminRole, visibleRoles, templateRoles,
+  normalizeGrid, hasView, hasAct, setView, setAct, accessCounts, accessLabel,
+  validateRoleName, groupModules, fullGrid, gridsEqual,
+} from './rbacRules';
 import './RbacPage.css';
+
+/*
+ * Roles & Permissions — Roles & Permissions build guide, Part C.
+ * The grid IS the access model: a role can do exactly what is ticked (View = GET, Act = writes),
+ * superadmin always passes. Nothing on this page is hidden or disabled by the viewer's own role;
+ * a refused call comes back as 403 and the global pop-up / inline locked state explains it.
+ */
 
 // ─── Icons ────────────────────────────────────────────────
 const ShieldIcon = () => (
@@ -46,7 +62,7 @@ const LayersIcon = () => (
   </svg>
 );
 const LockIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <rect x="3" y="11" width="18" height="11" rx="2"/>
     <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
   </svg>
@@ -77,15 +93,16 @@ const ArrowLeftIcon = () => (
     <polyline points="15 18 9 12 15 6"/>
   </svg>
 );
-const ChevronRightIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <polyline points="9 18 15 12 9 6"/>
-  </svg>
-);
 const EditIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+  </svg>
+);
+const EyeIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+    <circle cx="12" cy="12" r="3"/>
   </svg>
 );
 const SaveIcon = () => (
@@ -122,19 +139,6 @@ const WarningIcon = () => (
     <line x1="12" y1="17" x2="12.01" y2="17"/>
   </svg>
 );
-const UserIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-    <circle cx="12" cy="7" r="4"/>
-  </svg>
-);
-const CubeIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <polyline points="21 16 21 8 12 3 3 8 3 16 12 21 21 16"/>
-    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
-    <line x1="12" y1="22.08" x2="12" y2="12"/>
-  </svg>
-);
 const AssignIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
@@ -142,54 +146,63 @@ const AssignIcon = () => (
     <polyline points="16 11 18 13 22 9"/>
   </svg>
 );
+const SearchIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+    <circle cx="11" cy="11" r="8"/>
+    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+  </svg>
+);
 
-// ─── Action config ────────────────────────────────────────
-const ACTION_CFG = {
-  read:    { color: '#38bdf8', bg: 'rgba(56,189,248,0.15)',  label: 'Read'    },
-  write:   { color: '#34d399', bg: 'rgba(52,211,153,0.15)',  label: 'Write'   },
-  delete:  { color: '#f87171', bg: 'rgba(248,113,113,0.15)', label: 'Delete'  },
-  execute: { color: '#a78bfa', bg: 'rgba(167,139,250,0.15)', label: 'Execute' },
+// View / Act tick colours (match the old Read / Write dots).
+const COL = {
+  [VIEW]: { label: 'View', color: '#38bdf8', bg: 'rgba(56,189,248,0.15)' },
+  [ACT]:  { label: 'Act',  color: '#34d399', bg: 'rgba(52,211,153,0.15)' },
 };
-const ALL_ACTIONS = ['read', 'write', 'delete', 'execute'];
 
 const roleColor = (name = '') => {
-  const palette = ['#6366f1','#8b5cf6','#06b6d4','#10b981','#f59e0b','#ef4444','#ec4899'];
+  const palette = ['#6366f1', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899'];
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffffffff;
   return palette[Math.abs(h) % palette.length];
 };
 const getInitials = (name = '') =>
-  name.trim().split(/\s+/).filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase()
+  name.trim().split(/[\s_]+/).filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase()
   || name.slice(0, 2).toUpperCase();
-const getPermCount = (role) =>
-  Object.values(role.permissions || {}).reduce((s, a) => s + (Array.isArray(a) ? a.length : 0), 0);
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+const adminRoleLabel = (u) => u?.role_display || u?.role || u?.role_name || 'no role';
 
-// ─── Export helpers ───────────────────────────────────────
-const ROLE_COLS = ['Role Name', 'Description', 'Type', 'Status', 'Assigned Users', 'Modules', 'Total Permissions'];
-const PERM_COLS = ['Role', 'Module', 'Read', 'Write', 'Delete', 'Execute'];
+// An action error string → inline message, unless it was a 403 (the global pop-up explained it).
+function ActionError({ error }) {
+  if (!error || isPermissionDenied(error)) return null;
+  return <div className="rb-save-error">⚠ {error}</div>;
+}
 
-const buildRoleRows = (roles) =>
-  roles.map(r => [
-    r.name,
-    r.description || '',
-    r.is_system ? 'System' : 'Custom',
-    r.is_active !== false ? 'Active' : 'Inactive',
-    r.user_count ?? 0,
-    Object.keys(r.permissions || {}).length,
-    getPermCount(r),
-  ]);
+// A read (GET) error → inline locked state for a 403, else the normal error line.
+function ReadError({ error, compact }) {
+  if (!error) return null;
+  if (isPermissionDenied(error)) return <AccessDenied message={error} compact={compact} />;
+  return <div className="rb-save-error">⚠ {error}</div>;
+}
+
+// ─── Export (View / Act only — no Delete / Execute columns) ──
+const ROLE_COLS = ['Role', 'Description', 'Type', 'Status', 'Admins', 'Access'];
+const PERM_COLS = ['Role', 'Module', 'View', 'Act'];
+
+const buildRoleRows = (roles) => roles.map(r => [
+  r.name,
+  r.description || '',
+  r.is_system ? 'System' : 'Custom',
+  r.is_active !== false ? 'Active' : 'Inactive',
+  r.user_count ?? 0,
+  accessLabel(r),
+]);
 
 const buildPermRows = (roles) => {
   const rows = [];
   for (const r of roles) {
-    for (const [mod, actions] of Object.entries(r.permissions || {})) {
-      rows.push([
-        r.name, mod,
-        actions.includes('read')    ? '✓' : '✗',
-        actions.includes('write')   ? '✓' : '✗',
-        actions.includes('delete')  ? '✓' : '✗',
-        actions.includes('execute') ? '✓' : '✗',
-      ]);
+    if (isSuperadminRole(r)) { rows.push([r.name, 'All modules', '✓', '✓']); continue; }
+    for (const [mod, actions] of Object.entries(normalizeGrid(r.permissions))) {
+      rows.push([r.name, mod, isActOnly(mod) ? '--' : (actions.includes(VIEW) ? '✓' : '✗'), actions.includes(ACT) ? '✓' : '✗']);
     }
   }
   return rows;
@@ -198,57 +211,37 @@ const buildPermRows = (roles) => {
 const exportRbacToExcel = async (roles) => {
   const { utils, writeFile } = await import('xlsx');
   const wb = utils.book_new();
-  const ws1 = utils.aoa_to_sheet([ROLE_COLS, ...buildRoleRows(roles)]);
-  utils.book_append_sheet(wb, ws1, 'Roles');
+  utils.book_append_sheet(wb, utils.aoa_to_sheet([ROLE_COLS, ...buildRoleRows(roles)]), 'Roles');
   const permRows = buildPermRows(roles);
-  if (permRows.length) {
-    const ws2 = utils.aoa_to_sheet([PERM_COLS, ...permRows]);
-    utils.book_append_sheet(wb, ws2, 'Permissions Matrix');
-  }
-  writeFile(wb, `rbac-roles-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  if (permRows.length) utils.book_append_sheet(wb, utils.aoa_to_sheet([PERM_COLS, ...permRows]), 'Permissions');
+  writeFile(wb, `roles-permissions-${new Date().toISOString().slice(0, 10)}.xlsx`);
 };
 
 const exportRbacToPDF = async (roles) => {
-  const { jsPDF }              = await import('jspdf');
+  const { jsPDF } = await import('jspdf');
   const { default: autoTable } = await import('jspdf-autotable');
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
-  const date = new Date().toLocaleString();
-
-  doc.setFontSize(13);
-  doc.text('RBAC — Roles', 40, 36);
-  doc.setFontSize(8);
-  doc.setTextColor(130, 130, 130);
-  doc.text(`Exported ${date}`, 40, 52);
-  doc.setTextColor(0, 0, 0);
-
-  autoTable(doc, {
-    startY: 64,
-    head: [ROLE_COLS],
-    body: buildRoleRows(roles),
+  const tableStyle = {
     styles: { fontSize: 8, cellPadding: 4 },
     headStyles: { fillColor: [30, 35, 60], textColor: [200, 210, 230], fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [245, 247, 250] },
     margin: { left: 40, right: 40 },
-  });
-
+  };
+  doc.setFontSize(13);
+  doc.text('Roles & Permissions — Roles', 40, 36);
+  doc.setFontSize(8);
+  doc.setTextColor(130, 130, 130);
+  doc.text(`Exported ${new Date().toLocaleString()}`, 40, 52);
+  doc.setTextColor(0, 0, 0);
+  autoTable(doc, { startY: 64, head: [ROLE_COLS], body: buildRoleRows(roles), ...tableStyle });
   const permRows = buildPermRows(roles);
   if (permRows.length) {
     doc.addPage();
     doc.setFontSize(13);
-    doc.setTextColor(0, 0, 0);
-    doc.text('RBAC — Permissions Matrix', 40, 36);
-    autoTable(doc, {
-      startY: 52,
-      head: [PERM_COLS],
-      body: permRows,
-      styles: { fontSize: 8, cellPadding: 4 },
-      headStyles: { fillColor: [30, 35, 60], textColor: [200, 210, 230], fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [245, 247, 250] },
-      margin: { left: 40, right: 40 },
-    });
+    doc.text('Roles & Permissions — View / Act grid', 40, 36);
+    autoTable(doc, { startY: 52, head: [PERM_COLS], body: permRows, ...tableStyle });
   }
-
-  doc.save(`rbac-roles-${new Date().toISOString().slice(0, 10)}.pdf`);
+  doc.save(`roles-permissions-${new Date().toISOString().slice(0, 10)}.pdf`);
 };
 
 function ExportButton({ onExportPDF, onExportExcel }) {
@@ -272,1372 +265,717 @@ function ExportButton({ onExportPDF, onExportExcel }) {
       </button>
       {open && (
         <div className="rb-export-menu">
-          <button onClick={() => { setOpen(false); onExportPDF(); }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
-            </svg>
-            PDF
-          </button>
-          <button onClick={() => { setOpen(false); onExportExcel(); }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2">
-              <rect x="3" y="3" width="18" height="18" rx="2"/>
-              <path d="M3 9h18M9 21V9"/>
-            </svg>
-            Excel
-          </button>
+          <button onClick={() => { setOpen(false); onExportPDF(); }}>PDF</button>
+          <button onClick={() => { setOpen(false); onExportExcel(); }}>Excel</button>
         </div>
       )}
     </div>
   );
 }
 
-// ─── Permission dot ───────────────────────────────────────
-function PermDot({ action, active, available, editMode, onChange }) {
-  if (!available) return <span className="rb-perm-na">—</span>;
-  const c = ACTION_CFG[action] || {};
-  if (editMode) {
+// ─── Modal shell ──────────────────────────────────────────
+function Modal({ title, icon, danger, onClose, busy, width, children, footer }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape' && !busy) onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose, busy]);
+  return createPortal(
+    <div className="rb-modal-overlay" onClick={e => e.target === e.currentTarget && !busy && onClose()}>
+      <div className="rb-modal" style={width ? { maxWidth: width } : undefined} role="dialog" aria-modal="true">
+        <div className="rb-modal-header">
+          <div className="rb-modal-title">
+            <div className={`rb-modal-icon${danger ? ' rb-modal-icon-danger' : ''}`}>{icon}</div>
+            {title}
+          </div>
+          <button className="rb-modal-close" onClick={onClose} disabled={busy} aria-label="Close"><CloseIcon /></button>
+        </div>
+        <div className="rb-modal-body">{children}</div>
+        {footer && <div className="rb-modal-footer">{footer}</div>}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// ─── The grid (C5) ────────────────────────────────────────
+function Tick({ on, column, editable, locked, onToggle, label }) {
+  const c = COL[column];
+  const style = on ? { '--ac': c.color, '--ab': c.bg } : undefined;
+  if (editable) {
     return (
       <button
-        className={`rb-perm-btn ${active ? 'rb-perm-on' : 'rb-perm-off'}`}
-        style={active ? { '--ac': c.color, '--ab': c.bg } : {}}
-        onClick={onChange}
-        title={active ? `Revoke ${c.label}` : `Grant ${c.label}`}
+        type="button"
+        className={`rb-perm-btn ${on ? 'rb-perm-on' : 'rb-perm-off'}`}
+        style={style}
+        onClick={onToggle}
+        aria-pressed={on}
+        aria-label={`${c.label} — ${label}`}
+        title={`${on ? 'Remove' : 'Grant'} ${c.label} on ${label}`}
       >
-        {active ? <CheckIcon /> : <MinusIcon />}
+        {on ? <CheckIcon /> : <MinusIcon />}
       </button>
     );
   }
-  if (!active) return <span className="rb-perm-off"><MinusIcon /></span>;
   return (
-    <span className="rb-perm-on" style={{ '--ac': c.color, '--ab': c.bg }}>
-      <CheckIcon />
+    <span className={`${on ? 'rb-perm-on' : 'rb-perm-off'}${locked ? ' rb-tick-locked' : ''}`} style={style}
+      aria-label={`${c.label} ${on ? 'granted' : 'not granted'} — ${label}`}>
+      {on ? <CheckIcon /> : <MinusIcon />}
     </span>
   );
 }
 
-// ─── Change role modal ────────────────────────────────────
-function AssignUserModal({ currentRole, user, assigning, assignError, onClose, onSubmit }) {
-  const dispatch = useDispatch();
-  const { assignableRoles, assignableRolesLoading, assignableRolesError } =
-    useSelector(s => s.rbac);
-
-  const [selectedRoleId, setSelectedRoleId] = useState(currentRole.id);
-  const [reason, setReason] = useState('');
-
-  useEffect(() => {
-    dispatch(fetchAssignableRoles());
-  }, [dispatch]);
-
-  const userColor = roleColor(user?.full_name || user?.email || '');
-  const name  = user?.full_name || '';
-  const email = user?.email || '';
-
-  const selectedRole = assignableRoles.find(r => r.id === selectedRoleId);
-  const isUnchanged  = selectedRoleId === currentRole.id;
-
-  const handleSubmit = () => {
-    if (!selectedRoleId) return;
-    onSubmit(selectedRoleId, { user_id: user.id, reason });
-  };
-
-  return createPortal(
-    <div className="rb-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="rb-modal" style={{ maxWidth: 500 }}>
-        <div className="rb-modal-header">
-          <div className="rb-modal-title">
-            <div className="rb-modal-icon"><AssignIcon /></div>
-            Change Role
-          </div>
-          <button className="rb-modal-close" onClick={onClose}><CloseIcon /></button>
-        </div>
-
-        <div className="rb-modal-body">
-          {/* User + current role row */}
-          <div className="rb-assign-user-card">
-            <div className="rb-user-av rb-user-av-lg" style={{ background: `${userColor}20`, color: userColor, border: `1px solid ${userColor}40` }}>
-              {getInitials(name || email || '?')}
-            </div>
-            <div className="rb-assign-user-info">
-              <span className="rb-assign-user-name">{name || email}</span>
-              <span className="rb-assign-user-email">{name ? email : 'Admin user'}</span>
-            </div>
-            <div className="rb-assign-flow">
-              <span className="rb-assign-flow-from">{currentRole.name}</span>
-              <span className="rb-assign-flow-arrow">→</span>
-              <span className="rb-assign-flow-to">
-                {selectedRole ? selectedRole.name : '…'}
-              </span>
-            </div>
-          </div>
-
-          {/* Role select */}
-          <div className="rb-form-group" style={{ marginTop: 14 }}>
-            <label className="rb-form-label">Change role to</label>
-            {assignableRolesLoading ? (
-              <div className="rb-sk" style={{ height: 42, borderRadius: 8, width: '100%' }} />
-            ) : assignableRolesError ? (
-              <div className="rb-save-error">⚠ Could not load roles.</div>
-            ) : (
-              <select
-                className="rb-form-select"
-                value={selectedRoleId}
-                onChange={e => setSelectedRoleId(e.target.value)}
-              >
-                {assignableRoles.map(r => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}{r.id === currentRole.id ? '  (current)' : ''}
-                  </option>
-                ))}
-              </select>
-            )}
-            {selectedRole?.description && (
-              <span className="rb-form-hint">{selectedRole.description}</span>
-            )}
-          </div>
-
-          {/* Reason */}
-          <div className="rb-form-group">
-            <label className="rb-form-label">Reason <span className="rb-form-optional">optional</span></label>
-            <input
-              className="rb-form-input"
-              type="text"
-              placeholder="e.g. Promoted to billing reviewer"
-              value={reason}
-              onChange={e => setReason(e.target.value)}
-            />
-            <span className="rb-form-hint">Stored in the audit trail.</span>
-          </div>
-
-          {assignError && <div className="rb-save-error">⚠ {assignError}</div>}
-        </div>
-
-        <div className="rb-modal-footer">
-          <button className="rb-cancel-btn" onClick={onClose} disabled={assigning}>Cancel</button>
-          <button
-            className="rb-save-btn"
-            onClick={handleSubmit}
-            disabled={assigning || !selectedRoleId || assignableRolesLoading}
-          >
-            {assigning
-              ? <><span className="rb-spinner" /> Assigning…</>
-              : isUnchanged
-                ? <><AssignIcon /> Re-assign Role</>
-                : <><AssignIcon /> Change to {selectedRole?.name || '…'}</>
-            }
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
-
-// ─── Create module modal ──────────────────────────────────
-function CreateModuleModal({ creatingModule, createModuleError, onClose, onSubmit }) {
-  const [name, setName]             = useState('');
-  const [displayName, setDisplayName] = useState('');
-  const [actions, setActions]       = useState(['read', 'write']);
-  const [desc, setDesc]             = useState('');
-  const [nameErr, setNameErr]       = useState('');
-  const [actErr, setActErr]         = useState('');
-
-  const validateName = v => {
-    if (!v) return 'Name is required.';
-    if (!/^[a-z][a-z0-9_]*$/.test(v)) return 'Lowercase letters, digits and underscores only.';
-    return '';
-  };
-
-  const toggleAction = (a) =>
-    setActions(prev => prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a]);
-
-  const handleSubmit = () => {
-    const ne = validateName(name);
-    if (ne) { setNameErr(ne); return; }
-    if (!displayName.trim()) return;
-    if (actions.length === 0) { setActErr('Select at least one action.'); return; }
-    onSubmit({ name: name.trim(), display_name: displayName.trim(), available_actions: actions, description: desc });
-  };
-
-  return createPortal(
-    <div className="rb-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="rb-modal" style={{ maxWidth: 480 }}>
-        <div className="rb-modal-header">
-          <div className="rb-modal-title">
-            <div className="rb-modal-icon"><CubeIcon /></div>
-            Register Module
-          </div>
-          <button className="rb-modal-close" onClick={onClose}><CloseIcon /></button>
-        </div>
-        <div className="rb-modal-body">
-          <div className="rb-form-group">
-            <label className="rb-form-label">Module Name <span className="rb-required">*</span></label>
-            <input
-              className={`rb-form-input rb-mono-input ${nameErr ? 'rb-input-error' : ''}`}
-              type="text"
-              placeholder="e.g. analytics"
-              value={name}
-              onChange={e => { setName(e.target.value); setNameErr(''); }}
-            />
-            {nameErr
-              ? <span className="rb-form-hint rb-hint-err">{nameErr}</span>
-              : <span className="rb-form-hint">Unique machine name — lowercase, underscores only.</span>
-            }
-          </div>
-
-          <div className="rb-form-group">
-            <label className="rb-form-label">Display Name <span className="rb-required">*</span></label>
-            <input
-              className="rb-form-input"
-              type="text"
-              placeholder="e.g. Analytics"
-              value={displayName}
-              onChange={e => setDisplayName(e.target.value)}
-            />
-          </div>
-
-          <div className="rb-form-group">
-            <label className="rb-form-label">Available Actions <span className="rb-required">*</span></label>
-            <div className="rb-checkbox-group">
-              {ALL_ACTIONS.map(a => {
-                const c = ACTION_CFG[a];
-                return (
-                  <label key={a} className={`rb-checkbox-item ${actions.includes(a) ? 'rb-cb-checked' : ''}`}>
-                    <input
-                      type="checkbox"
-                      className="rb-checkbox-input"
-                      checked={actions.includes(a)}
-                      onChange={() => { toggleAction(a); setActErr(''); }}
-                    />
-                    <span className="rb-cb-dot" style={{ background: c.color }} />
-                    <span className="rb-cb-label" style={{ color: actions.includes(a) ? c.color : undefined }}>
-                      {c.label}
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
-            {actErr && <span className="rb-form-hint rb-hint-err">{actErr}</span>}
-          </div>
-
-          <div className="rb-form-group">
-            <label className="rb-form-label">Description <span className="rb-form-optional">optional</span></label>
-            <textarea
-              className="rb-form-textarea"
-              rows={2}
-              placeholder="Human-readable description of this module…"
-              value={desc}
-              onChange={e => setDesc(e.target.value)}
-            />
-          </div>
-
-          {createModuleError && <div className="rb-save-error">⚠ {createModuleError}</div>}
-        </div>
-        <div className="rb-modal-footer">
-          <button className="rb-cancel-btn" onClick={onClose} disabled={creatingModule}>Cancel</button>
-          <button className="rb-save-btn" onClick={handleSubmit} disabled={creatingModule}>
-            {creatingModule ? <><span className="rb-spinner" /> Registering…</> : <><CubeIcon /> Register Module</>}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
-
-// ─── Assigned users section ───────────────────────────────
-function AssignedUsers({ detail, loading, error, showHeader = true }) {
-  const users = detail?.users || [];
-  const count = detail?.user_count ?? users.length;
-
+function PermGrid({ modules, grid, onChange, readOnly, locked, baseline }) {
+  const groups = useMemo(() => groupModules(modules), [modules]);
+  if (!groups.length) return <div className="rb-empty"><LockIcon /><span>No modules returned.</span></div>;
+  const changed = (mod) => baseline && (grid[mod] || []).join() !== (baseline[mod] || []).join();
   return (
-    <div className="rb-users-section">
-
-      {/* Header — hidden when rendered inside AssignedUsersModal */}
-      {showHeader && (
-        <div className="rb-users-head">
-          <span className="rb-users-title"><UserIcon /> Assigned Users</span>
-          {!loading && <span className="rb-panel-count">{count}</span>}
-        </div>
-      )}
-
-      {/* Column labels */}
-      <div className="rb-ucols-head">
-        <span className="rb-ucol rb-ucol-user">User</span>
-        <span className="rb-ucol rb-ucol-email">Email</span>
-        <span className="rb-ucol rb-ucol-status">Status</span>
-      </div>
-
-      {error ? (
-        <div className="rb-users-error">⚠ Could not load users.</div>
-      ) : loading ? (
-        <div className="rb-users-body">
-          {Array.from({ length: 3 }, (_, i) => (
-            <div key={i} className={`rb-user-row${i % 2 !== 0 ? ' rb-user-row-alt' : ''}`}>
-              <div className="rb-ucol rb-ucol-user">
-                <div className="rb-sk" style={{ width: 36, height: 36, borderRadius: 9, flexShrink: 0 }} />
-                <div style={{ flex: 1 }}>
-                  <div className="rb-sk rb-sk-title" style={{ width: '55%' }} />
-                  <div className="rb-sk rb-sk-sub"   style={{ width: '75%' }} />
-                </div>
-              </div>
-              <div className="rb-ucol rb-ucol-email">
-                <div className="rb-sk rb-sk-sub" style={{ width: '60%' }} />
-              </div>
-              <div className="rb-ucol rb-ucol-status">
-                <div className="rb-sk" style={{ width: 54, height: 22, borderRadius: 20 }} />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : users.length === 0 ? (
-        <div className="rb-users-empty">No users assigned to this role.</div>
-      ) : (
-        <div className="rb-users-body">
-          {users.map((u, idx) => {
-            const color = roleColor(u.full_name || u.email || '');
-            const name  = u.full_name || '';
-            const email = u.email || '';
-            return (
-              <div key={u.id} className={`rb-user-row${idx % 2 !== 0 ? ' rb-user-row-alt' : ''}`}>
-                {/* User column */}
-                <div className="rb-ucol rb-ucol-user">
-                  <div className="rb-user-av" style={{ background: `${color}20`, color, border: `1px solid ${color}40` }}>
-                    {getInitials(name || email || '?')}
-                  </div>
-                  <div className="rb-user-av-info">
-                    <span className="rb-user-av-name">{name || email}</span>
-                    {name && <span className="rb-user-av-sub">{email}</span>}
-                  </div>
-                </div>
-                {/* Email column */}
-                <div className="rb-ucol rb-ucol-email">
-                  <span className="rb-user-email-val">{email}</span>
-                </div>
-                {/* Status column */}
-                <div className="rb-ucol rb-ucol-status">
-                  <span className={u.status === 'active' ? 'rb-status-active' : 'rb-status-inactive'}>
-                    {u.status || 'active'}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+    <div className="rb-matrix-scroll">
+      <table className="rb-matrix-table rb-va-table">
+        <thead>
+          <tr>
+            <th className="rb-th-module">Module</th>
+            {[VIEW, ACT].map(col => (
+              <th key={col} className="rb-th-action-col">
+                <span className="rb-th-dot" style={{ background: COL[col].color }} />
+                <span style={{ color: COL[col].color }}>{COL[col].label}</span>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {groups.map(g => [
+            <tr key={`g-${g.key}`} className="rb-grid-group"><td colSpan={3}>{g.label}</td></tr>,
+            ...g.rows.map((mod, idx) => {
+              const label = mod.display_name || mod.name;
+              const actOnly = isActOnly(mod.name);
+              const rowChanged = changed(mod.name);
+              return (
+                <tr key={mod.name} className={[idx % 2 ? 'rb-row-odd' : '', rowChanged ? 'rb-row-changed' : ''].filter(Boolean).join(' ')}>
+                  <td className="rb-td-module" title={mod.description || undefined}>
+                    <div className="rb-module-name">
+                      {label}
+                      {rowChanged && <span className="rb-changed-dot" />}
+                    </div>
+                    <div className="rb-module-key">{mod.name}</div>
+                  </td>
+                  <td className="rb-td-perm">
+                    {actOnly
+                      ? <span className="rb-perm-na" title="No page — Act only">--</span>
+                      : <Tick on={hasView(grid, mod.name)} column={VIEW} editable={!readOnly} locked={locked} label={label}
+                          onToggle={() => onChange(setView(grid, mod.name, !hasView(grid, mod.name)))} />}
+                  </td>
+                  <td className="rb-td-perm">
+                    <Tick on={hasAct(grid, mod.name)} column={ACT} editable={!readOnly} locked={locked} label={label}
+                      onToggle={() => onChange(setAct(grid, mod.name, !hasAct(grid, mod.name)))} />
+                  </td>
+                </tr>
+              );
+            }),
+          ])}
+        </tbody>
+      </table>
     </div>
   );
 }
 
-// ─── Assigned users modal ────────────────────────────────
-function AssignedUsersModal({ role, detail, loading, error, onClose, onAssign }) {
-  const users = detail?.users || [];
-  const count = detail?.user_count ?? users.length;
-
-  return createPortal(
-    <div className="rb-modal-overlay rb-users-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="rb-modal rb-users-modal">
-        {/* Header */}
-        <div className="rb-modal-header">
-          <div className="rb-modal-title">
-            <div className="rb-modal-icon" style={{ background: 'rgba(6,182,212,0.12)', borderColor: 'rgba(6,182,212,0.3)', color: '#22d3ee' }}>
-              <UsersIcon />
-            </div>
-            Assigned Users
-            {!loading && <span className="rb-panel-count" style={{ marginLeft: 6 }}>{count}</span>}
-            <span className="rb-modal-role-tag">{role.name}</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button className="rb-assign-btn" onClick={onAssign}>
-              <AssignIcon /> Assign User
-            </button>
-            <button className="rb-modal-close" onClick={onClose}><CloseIcon /></button>
-          </div>
-        </div>
-
-        {/* Column labels */}
-        <div className="rb-ucols-head rb-ucols-head-modal">
-          <span className="rb-ucol rb-ucol-user">User</span>
-          <span className="rb-ucol rb-ucol-email">Email</span>
-          <span className="rb-ucol rb-ucol-status">Status</span>
-        </div>
-
-        {/* Body */}
-        <div className="rb-modal-users-body">
-          {error ? (
-            <div className="rb-users-error">⚠ Could not load users.</div>
-          ) : loading ? (
-            <div className="rb-users-body">
-              {Array.from({ length: 4 }, (_, i) => (
-                <div key={i} className={`rb-user-row${i % 2 !== 0 ? ' rb-user-row-alt' : ''}`}>
-                  <div className="rb-ucol rb-ucol-user">
-                    <div className="rb-sk" style={{ width: 36, height: 36, borderRadius: 9, flexShrink: 0 }} />
-                    <div style={{ flex: 1 }}>
-                      <div className="rb-sk rb-sk-title" style={{ width: '55%' }} />
-                      <div className="rb-sk rb-sk-sub"   style={{ width: '70%' }} />
-                    </div>
-                  </div>
-                  <div className="rb-ucol rb-ucol-email"><div className="rb-sk rb-sk-sub" style={{ width: '60%' }} /></div>
-                  <div className="rb-ucol rb-ucol-status"><div className="rb-sk" style={{ width: 54, height: 22, borderRadius: 20 }} /></div>
-                </div>
-              ))}
-            </div>
-          ) : users.length === 0 ? (
-            <div className="rb-users-empty rb-users-empty-modal">
-              <UserIcon />
-              <span>No users are assigned to <strong>{role.name}</strong>.</span>
-              <button className="rb-assign-btn" onClick={onAssign} style={{ marginTop: 8 }}>
-                <AssignIcon /> Assign First User
-              </button>
-            </div>
-          ) : (
-            <div className="rb-users-body">
-              {users.map((u, idx) => {
-                const color = roleColor(u.full_name || u.email || '');
-                const name  = u.full_name || '';
-                const email = u.email || '';
-                return (
-                  <div key={u.id} className={`rb-user-row${idx % 2 !== 0 ? ' rb-user-row-alt' : ''}`}>
-                    <div className="rb-ucol rb-ucol-user">
-                      <div className="rb-user-av" style={{ background: `${color}20`, color, border: `1px solid ${color}40` }}>
-                        {getInitials(name || email || '?')}
-                      </div>
-                      <div className="rb-user-av-info">
-                        <span className="rb-user-av-name">{name || email}</span>
-                        {name && <span className="rb-user-av-sub">{email}</span>}
-                      </div>
-                    </div>
-                    <div className="rb-ucol rb-ucol-email">
-                      <span className="rb-user-email-val">{email}</span>
-                    </div>
-                    <div className="rb-ucol rb-ucol-status">
-                      <span className={u.status === 'active' ? 'rb-status-active' : 'rb-status-inactive'}>
-                        {u.status || 'active'}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="rb-modal-footer">
-          <span className="rb-modal-footer-hint">
-            {count > 0 ? `${count} user${count !== 1 ? 's' : ''} assigned` : 'No users assigned yet'}
-          </span>
-          <button className="rb-cancel-btn" onClick={onClose}>Close</button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
-
-// ─── Create role modal ────────────────────────────────────
-function CreateRoleModal({ modules, creating, createError, onClose, onSubmit }) {
-  const [name, setName]             = useState('');
-  const [desc, setDesc]             = useState('');
-  const [draftPerms, setDraftPerms] = useState({});
-  const [nameErr, setNameErr]       = useState('');
-
-  const validateName = (v) => {
-    if (!v) return 'Name is required.';
-    if (!/^[a-z][a-z0-9_]*$/.test(v)) return 'Lowercase letters, digits and underscores only.';
-    if (['viewer','admin','superadmin'].includes(v)) return 'Cannot shadow a system role name.';
-    return '';
-  };
-
-  const togglePerm = (modName, action) => {
-    setDraftPerms(prev => {
-      const next = { ...prev, [modName]: [...(prev[modName] || [])] };
-      const idx  = next[modName].indexOf(action);
-      if (idx === -1) next[modName].push(action);
-      else next[modName].splice(idx, 1);
-      if (next[modName].length === 0) delete next[modName];
-      return next;
-    });
-  };
-
-  const handleSubmit = () => {
-    const err = validateName(name);
-    if (err) { setNameErr(err); return; }
-    onSubmit({ name, description: desc, permissions: draftPerms });
-  };
-
-  const rows = modules.length > 0
-    ? modules
-    : [];
-
-  return createPortal(
-    <div className="rb-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="rb-modal">
-        <div className="rb-modal-header">
-          <div className="rb-modal-title">
-            <div className="rb-modal-icon"><PlusIcon /></div>
-            Create New Role
-          </div>
-          <button className="rb-modal-close" onClick={onClose}><CloseIcon /></button>
-        </div>
-
-        <div className="rb-modal-body">
-          {/* Name */}
-          <div className="rb-form-group">
-            <label className="rb-form-label">Role Name <span className="rb-required">*</span></label>
-            <input
-              className={`rb-form-input ${nameErr ? 'rb-input-error' : ''}`}
-              type="text"
-              placeholder="e.g. billing_viewer"
-              value={name}
-              onChange={e => { setName(e.target.value); setNameErr(''); }}
-            />
-            {nameErr
-              ? <span className="rb-form-hint rb-hint-err">{nameErr}</span>
-              : <span className="rb-form-hint">Lowercase letters, digits and underscores only.</span>
-            }
-          </div>
-
-          {/* Description */}
-          <div className="rb-form-group">
-            <label className="rb-form-label">Description</label>
-            <textarea
-              className="rb-form-textarea"
-              placeholder="Human-readable description of this role…"
-              rows={2}
-              value={desc}
-              onChange={e => setDesc(e.target.value)}
-            />
-          </div>
-
-          {/* Permissions */}
-          {rows.length > 0 && (
-            <div className="rb-form-group">
-              <label className="rb-form-label">Initial Permissions <span className="rb-form-optional">optional</span></label>
-              <div className="rb-create-matrix">
-                <table className="rb-matrix-table">
-                  <thead>
-                    <tr>
-                      <th className="rb-th-module">Module</th>
-                      {ALL_ACTIONS.map(a => {
-                        const c = ACTION_CFG[a];
-                        return (
-                          <th key={a} className="rb-th-action-col">
-                            <span className="rb-th-dot" style={{ background: c?.color }} />
-                            <span style={{ color: c?.color }}>{c?.label}</span>
-                          </th>
-                        );
-                      })}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((mod, idx) => {
-                      const granted = draftPerms[mod.name] || [];
-                      const avail   = mod.available_actions || ALL_ACTIONS;
-                      return (
-                        <tr key={mod.name} className={idx % 2 !== 0 ? 'rb-row-odd' : ''}>
-                          <td className="rb-td-module">
-                            <div className="rb-module-name">{mod.display_name || mod.name}</div>
-                            <div className="rb-module-key">{mod.name}</div>
-                          </td>
-                          {ALL_ACTIONS.map(action => (
-                            <td key={action} className="rb-td-perm">
-                              <PermDot
-                                action={action}
-                                active={granted.includes(action)}
-                                available={avail.includes(action)}
-                                editMode
-                                onChange={() => togglePerm(mod.name, action)}
-                              />
-                            </td>
-                          ))}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {createError && (
-            <div className="rb-save-error">⚠ {createError}</div>
-          )}
-        </div>
-
-        <div className="rb-modal-footer">
-          <button className="rb-cancel-btn" onClick={onClose} disabled={creating}>Cancel</button>
-          <button className="rb-save-btn" onClick={handleSubmit} disabled={creating}>
-            {creating ? <><span className="rb-spinner" /> Creating…</> : <><PlusIcon /> Create Role</>}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
-
-// ─── Edit role modal ──────────────────────────────────────
-function EditRoleModal({ role, updating, updateError, onClose, onSubmit }) {
-  const [name, setName]         = useState(role.name);
-  const [desc, setDesc]         = useState(role.description || '');
-  const [isActive, setIsActive] = useState(role.is_active !== false);
-  const [nameErr, setNameErr]   = useState('');
-
-  const validateName = v => {
-    if (!v) return 'Name is required.';
-    if (!/^[a-z][a-z0-9_]*$/.test(v)) return 'Lowercase letters, digits and underscores only.';
-    return '';
-  };
-
-  const handleSubmit = () => {
-    if (!role.is_system) {
-      const err = validateName(name);
-      if (err) { setNameErr(err); return; }
-    }
-    const updates = { description: desc, is_active: isActive };
-    if (!role.is_system) updates.name = name;
-    onSubmit(role.id, updates);
-  };
-
-  return createPortal(
-    <div className="rb-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="rb-modal" style={{ maxWidth: 480 }}>
-        <div className="rb-modal-header">
-          <div className="rb-modal-title">
-            <div className="rb-modal-icon"><EditIcon /></div>
-            Edit Role
-          </div>
-          <button className="rb-modal-close" onClick={onClose}><CloseIcon /></button>
-        </div>
-        <div className="rb-modal-body">
-          <div className="rb-form-group">
-            <label className="rb-form-label">Role Name {!role.is_system && <span className="rb-required">*</span>}</label>
-            <input
-              className={`rb-form-input ${nameErr ? 'rb-input-error' : ''}`}
-              type="text"
-              value={name}
-              disabled={role.is_system}
-              onChange={e => { setName(e.target.value); setNameErr(''); }}
-            />
-            {role.is_system
-              ? <span className="rb-form-hint">System role names cannot be changed.</span>
-              : nameErr
-                ? <span className="rb-form-hint rb-hint-err">{nameErr}</span>
-                : <span className="rb-form-hint">Lowercase letters, digits and underscores only.</span>
-            }
-          </div>
-
-          <div className="rb-form-group">
-            <label className="rb-form-label">Description</label>
-            <textarea
-              className="rb-form-textarea"
-              rows={2}
-              value={desc}
-              onChange={e => setDesc(e.target.value)}
-            />
-          </div>
-
-          <div className="rb-form-group">
-            <label className="rb-form-label">Status</label>
-            <div className="rb-toggle-row" onClick={() => setIsActive(v => !v)}>
-              <div className={`rb-toggle ${isActive ? 'rb-toggle-on' : ''}`}>
-                <div className="rb-toggle-thumb" />
-              </div>
-              <span className={`rb-toggle-label ${isActive ? 'rb-toggle-label-on' : ''}`}>
-                {isActive ? 'Active' : 'Inactive'}
-              </span>
-              <span className="rb-form-hint" style={{ marginLeft: 4 }}>
-                {isActive ? 'Users with this role have full access.' : 'Users lose permissions until reactivated.'}
-              </span>
-            </div>
-          </div>
-
-          {updateError && <div className="rb-save-error">⚠ {updateError}</div>}
-        </div>
-        <div className="rb-modal-footer">
-          <button className="rb-cancel-btn" onClick={onClose} disabled={updating}>Cancel</button>
-          <button className="rb-save-btn" onClick={handleSubmit} disabled={updating}>
-            {updating ? <><span className="rb-spinner" /> Saving…</> : <><SaveIcon /> Save Changes</>}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
-
-// ─── Delete confirm modal ─────────────────────────────────
-function DeleteConfirmModal({ role, deleting, deleteError, onClose, onConfirm }) {
-  const hasUsers   = (role.user_count ?? 0) > 0;
-  const isSystem   = role.is_system;
-  const canDelete  = !hasUsers && !isSystem;
-
-  return createPortal(
-    <div className="rb-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="rb-modal rb-confirm-modal">
-        <div className="rb-modal-header">
-          <div className="rb-modal-title">
-            <div className="rb-modal-icon rb-modal-icon-danger"><TrashIcon /></div>
-            Delete Role
-          </div>
-          <button className="rb-modal-close" onClick={onClose}><CloseIcon /></button>
-        </div>
-        <div className="rb-modal-body">
-          <div className="rb-confirm-body">
-            <div className="rb-confirm-warn-icon"><WarningIcon /></div>
-            <div className="rb-confirm-text">
-              <p>Are you sure you want to delete <strong>{role.name}</strong>?</p>
-              {isSystem && (
-                <div className="rb-confirm-block rb-confirm-err">
-                  System roles cannot be deleted.
-                </div>
-              )}
-              {!isSystem && hasUsers && (
-                <div className="rb-confirm-block rb-confirm-err">
-                  This role has <strong>{role.user_count}</strong> assigned user{role.user_count !== 1 ? 's' : ''}.
-                  Reassign all users before deleting.
-                </div>
-              )}
-              {canDelete && (
-                <div className="rb-confirm-block rb-confirm-warn">
-                  This action is permanent and will invalidate RBAC cache for all affected users.
-                </div>
-              )}
-            </div>
-          </div>
-          {deleteError && <div className="rb-save-error">⚠ {deleteError}</div>}
-        </div>
-        <div className="rb-modal-footer">
-          <button className="rb-cancel-btn" onClick={onClose} disabled={deleting}>Cancel</button>
-          <button
-            className="rb-delete-btn"
-            onClick={() => canDelete && onConfirm(role.id)}
-            disabled={deleting || !canDelete}
-            title={isSystem ? 'Cannot delete system role' : hasUsers ? 'Reassign users first' : ''}
-          >
-            {deleting ? <><span className="rb-spinner rb-spinner-danger" /> Deleting…</> : <><TrashIcon /> Delete Role</>}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
-
-// ─── Roles table ──────────────────────────────────────────
-const ROLES_PAGE_SIZE = 10;
-
-function RolesTable({ roles, loading, onSelect, onEdit, onDelete }) {
-  const [page, setPage] = useState(1);
-
-  const totalPages  = Math.max(1, Math.ceil(roles.length / ROLES_PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const pageRoles   = roles.slice((currentPage - 1) * ROLES_PAGE_SIZE, currentPage * ROLES_PAGE_SIZE);
-
-  // Keep page in range when the roles list changes.
-  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [totalPages, page]);
-
-  if (loading) return <SkeletonTable />;
-  if (!roles.length) return (
-    <div className="rb-empty"><LockIcon /><span>No roles found.</span></div>
-  );
-
-  const start = (currentPage - 1) * ROLES_PAGE_SIZE + 1;
-  const end   = Math.min(currentPage * ROLES_PAGE_SIZE, roles.length);
-  const pageNums = Array.from({ length: totalPages }, (_, i) => i + 1)
-    .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
-    .reduce((acc, p, i, arr) => { if (i > 0 && p - arr[i - 1] > 1) acc.push(`e${p}`); acc.push(p); return acc; }, []);
-
+// ─── Roles tab (C1 / C2) ──────────────────────────────────
+function RolesTab({ roles, loading, error, onOpen, onDelete }) {
+  if (error) return <ReadError error={error} />;
+  if (loading && !roles.length) {
+    return <div className="rb-empty"><span className="rb-spinner" /><span>Loading roles…</span></div>;
+  }
+  if (!roles.length) return <div className="rb-empty"><LockIcon /><span>No roles found.</span></div>;
   return (
     <div className="rb-table-wrap">
       <table className="rb-roles-table">
         <thead>
           <tr>
             <th className="rb-rth-role">Role</th>
-            <th className="rb-rth-center">Users</th>
-            <th className="rb-rth-center">Modules</th>
-            <th className="rb-rth-center">Perms</th>
+            <th className="rb-rth-center">Type</th>
             <th className="rb-rth-center">Status</th>
+            <th className="rb-rth-center">Admins</th>
+            <th className="rb-rth-center">Access</th>
             <th className="rb-rth-actions" />
-            <th className="rb-rth-arrow" />
           </tr>
         </thead>
         <tbody>
-          {pageRoles.map((role, idx) => {
-            const color      = roleColor(role.name);
-            const canDelete  = !role.is_system && !(role.user_count > 0);
+          {roles.map((role, idx) => {
+            const color = roleColor(role.name);
+            const superadmin = isSuperadminRole(role);
             return (
-              <tr
-                key={role.id}
-                className={`rb-rt-row${idx % 2 !== 0 ? ' rb-rt-odd' : ''}`}
-                onClick={() => onSelect(role)}
-              >
+              <tr key={role.id} className={`rb-rt-row${idx % 2 ? ' rb-rt-odd' : ''}`} onClick={() => onOpen(role)}>
                 <td className="rb-rtd-role">
                   <div className="rb-rt-avatar" style={{ background: `${color}20`, color, border: `1px solid ${color}35` }}>
                     {getInitials(role.name)}
                   </div>
                   <div className="rb-rt-info">
-                    <div className="rb-rt-name">
-                      {role.name}
-                      {role.is_system && <span className="rb-system-badge"><StarIcon /> System</span>}
-                    </div>
+                    <div className="rb-rt-name">{role.name}</div>
                     {role.description && <div className="rb-rt-desc">{role.description}</div>}
                   </div>
                 </td>
-                <td className="rb-rtd-center"><span className="rb-rt-num">{role.user_count ?? 0}</span></td>
-                <td className="rb-rtd-center"><span className="rb-rt-num">{Object.keys(role.permissions || {}).length}</span></td>
-                <td className="rb-rtd-center"><span className="rb-rt-num">{getPermCount(role)}</span></td>
+                <td className="rb-rtd-center">
+                  {role.is_system
+                    ? <span className="rb-system-badge"><StarIcon /> System</span>
+                    : <span className="rb-type-custom">Custom</span>}
+                </td>
                 <td className="rb-rtd-center">
                   {role.is_active !== false
                     ? <span className="rb-status-active">Active</span>
-                    : <span className="rb-status-inactive">Inactive</span>
-                  }
+                    : <span className="rb-status-inactive">Inactive</span>}
                 </td>
+                <td className="rb-rtd-center"><span className="rb-rt-num">{role.user_count ?? 0}</span></td>
+                <td className="rb-rtd-center"><span className="rb-access-text">{accessLabel(role)}</span></td>
                 <td className="rb-rtd-actions" onClick={e => e.stopPropagation()}>
                   <div className="rb-row-actions">
-                    <button
-                      className="rb-action-btn rb-action-edit"
-                      title="Edit role"
-                      onClick={() => onEdit(role)}
-                    >
-                      <EditIcon />
+                    <button className="rb-row-text-btn" onClick={() => onOpen(role)}>
+                      {superadmin ? <><EyeIcon /> View</> : <><EditIcon /> Edit</>}
                     </button>
-                    <button
-                      className={`rb-action-btn rb-action-delete${!canDelete ? ' rb-action-disabled' : ''}`}
-                      title={role.is_system ? 'Cannot delete system role' : role.user_count > 0 ? 'Reassign users first' : 'Delete role'}
-                      onClick={() => onDelete(role)}
-                    >
-                      <TrashIcon />
-                    </button>
+                    {!role.is_system && (
+                      <button className="rb-row-text-btn rb-row-text-danger" onClick={() => onDelete(role)}>
+                        <TrashIcon /> Delete
+                      </button>
+                    )}
                   </div>
-                </td>
-                <td className="rb-rtd-arrow">
-                  <span className="rb-rt-chevron"><ChevronRightIcon /></span>
                 </td>
               </tr>
             );
           })}
         </tbody>
       </table>
-
-      {totalPages > 1 && (
-        <div className="rb-pagination">
-          <span className="rb-pg-info">
-            Showing <strong>{start}</strong>–<strong>{end}</strong> of <strong>{roles.length}</strong> roles
-          </span>
-          <div className="rb-pg-controls">
-            <button className="rb-pg-nav" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
-              <ArrowLeftIcon /> Prev
-            </button>
-            <div className="rb-pg-pages">
-              {pageNums.map(p => typeof p === 'string'
-                ? <span key={p} className="rb-pg-ellipsis">…</span>
-                : <button key={p} className={`rb-pg-page${p === currentPage ? ' active' : ''}`} onClick={() => setPage(p)}>{p}</button>
-              )}
-            </div>
-            <button className="rb-pg-nav" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
-              Next <ChevronRightIcon />
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-// ─── Permission matrix ────────────────────────────────────
-function PermMatrix({ role, modules, saving, saveError, onBack, onSave, detail, detailLoading, detailError, onAssign }) {
-  const color = roleColor(role.name);
-  const [editMode, setEditMode]     = useState(false);
-  const [draftPerms, setDraftPerms] = useState(null);
-  const [view, setView]             = useState('matrix'); // 'matrix' | 'users'
+// ─── New role (C3) ────────────────────────────────────────
+function CreateRoleModal({ roles, modules, modulesLoading, modulesError, creating, createError, onClose, onSubmit }) {
+  const [name, setName] = useState('');
+  const [touched, setTouched] = useState(false);
+  const [desc, setDesc] = useState('');
+  const [templateId, setTemplateId] = useState('');
+  const [grid, setGrid] = useState({});
+  const nameErr = validateRoleName(name);
+  const templates = templateRoles(roles);
 
-  // detail.permissions is the authoritative source once GET /roles/{id} responds
-  const basePerms = detail?.permissions || role.permissions || {};
-
-  const rows = modules.length > 0
-    ? modules
-    : Object.keys(basePerms).map(k => ({ name: k, display_name: k, available_actions: ALL_ACTIONS }));
-
-  const activePerms    = editMode ? draftPerms : basePerms;
-  const userCount      = detail?.user_count ?? (detail?.users?.length ?? role.user_count ?? 0);
-  const permModCount   = Object.keys(basePerms).length;
-  const permActCount   = Object.values(basePerms).reduce((s, a) => s + (Array.isArray(a) ? a.length : 0), 0);
-
-  const enterEdit = () => {
-    setDraftPerms(JSON.parse(JSON.stringify(basePerms)));
-    setEditMode(true);
+  // Picking a template pre-fills the grid from that role; ticks are then added on top. Only
+  // `permissions` is sent (no template_role_id) — the guide's simplest path.
+  const pickTemplate = (id) => {
+    setTemplateId(id);
+    const t = templates.find(r => r.id === id);
+    setGrid(t ? normalizeGrid(t.permissions) : {});
   };
-  const cancelEdit = () => { setDraftPerms(null); setEditMode(false); };
-  const switchToUsers = () => { cancelEdit(); setView('users'); };
-  const switchToMatrix = () => setView('matrix');
-  const togglePerm = (modName, action) => {
-    setDraftPerms(prev => {
-      const next = { ...prev, [modName]: [...(prev[modName] || [])] };
-      const idx  = next[modName].indexOf(action);
-      if (idx === -1) next[modName].push(action);
-      else next[modName].splice(idx, 1);
-      return next;
-    });
+
+  const submit = () => {
+    setTouched(true);
+    if (nameErr) return;
+    onSubmit({ name, description: desc.trim() || undefined, permissions: normalizeGrid(grid) });
   };
-  const handleSave = async () => {
-    const allMods = new Set([...Object.keys(basePerms), ...Object.keys(draftPerms)]);
-    const add = {}, remove = {};
-    for (const mod of allMods) {
-      const orig  = basePerms[mod]  || [];
-      const draft = draftPerms[mod] || [];
-      const added   = draft.filter(a => !orig.includes(a));
-      const removed = orig.filter(a => !draft.includes(a));
-      if (added.length)   add[mod]    = added;
-      if (removed.length) remove[mod] = removed;
+
+  return (
+    <Modal title="New role" icon={<PlusIcon />} onClose={onClose} busy={creating} width={760}
+      footer={<>
+        <button className="rb-cancel-btn" onClick={onClose} disabled={creating}>Cancel</button>
+        <button className="rb-save-btn" onClick={submit} disabled={creating || (touched && !!nameErr)}>
+          {creating ? <><span className="rb-spinner" /> Creating…</> : <><PlusIcon /> Create role</>}
+        </button>
+      </>}>
+      <div className="rb-form-group">
+        <label className="rb-form-label" htmlFor="rb-new-name">Name <span className="rb-required">*</span></label>
+        <input id="rb-new-name" className={`rb-form-input${touched && nameErr ? ' rb-input-error' : ''}`} type="text"
+          placeholder="e.g. support_team" value={name} autoFocus
+          onChange={e => { setName(e.target.value); setTouched(true); }} />
+        {touched && nameErr
+          ? <span className="rb-form-hint rb-hint-err">{nameErr}</span>
+          : <span className="rb-form-hint">Lowercase letters, digits and underscores. Not viewer, admin or superadmin.</span>}
+      </div>
+      <div className="rb-form-group">
+        <label className="rb-form-label" htmlFor="rb-new-desc">Description <span className="rb-form-optional">optional</span></label>
+        <textarea id="rb-new-desc" className="rb-form-textarea" rows={2} value={desc} onChange={e => setDesc(e.target.value)}
+          placeholder="e.g. Front-line support" />
+      </div>
+      <div className="rb-form-group">
+        <label className="rb-form-label" htmlFor="rb-new-template">Start from</label>
+        <select id="rb-new-template" className="rb-form-select" value={templateId} onChange={e => pickTemplate(e.target.value)}>
+          <option value="">None — start empty</option>
+          {templates.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+        </select>
+        <span className="rb-form-hint">Copies that role's grid below; tick more on top. A new role is active straight away and nobody has it until you add admins.</span>
+      </div>
+      <div className="rb-form-group">
+        <label className="rb-form-label">Access</label>
+        {modulesLoading && !modules.length
+          ? <div className="rb-empty"><span className="rb-spinner" /><span>Loading modules…</span></div>
+          : modulesError ? <ReadError error={modulesError} compact />
+          : <PermGrid modules={modules} grid={grid} onChange={setGrid} />}
+      </div>
+      <ActionError error={createError} />
+    </Modal>
+  );
+}
+
+// ─── Confirm: turn a role off (C4) ────────────────────────
+function DeactivateModal({ role, count, busy, onClose, onConfirm }) {
+  return (
+    <Modal title="Turn this role off?" icon={<WarningIcon />} danger onClose={onClose} busy={busy} width={460}
+      footer={<>
+        <button className="rb-cancel-btn" onClick={onClose} disabled={busy}>Cancel</button>
+        <button className="rb-delete-btn" onClick={onConfirm} disabled={busy}>
+          {busy ? <><span className="rb-spinner rb-spinner-danger" /> Saving…</> : 'Turn off'}
+        </button>
+      </>}>
+      <div className="rb-confirm-block rb-confirm-err">
+        <strong>{plural(count, 'admin')}</strong> on <strong>{role.name}</strong> will lose all access.
+      </div>
+      <p className="rb-confirm-p">They can still log in, but every page is refused on their next click until the role is turned back on.</p>
+    </Modal>
+  );
+}
+
+// ─── Delete role (C7) ─────────────────────────────────────
+function DeleteRoleModal({ role, deleting, deleteError, onClose, onConfirm, onShowAdmins }) {
+  const blockedByAdmins = !!deleteError && /reassign|user\(s\)/i.test(deleteError);
+  return (
+    <Modal title="Delete role" icon={<TrashIcon />} danger onClose={onClose} busy={deleting} width={460}
+      footer={<>
+        <button className="rb-cancel-btn" onClick={onClose} disabled={deleting}>Cancel</button>
+        <button className="rb-delete-btn" onClick={() => onConfirm(role.id)} disabled={deleting}>
+          {deleting ? <><span className="rb-spinner rb-spinner-danger" /> Deleting…</> : <><TrashIcon /> Delete role</>}
+        </button>
+      </>}>
+      <p className="rb-confirm-p">Delete <strong>{role.name}</strong>? This can't be undone (it is recorded in the audit log).</p>
+      <ActionError error={deleteError} />
+      {blockedByAdmins && (
+        <button className="rb-link-btn" onClick={() => onShowAdmins(role)}>
+          <UsersIcon /> Show the admins on {role.name}
+        </button>
+      )}
+    </Modal>
+  );
+}
+
+// ─── Add admin → move them to this role (C6) ──────────────
+function AddAdminModal({ role, accessToken, existingIds, assigning, assignError, onClose, onSubmit }) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState(null);
+  const [picked, setPicked] = useState(null);
+  const [reason, setReason] = useState('');
+  const q = query.trim().toLowerCase();
+
+  useEffect(() => {
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      setSearching(true);
+      setSearchError(null);
+      try {
+        const r = await apiFetchAdminUsers(accessToken, { search: q || undefined, page_size: 50 });
+        const list = Array.isArray(r?.users) ? r.users : Array.isArray(r) ? r : [];
+        // The search param is a hint; filter by email/name here too so results always match.
+        const filtered = q ? list.filter(u => `${u.email || ''} ${u.full_name || ''}`.toLowerCase().includes(q)) : list;
+        if (!cancelled) setResults(filtered.slice(0, 20));
+      } catch (err) {
+        if (!cancelled) setSearchError(err.message);
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    }, 300);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [q, accessToken]);
+
+  const name = (u) => u.full_name || u.email;
+
+  return (
+    <Modal title={picked ? `Move ${name(picked)}?` : `Add admin to ${role.name}`} icon={<AssignIcon />} onClose={onClose}
+      busy={assigning} width={520}
+      footer={picked ? <>
+        <button className="rb-cancel-btn" onClick={() => setPicked(null)} disabled={assigning}>Back</button>
+        <button className="rb-save-btn" onClick={() => onSubmit(picked, reason)} disabled={assigning}>
+          {assigning ? <><span className="rb-spinner" /> Moving…</> : <><AssignIcon /> Move to {role.name}</>}
+        </button>
+      </> : <button className="rb-cancel-btn" onClick={onClose}>Cancel</button>}>
+      {!picked ? (
+        <>
+          <div className="rb-search-wrap">
+            <SearchIcon />
+            <input className="rb-form-input rb-search-input" placeholder="Search admins by email…" value={query}
+              onChange={e => setQuery(e.target.value)} autoFocus />
+          </div>
+          {searching ? <div className="rb-empty"><span className="rb-spinner" /><span>Searching…</span></div>
+            : searchError ? <ReadError error={searchError} compact />
+            : results.length === 0 ? <div className="rb-empty"><UsersIcon /><span>No matching admins.</span></div>
+            : (
+              <ul className="rb-pick-list">
+                {results.map(u => {
+                  const already = existingIds.has(u.id);
+                  return (
+                    <li key={u.id} className="rb-pick-row">
+                      <div className="rb-pick-who">
+                        <span className="rb-user-av-name">{name(u)}</span>
+                        {u.full_name && <span className="rb-user-av-sub">{u.email}</span>}
+                      </div>
+                      <span className="rb-pick-role">{adminRoleLabel(u)}</span>
+                      <button className="rb-user-assign-btn" disabled={already} onClick={() => setPicked(u)}
+                        title={already ? `Already on ${role.name}` : `Move to ${role.name}`}>
+                        {already ? 'On this role' : 'Select'}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+        </>
+      ) : (
+        <>
+          <p className="rb-confirm-p">
+            Each admin has exactly one role, so this <strong>moves</strong> {name(picked)} off their current role.
+          </p>
+          <div className="rb-assign-flow">
+            <span className="rb-assign-flow-from">{adminRoleLabel(picked)}</span>
+            <span className="rb-assign-flow-arrow">→</span>
+            <span className="rb-assign-flow-to">{role.name}</span>
+          </div>
+          <div className="rb-form-group" style={{ marginTop: 14 }}>
+            <label className="rb-form-label" htmlFor="rb-assign-reason">Reason <span className="rb-form-optional">optional · saved in the audit log</span></label>
+            <textarea id="rb-assign-reason" className="rb-form-textarea" rows={2} value={reason} maxLength={500}
+              placeholder="e.g. Joined support team" onChange={e => setReason(e.target.value)} />
+          </div>
+          <ActionError error={assignError} />
+        </>
+      )}
+    </Modal>
+  );
+}
+
+// ─── Role editor (C4 + C5 + admins) ───────────────────────
+function RoleEditor({ roleSummary, modules, modulesLoading, modulesError, onBack, onDelete, focusAdmins }) {
+  const dispatch = useDispatch();
+  const accessToken = useSelector(s => s.auth.accessToken);
+  const {
+    roleDetail, roleDetailLoading, roleDetailError,
+    saving, saveError, updating, updateError, assigning, assignError,
+  } = useSelector(s => s.rbac);
+
+  const role = roleDetail?.id === roleSummary.id ? roleDetail : roleSummary;
+  const superadmin = isSuperadminRole(role);
+  const active = role.is_active !== false;
+  const userCount = role.user_count ?? 0;
+  const users = roleDetail?.id === roleSummary.id ? (roleDetail.users || []) : [];
+
+  // Header drafts (name + description) — PATCH sends only what changed.
+  const [nameDraft, setNameDraft] = useState(null);
+  const [descDraft, setDescDraft] = useState(null);
+  const name = nameDraft ?? role.name ?? '';
+  const desc = descDraft ?? role.description ?? '';
+  const nameErr = !role.is_system && nameDraft !== null ? validateRoleName(nameDraft) : '';
+  const headerDirty = (nameDraft !== null && nameDraft !== role.name) || (descDraft !== null && descDraft !== (role.description || ''));
+
+  // Grid draft — null means "showing what's saved". The saved grid always comes from the
+  // server (detail or save response), never from what was sent.
+  const saved = useMemo(() => normalizeGrid(role.permissions), [role.permissions]);
+  const [draft, setDraft] = useState(null);
+  const grid = superadmin ? fullGrid(modules) : (draft ?? saved);
+  const gridDirty = !superadmin && draft !== null && !gridsEqual(draft, saved);
+
+  const [confirmOff, setConfirmOff] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
+  const adminsRef = useRef(null);
+
+  useEffect(() => {
+    if (focusAdmins && adminsRef.current) adminsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [focusAdmins, roleDetail]);
+
+  const saveHeader = async () => {
+    if (nameErr) return;
+    const updates = {};
+    if (!role.is_system && nameDraft !== null && nameDraft !== role.name) updates.name = nameDraft;
+    if (descDraft !== null && descDraft !== (role.description || '')) updates.description = descDraft;
+    if (!Object.keys(updates).length) return;
+    dispatch(clearUpdateError());
+    const res = await dispatch(updateRbacRole({ roleId: role.id, ...updates }));
+    if (updateRbacRole.fulfilled.match(res)) {
+      setNameDraft(null);
+      setDescDraft(null);
+      toast.success('Role saved');
+      dispatch(fetchRbacRoles({ force: true }));
     }
-    await onSave(role.id, add, remove);
-    setEditMode(false);
-    setDraftPerms(null);
-  };
-  const isChanged = (modName, action) => {
-    if (!editMode || !draftPerms) return false;
-    const orig  = (basePerms)[modName] || [];
-    const draft = draftPerms[modName] || [];
-    return orig.includes(action) !== draft.includes(action);
   };
 
-  const users = detail?.users || [];
+  const setActive = async (next) => {
+    dispatch(clearUpdateError());
+    const res = await dispatch(updateRbacRole({ roleId: role.id, is_active: next }));
+    setConfirmOff(false);
+    if (updateRbacRole.fulfilled.match(res)) {
+      toast.success(next ? 'Role turned on' : 'Role turned off');
+      dispatch(fetchRoleDetail(role.id));
+      dispatch(fetchRbacRoles({ force: true }));
+    }
+  };
+
+  const saveGrid = async () => {
+    dispatch(clearSaveError());
+    const res = await dispatch(putRolePermissions({ roleId: role.id, permissions: normalizeGrid(draft) }));
+    if (putRolePermissions.fulfilled.match(res)) {
+      setDraft(null);   // redraw from the saved response
+      toast.success('Access saved — applies on their next request');
+      // Their own access may have changed if this is the signed-in admin's role.
+      dispatch(refreshCurrentUser());
+    }
+  };
+
+  const assign = async (user, reason) => {
+    dispatch(clearAssignError());
+    const res = await dispatch(assignRbacRole({ roleId: role.id, user_id: user.id, reason: reason.trim() || undefined }));
+    if (assignRbacRole.fulfilled.match(res)) {
+      setShowAdd(false);
+      toast.success(`${user.full_name || user.email} moved to ${role.name}`);
+      dispatch(fetchRoleDetail(role.id));
+      dispatch(fetchRbacRoles({ force: true }));
+      dispatch(refreshCurrentUser());
+    } else if (!isPermissionDenied(res.payload)) {
+      // 400 inactive role / 404 unknown admin → ordinary error toast (C6).
+      toast.error(res.payload || 'Could not assign the role.');
+    }
+  };
+
+  const color = roleColor(role.name || '');
 
   return (
     <div className="rb-detail-wrap">
-      {/* ── Header ── */}
+      {/* ── Header: < Roles  name  [Active]  [Delete] ── */}
       <div className="rb-detail-header">
-        <button className="rb-back-btn" onClick={onBack} disabled={saving}>
-          <ArrowLeftIcon /> Back to Roles
+        <button className="rb-back-btn" onClick={onBack} disabled={saving || updating}>
+          <ArrowLeftIcon /> Roles
         </button>
         <div className="rb-detail-role-info">
           <div className="rb-detail-avatar" style={{ background: `${color}20`, color, border: `1px solid ${color}40` }}>
-            {getInitials(role.name)}
+            {getInitials(role.name || '')}
           </div>
           <div>
             <div className="rb-detail-role-name">
               {role.name}
               {role.is_system && <span className="rb-system-badge"><StarIcon /> System</span>}
             </div>
-            <div className="rb-detail-role-sub">
-              {view === 'matrix'
-                ? `${permModCount} modules · ${permActCount} actions granted`
-                : `${userCount} user${userCount !== 1 ? 's' : ''} assigned to this role`
-              }
-            </div>
+            <div className="rb-detail-role-sub">{accessLabel(role)} · {plural(userCount, 'admin')}</div>
           </div>
         </div>
-
         <div className="rb-detail-actions">
-          {view === 'matrix' ? (
-            <>
-              <button className="rb-users-pill-btn" onClick={switchToUsers}>
-                <UsersIcon />
-                <span>Assigned Users</span>
-                {userCount > 0 && <span className="rb-users-pill-count">{userCount}</span>}
-              </button>
-              {!editMode ? (
-                <button className="rb-edit-btn" onClick={enterEdit}>
-                  <EditIcon /> Edit Permissions
-                </button>
-              ) : (
-                <>
-                  <button className="rb-cancel-btn" onClick={cancelEdit} disabled={saving}>Cancel</button>
-                  <button className="rb-save-btn" onClick={handleSave} disabled={saving}>
-                    {saving ? <><span className="rb-spinner" /> Saving…</> : <><SaveIcon /> Save Changes</>}
-                  </button>
-                </>
-              )}
-            </>
-          ) : (
-            <button className="rb-edit-btn" onClick={switchToMatrix}>
-              <LockIcon /> View Permissions
+          <div className={`rb-toggle-row${superadmin ? ' rb-toggle-disabled' : ''}`}
+            onClick={() => { if (superadmin || updating) return; if (active) setConfirmOff(true); else setActive(true); }}
+            role="switch" aria-checked={active} tabIndex={superadmin ? -1 : 0}
+            title={superadmin ? 'The superadmin role cannot be turned off' : active ? 'Turn this role off' : 'Turn this role on'}
+            onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && !superadmin) { e.preventDefault(); if (active) setConfirmOff(true); else setActive(true); } }}>
+            <div className={`rb-toggle ${active ? 'rb-toggle-on' : ''}`}><div className="rb-toggle-thumb" /></div>
+            <span className={`rb-toggle-label ${active ? 'rb-toggle-label-on' : ''}`}>{active ? 'Active' : 'Inactive'}</span>
+          </div>
+          {!role.is_system && (
+            <button className="rb-delete-btn" onClick={() => onDelete(role)}><TrashIcon /> Delete</button>
+          )}
+        </div>
+      </div>
+
+      {roleDetailError && <ReadError error={roleDetailError} compact />}
+
+      {/* ── Name + description ── */}
+      <div className="rb-editor-card">
+        <div className="rb-editor-fields">
+          <div className="rb-form-group">
+            <label className="rb-form-label" htmlFor="rb-edit-name">Name</label>
+            <input id="rb-edit-name" className={`rb-form-input${nameErr ? ' rb-input-error' : ''}`} value={name}
+              disabled={role.is_system} onChange={e => setNameDraft(e.target.value)} />
+            {role.is_system
+              ? <span className="rb-form-hint">System role names can't be changed.</span>
+              : nameErr && <span className="rb-form-hint rb-hint-err">{nameErr}</span>}
+          </div>
+          <div className="rb-form-group rb-grow">
+            <label className="rb-form-label" htmlFor="rb-edit-desc">Description</label>
+            <input id="rb-edit-desc" className="rb-form-input" value={desc} disabled={superadmin}
+              onChange={e => setDescDraft(e.target.value)} />
+          </div>
+          {!superadmin && (
+            <button className="rb-save-btn rb-editor-save" onClick={saveHeader} disabled={!headerDirty || !!nameErr || updating}>
+              {updating ? <><span className="rb-spinner" /> Saving…</> : <><SaveIcon /> Save</>}
             </button>
           )}
         </div>
+        <ActionError error={updateError} />
       </div>
 
-      {/* ── Matrix view ── */}
-      {view === 'matrix' && (
-        <>
-          {saveError && <div className="rb-save-error">⚠ {saveError}</div>}
-          {detailError && !saveError && <div className="rb-save-error">⚠ Could not load permissions — showing cached data.</div>}
-
-          {/* ── Skeleton while detail is loading ── */}
-          {detailLoading && !detail && !editMode ? (
-            <div className="rb-matrix-scroll">
-              <table className="rb-matrix-table">
-                <thead>
-                  <tr>
-                    <th className="rb-th-module">Module</th>
-                    {ALL_ACTIONS.map(a => {
-                      const c = ACTION_CFG[a];
-                      return (
-                        <th key={a} className="rb-th-action-col">
-                          <span className="rb-th-dot" style={{ background: c?.color }} />
-                          <span style={{ color: c?.color }}>{c?.label}</span>
-                        </th>
-                      );
-                    })}
-                    <th className="rb-th-summary">Access</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Array.from({ length: 7 }, (_, i) => (
-                    <tr key={i} className={i % 2 !== 0 ? 'rb-row-odd' : ''}>
-                      <td className="rb-td-module">
-                        <div className="rb-sk rb-sk-title" style={{ width: '55%', marginBottom: 5 }} />
-                        <div className="rb-sk rb-sk-sub"  style={{ width: '38%' }} />
-                      </td>
-                      {ALL_ACTIONS.map(a => (
-                        <td key={a} className="rb-td-perm">
-                          <div className="rb-sk" style={{ width: 28, height: 28, borderRadius: '50%' }} />
-                        </td>
-                      ))}
-                      <td className="rb-td-summary">
-                        <div className="rb-access-bar-wrap">
-                          <div className="rb-sk" style={{ flex: 1, height: 6, borderRadius: 4 }} />
-                          <div className="rb-sk rb-sk-sub" style={{ width: 28 }} />
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      {/* ── Access grid ── */}
+      <div className="rb-editor-card">
+        <div className="rb-editor-card-head">
+          <span className="rb-panel-title">Access</span>
+          {!superadmin && (
+            <div className="rb-detail-actions">
+              {gridDirty && <button className="rb-cancel-btn" onClick={() => setDraft(null)} disabled={saving}>Reset</button>}
+              <button className="rb-save-btn" onClick={saveGrid} disabled={!gridDirty || saving}>
+                {saving ? <><span className="rb-spinner" /> Saving…</> : <><SaveIcon /> Save access</>}
+              </button>
             </div>
-          ) : (
-            /* ── Real matrix once detail is loaded ── */
-            <>
-              {editMode && <div className="rb-edit-notice">Click any permission dot to toggle it, then press <strong>Save Changes</strong>.</div>}
-
-              <div className="rb-legend-bar">
-                <span className="rb-legend-item rb-legend-granted"><CheckIcon /> Granted</span>
-                <span className="rb-legend-item rb-legend-denied"><MinusIcon /> Denied</span>
-                <span className="rb-legend-item rb-legend-na">— N/A</span>
-                {editMode && <span className="rb-legend-item rb-legend-changed">● Changed</span>}
-              </div>
-
-              <div className="rb-matrix-scroll">
-                <table className="rb-matrix-table">
-                  <thead>
-                    <tr>
-                      <th className="rb-th-module">Module</th>
-                      {ALL_ACTIONS.map(a => {
-                        const c = ACTION_CFG[a];
-                        return (
-                          <th key={a} className="rb-th-action-col">
-                            <span className="rb-th-dot" style={{ background: c?.color }} />
-                            <span style={{ color: c?.color }}>{c?.label}</span>
-                          </th>
-                        );
-                      })}
-                      <th className="rb-th-summary">Access</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((mod, idx) => {
-                      const granted      = activePerms[mod.name] || [];
-                      const avail        = mod.available_actions || ALL_ACTIONS;
-                      const grantedCount = ALL_ACTIONS.filter(a => avail.includes(a) && granted.includes(a)).length;
-                      const availCount   = ALL_ACTIONS.filter(a => avail.includes(a)).length;
-                      const pct          = availCount > 0 ? Math.round((grantedCount / availCount) * 100) : 0;
-                      const rowChanged   = editMode && ALL_ACTIONS.some(a => isChanged(mod.name, a));
-                      return (
-                        <tr key={mod.name} className={[idx % 2 !== 0 ? 'rb-row-odd' : '', rowChanged ? 'rb-row-changed' : ''].filter(Boolean).join(' ')}>
-                          <td className="rb-td-module">
-                            <div className="rb-module-name">
-                              {mod.display_name || mod.name}
-                              {rowChanged && <span className="rb-changed-dot" />}
-                            </div>
-                            <div className="rb-module-key">{mod.name}</div>
-                          </td>
-                          {ALL_ACTIONS.map(action => (
-                            <td key={action} className="rb-td-perm">
-                              <PermDot
-                                action={action}
-                                active={granted.includes(action)}
-                                available={avail.includes(action)}
-                                editMode={editMode}
-                                onChange={() => togglePerm(mod.name, action)}
-                              />
-                            </td>
-                          ))}
-                          <td className="rb-td-summary">
-                            <div className="rb-access-bar-wrap">
-                              <div className="rb-access-bar">
-                                <div className="rb-access-fill" style={{ width: `${pct}%` }} />
-                              </div>
-                              <span className="rb-access-pct">{grantedCount}/{availCount}</span>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-                {rows.length === 0 && <div className="rb-empty"><LockIcon /><span>No modules defined.</span></div>}
-              </div>
-            </>
           )}
-        </>
-      )}
-
-      {/* ── Users view ── */}
-      {view === 'users' && (
-        <div className="rb-users-view">
-          {/* Column labels */}
-          <div className="rb-ucols-head rb-ucols-head-inline">
-            <span className="rb-ucol rb-ucol-user">User</span>
-            <span className="rb-ucol rb-ucol-email">Email</span>
-            <span className="rb-ucol rb-ucol-status">Status</span>
-            <span className="rb-ucol rb-ucol-action" />
+        </div>
+        {superadmin ? (
+          <div className="rb-readonly-note"><LockIcon /> Always has full access. This grid can't be edited.</div>
+        ) : (
+          <div className="rb-edit-notice">
+            View opens a page (GET). Act changes things (POST / PUT / PATCH / DELETE) — ticking Act also ticks View.
+            Changes apply to this role's admins on their next request; they don't need to log out.
           </div>
+        )}
+        <ActionError error={saveError} />
+        {roleDetailLoading && !roleDetail
+          ? <div className="rb-empty"><span className="rb-spinner" /><span>Loading access…</span></div>
+          : modulesLoading && !modules.length
+            ? <div className="rb-empty"><span className="rb-spinner" /><span>Loading modules…</span></div>
+            : modulesError ? <ReadError error={modulesError} compact />
+            : <PermGrid modules={modules} grid={grid} readOnly={superadmin} locked={superadmin}
+                baseline={gridDirty ? saved : null} onChange={setDraft} />}
+      </div>
 
-          {detailError ? (
-            <div className="rb-users-error">⚠ Could not load users.</div>
-          ) : detailLoading ? (
-            <div className="rb-users-body">
-              {Array.from({ length: 4 }, (_, i) => (
-                <div key={i} className={`rb-user-row${i % 2 !== 0 ? ' rb-user-row-alt' : ''}`}>
+      {/* ── Admins on this role ── */}
+      <div className="rb-editor-card" ref={adminsRef}>
+        <div className="rb-editor-card-head">
+          <span className="rb-panel-title">Admins on this role <span className="rb-panel-count">{userCount}</span></span>
+          {active
+            ? <button className="rb-create-btn" onClick={() => { dispatch(clearAssignError()); setShowAdd(true); }}><PlusIcon /> Add admin</button>
+            : <span className="rb-form-hint">Turn the role on to add admins.</span>}
+        </div>
+        {userCount > users.length && users.length > 0 && (
+          <div className="rb-form-hint" style={{ marginBottom: 8 }}>Showing {users.length} of {userCount}.</div>
+        )}
+        {roleDetailLoading && !users.length ? (
+          <div className="rb-empty"><span className="rb-spinner" /><span>Loading admins…</span></div>
+        ) : users.length === 0 ? (
+          <div className="rb-users-empty rb-users-empty-inline"><UsersIcon /><span>Nobody has <strong>{role.name}</strong> yet.</span></div>
+        ) : (
+          <div className="rb-users-body">
+            {users.map((u, idx) => {
+              const c = roleColor(u.full_name || u.email || '');
+              return (
+                <div key={u.id} className={`rb-user-row${idx % 2 ? ' rb-user-row-alt' : ''}`}>
                   <div className="rb-ucol rb-ucol-user">
-                    <div className="rb-sk" style={{ width: 36, height: 36, borderRadius: 9, flexShrink: 0 }} />
-                    <div style={{ flex: 1 }}>
-                      <div className="rb-sk rb-sk-title" style={{ width: '50%' }} />
-                      <div className="rb-sk rb-sk-sub"   style={{ width: '70%' }} />
+                    <div className="rb-user-av" style={{ background: `${c}20`, color: c, border: `1px solid ${c}40` }}>
+                      {getInitials(u.full_name || u.email || '?')}
+                    </div>
+                    <div className="rb-user-av-info">
+                      <span className="rb-user-av-name">{u.full_name || u.email}</span>
+                      {u.full_name && <span className="rb-user-av-sub">{u.email}</span>}
                     </div>
                   </div>
-                  <div className="rb-ucol rb-ucol-email"><div className="rb-sk rb-sk-sub" style={{ width: '55%' }} /></div>
-                  <div className="rb-ucol rb-ucol-status"><div className="rb-sk" style={{ width: 54, height: 22, borderRadius: 20 }} /></div>
-                  <div className="rb-ucol rb-ucol-action" />
+                  <div className="rb-ucol rb-ucol-status">
+                    <span className={u.status === 'active' ? 'rb-status-active' : 'rb-status-inactive'}>{u.status || '—'}</span>
+                  </div>
                 </div>
-              ))}
-            </div>
-          ) : users.length === 0 ? (
-            <div className="rb-users-empty rb-users-empty-inline">
-              <UsersIcon />
-              <span>No users assigned to <strong>{role.name}</strong>.</span>
-            </div>
-          ) : (
-            <div className="rb-users-body">
-              {users.map((u, idx) => {
-                const c    = roleColor(u.full_name || u.email || '');
-                const name = u.full_name || '';
-                const email= u.email || '';
-                return (
-                  <div key={u.id} className={`rb-user-row${idx % 2 !== 0 ? ' rb-user-row-alt' : ''}`}>
-                    <div className="rb-ucol rb-ucol-user">
-                      <div className="rb-user-av" style={{ background: `${c}20`, color: c, border: `1px solid ${c}40` }}>
-                        {getInitials(name || email || '?')}
-                      </div>
-                      <div className="rb-user-av-info">
-                        <span className="rb-user-av-name">{name || email}</span>
-                        {name && <span className="rb-user-av-sub">{email}</span>}
-                      </div>
-                    </div>
-                    <div className="rb-ucol rb-ucol-email">
-                      <span className="rb-user-email-val">{email}</span>
-                    </div>
-                    <div className="rb-ucol rb-ucol-status">
-                      <span className={u.status === 'active' ? 'rb-status-active' : 'rb-status-inactive'}>
-                        {u.status || 'active'}
-                      </span>
-                    </div>
-                    <div className="rb-ucol rb-ucol-action">
-                      <button
-                        className="rb-user-assign-btn"
-                        title={`Assign ${name || email} to ${role.name}`}
-                        onClick={() => onAssign(u)}
-                      >
-                        <AssignIcon /> Assign
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {confirmOff && (
+        <DeactivateModal role={role} count={userCount} busy={updating}
+          onClose={() => setConfirmOff(false)} onConfirm={() => setActive(false)} />
+      )}
+      {showAdd && (
+        <AddAdminModal role={role} accessToken={accessToken} existingIds={new Set(users.map(u => u.id))}
+          assigning={assigning} assignError={assignError} onClose={() => setShowAdd(false)} onSubmit={assign} />
       )}
     </div>
   );
 }
 
-// ─── Delete module confirm modal ─────────────────────────
-function DeleteModuleModal({ module: mod, deletingModule, deleteModuleError, onClose, onConfirm }) {
-  return createPortal(
-    <div className="rb-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="rb-modal rb-confirm-modal">
-        <div className="rb-modal-header">
-          <div className="rb-modal-title">
-            <div className="rb-modal-icon rb-modal-icon-danger"><TrashIcon /></div>
-            Delete Module
-          </div>
-          <button className="rb-modal-close" onClick={onClose}><CloseIcon /></button>
-        </div>
-        <div className="rb-modal-body">
-          <div className="rb-confirm-body">
-            <div className="rb-confirm-warn-icon"><WarningIcon /></div>
-            <div className="rb-confirm-text">
-              <p>
-                Delete module <strong>{mod.display_name || mod.name}</strong>
-                {' '}<span className="rb-mod-key-inline">{mod.name}</span>?
-              </p>
-              <div className="rb-confirm-block rb-confirm-warn">
-                This action is permanent. The module will be purged from all role permission maps and the RBAC cache will be invalidated globally.
-              </div>
-              <div className="rb-confirm-block" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
-                <strong style={{ color: 'var(--text-secondary)' }}>Blocked if:</strong> module is a built-in system module (400) or any role currently has permissions on it (409).
-              </div>
-            </div>
-          </div>
-          {deleteModuleError && <div className="rb-save-error">⚠ {deleteModuleError}</div>}
-        </div>
-        <div className="rb-modal-footer">
-          <button className="rb-cancel-btn" onClick={onClose} disabled={deletingModule}>Cancel</button>
-          <button
-            className="rb-delete-btn"
-            onClick={() => onConfirm(mod.id || mod.name)}
-            disabled={deletingModule}
-          >
-            {deletingModule
-              ? <><span className="rb-spinner rb-spinner-danger" /> Deleting…</>
-              : <><TrashIcon /> Delete Module</>
-            }
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
-
-// ─── Modules view ────────────────────────────────────────
-function ModulesView({ modules, loading, error, onBack, onRegister, onDelete }) {
+// ─── Modules tab (C8) ─────────────────────────────────────
+function EditModuleModal({ module: mod, busy, error, onClose, onSubmit }) {
+  const [label, setLabel] = useState(mod.display_name || '');
+  const [desc, setDesc] = useState(mod.description || '');
+  const changes = {};
+  if (label.trim() !== (mod.display_name || '')) changes.display_name = label.trim();
+  if (desc !== (mod.description || '')) changes.description = desc;
+  const dirty = Object.keys(changes).length > 0;
   return (
-    <div className="rb-detail-wrap rb-modules-wrap">
-      {/* Header */}
-      <div className="rb-detail-header">
-        <button className="rb-back-btn" onClick={onBack}>
-          <ArrowLeftIcon /> Back to Roles
+    <Modal title={`Edit ${mod.name}`} icon={<EditIcon />} onClose={onClose} busy={busy} width={480}
+      footer={<>
+        <button className="rb-cancel-btn" onClick={onClose} disabled={busy}>Cancel</button>
+        <button className="rb-save-btn" onClick={() => onSubmit(mod.id, changes)} disabled={busy || !dirty || !label.trim()}>
+          {busy ? <><span className="rb-spinner" /> Saving…</> : <><SaveIcon /> Save</>}
         </button>
-        <div className="rb-detail-role-info" style={{ flex: 1 }}>
-          <div className="rb-detail-avatar" style={{ background: 'rgba(6,182,212,0.15)', color: '#22d3ee', border: '1px solid rgba(6,182,212,0.3)' }}>
-            <LayersIcon />
-          </div>
-          <div>
-            <div className="rb-detail-role-name">All Modules</div>
-            <div className="rb-detail-role-sub">
-              {loading ? 'Loading…' : `${modules.length} module${modules.length !== 1 ? 's' : ''} registered`}
-            </div>
-          </div>
-        </div>
-        <div className="rb-detail-actions">
-          <button className="rb-create-btn" onClick={onRegister}>
-            <CubeIcon /> Register Module
-          </button>
-        </div>
+      </>}>
+      <div className="rb-form-group">
+        <label className="rb-form-label" htmlFor="rb-mod-label">Label</label>
+        <input id="rb-mod-label" className="rb-form-input" value={label} onChange={e => setLabel(e.target.value)} />
+        <span className="rb-form-hint">Shown as the row label in every role's grid.</span>
       </div>
-
-      {error && <div className="rb-save-error">⚠ {error}</div>}
-
-      {loading ? (
-        <div className="rb-modules-grid">
-          {Array.from({ length: 6 }, (_, i) => (
-            <div key={i} className="rb-mod-card">
-              <div className="rb-sk" style={{ width: '55%', height: 14, marginBottom: 8, borderRadius: 4 }} />
-              <div className="rb-sk" style={{ width: '40%', height: 10, marginBottom: 14, borderRadius: 4 }} />
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {[1,2,3].map(j => <div key={j} className="rb-sk" style={{ width: 62, height: 22, borderRadius: 20 }} />)}
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : modules.length === 0 ? (
-        <div className="rb-empty" style={{ padding: '52px 20px' }}>
-          <LayersIcon />
-          <span>No modules registered yet.</span>
-          <button className="rb-create-btn" onClick={onRegister} style={{ marginTop: 10 }}>
-            <CubeIcon /> Register First Module
-          </button>
-        </div>
-      ) : (
-        <div className="rb-modules-grid">
-          {modules.map(mod => {
-            const avail = mod.available_actions || [];
-            return (
-              <div key={mod.id || mod.name} className="rb-mod-card">
-                <button
-                  className="rb-mod-delete-btn"
-                  title={`Delete ${mod.display_name || mod.name}`}
-                  onClick={() => onDelete(mod)}
-                >
-                  <TrashIcon />
-                </button>
-                <div className="rb-mod-card-top">
-                  <div className="rb-mod-name">{mod.display_name || mod.name}</div>
-                  <span className="rb-mod-key">{mod.name}</span>
-                </div>
-                <div className="rb-mod-actions">
-                  {ALL_ACTIONS.map(a => {
-                    const c      = ACTION_CFG[a];
-                    const active = avail.includes(a);
-                    return (
-                      <span
-                        key={a}
-                        className={`rb-mod-action-pill ${active ? 'rb-mod-pill-on' : 'rb-mod-pill-off'}`}
-                        style={active ? { '--ac': c.color, '--ab': c.bg } : {}}
-                      >
-                        <span className="rb-mod-pill-dot" />
-                        {c.label}
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
+      <div className="rb-form-group">
+        <label className="rb-form-label" htmlFor="rb-mod-desc">Description</label>
+        <textarea id="rb-mod-desc" className="rb-form-textarea" rows={3} value={desc} onChange={e => setDesc(e.target.value)} />
+        <span className="rb-form-hint">Shown as the row's tooltip.</span>
+      </div>
+      <ActionError error={error} />
+    </Modal>
   );
 }
 
-// ─── Skeleton ─────────────────────────────────────────────
-function SkeletonTable() {
+function DeleteModuleModal({ module: mod, busy, error, onClose, onConfirm }) {
+  return (
+    <Modal title="Delete module" icon={<TrashIcon />} danger onClose={onClose} busy={busy} width={460}
+      footer={<>
+        <button className="rb-cancel-btn" onClick={onClose} disabled={busy}>Cancel</button>
+        <button className="rb-delete-btn" onClick={() => onConfirm(mod.id)} disabled={busy}>
+          {busy ? <><span className="rb-spinner rb-spinner-danger" /> Deleting…</> : <><TrashIcon /> Delete module</>}
+        </button>
+      </>}>
+      <p className="rb-confirm-p">
+        Delete <strong>{mod.display_name || mod.name}</strong>? It is not a built-in module, so no API route maps to it.
+        If a role still ticks it, untick it on those roles first.
+      </p>
+      <ActionError error={error} />
+    </Modal>
+  );
+}
+
+function ModulesTab({ modules, loading, error, onEdit, onDelete }) {
+  if (error) return <ReadError error={error} />;
+  if (loading && !modules.length) return <div className="rb-empty"><span className="rb-spinner" /><span>Loading modules…</span></div>;
+  if (!modules.length) return <div className="rb-empty"><LayersIcon /><span>No modules returned.</span></div>;
   return (
     <div className="rb-table-wrap">
       <table className="rb-roles-table">
         <thead>
           <tr>
-            <th className="rb-rth-role">Role</th>
-            <th className="rb-rth-center">Users</th>
-            <th className="rb-rth-center">Modules</th>
-            <th className="rb-rth-center">Perms</th>
-            <th className="rb-rth-center">Status</th>
+            <th className="rb-rth-role">Module</th>
+            <th>Description</th>
+            <th className="rb-rth-center">Type</th>
             <th className="rb-rth-actions" />
-            <th className="rb-rth-arrow" />
           </tr>
         </thead>
         <tbody>
-          {Array.from({ length: 5 }, (_, i) => (
-            <tr key={i} className={i % 2 !== 0 ? 'rb-rt-odd' : ''}>
-              <td className="rb-rtd-role">
-                <div className="rb-sk rb-sk-avatar" />
-                <div style={{ flex: 1 }}>
-                  <div className="rb-sk rb-sk-title" />
-                  <div className="rb-sk rb-sk-sub" style={{ width: '60%' }} />
-                </div>
-              </td>
-              {[1,2,3,4].map(j => (
-                <td key={j} className="rb-rtd-center">
-                  <div className="rb-sk" style={{ width: 40, height: 20, margin: '0 auto', borderRadius: 20 }} />
+          {modules.map((m, idx) => {
+            const builtIn = BUILT_IN_MODULES.has(m.name);
+            return (
+              <tr key={m.id || m.name} className={`rb-mod-row${idx % 2 ? ' rb-rt-odd' : ''}`}>
+                <td className="rb-rtd-role">
+                  <div className="rb-rt-info">
+                    <div className="rb-rt-name">{m.display_name || m.name}</div>
+                    <div className="rb-rt-desc rb-mono">{m.name}{isActOnly(m.name) ? ' · Act only' : ''}</div>
+                  </div>
                 </td>
-              ))}
-              <td /><td />
-            </tr>
-          ))}
+                <td className="rb-mod-desc">{m.description || '—'}</td>
+                <td className="rb-rtd-center">
+                  {builtIn
+                    ? <span className="rb-system-badge"><StarIcon /> Built-in</span>
+                    : <span className="rb-type-leftover" title="No API route maps to this module — it gates nothing">Leftover</span>}
+                </td>
+                <td className="rb-rtd-actions">
+                  <div className="rb-row-actions">
+                    <button className="rb-row-text-btn" onClick={() => onEdit(m)}><EditIcon /> Edit</button>
+                    {!builtIn && (
+                      <button className="rb-row-text-btn rb-row-text-danger" onClick={() => onDelete(m)}><TrashIcon /> Delete</button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -1648,152 +986,108 @@ function SkeletonTable() {
 export default function RbacPage() {
   const dispatch = useDispatch();
   const {
-    roles, modules,
-    rolesLoading, rolesError,
-    modulesLoading, modulesError,
-    roleDetail, roleDetailLoading, roleDetailError,
-    saving, saveError,
-    creating, createError,
-    updating, updateError,
-    deleting, deleteError,
-    assigning, assignError,
-    creatingModule, createModuleError,
-    deletingModule, deleteModuleError,
+    roles: allRoles, modules,
+    rolesLoading, rolesError, modulesLoading, modulesError,
+    creating, createError, deleting, deleteError,
+    updatingModule, updateModuleError, deletingModule, deleteModuleError,
   } = useSelector(s => s.rbac);
 
-  const [selectedRole,         setSelectedRole]         = useState(null);
-  const [pageView,             setPageView]             = useState('roles'); // 'roles' | 'modules'
-  const [showCreateModal,      setShowCreateModal]      = useState(false);
-  const [editingRole,          setEditingRole]          = useState(null);
-  const [deletingRole,         setDeletingRole]         = useState(null);
-  const [assigningUser,        setAssigningUser]        = useState(null);
-  const [showCreateModuleModal,setShowCreateModuleModal]= useState(false);
-  const [deletingModuleItem,   setDeletingModuleItem]   = useState(null);
+  const roles = useMemo(() => visibleRoles(allRoles), [allRoles]);
+  const [tab, setTab] = useState('roles');            // roles | modules
+  const [openRole, setOpenRole] = useState(null);     // role summary being edited
+  const [focusAdmins, setFocusAdmins] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [deletingRole, setDeletingRole] = useState(null);
+  const [editingModule, setEditingModule] = useState(null);
+  const [deletingModuleItem, setDeletingModuleItem] = useState(null);
 
-  // Only fetch roles on mount — modules are loaded on demand
   useEffect(() => {
     dispatch(fetchRbacRoles());
+    dispatch(fetchRbacModules());
   }, [dispatch]);
 
-  useEffect(() => {
-    if (selectedRole) {
-      const updated = roles.find(r => r.id === selectedRole.id);
-      if (updated) setSelectedRole(updated);
-    }
-  }, [roles]);
+  // Grid rows are the API's ACTIVE modules (C5); the Modules tab lists all of them.
+  const gridModules = useMemo(() => modules.filter(m => m.is_active !== false), [modules]);
 
-  const handleSelectRole = (role) => {
-    setSelectedRole(role);
+  const openEditor = (role, { admins = false } = {}) => {
     dispatch(clearRoleDetail());
+    dispatch(clearSaveError());
+    dispatch(clearUpdateError());
+    setFocusAdmins(admins);
+    setOpenRole(role);
     dispatch(fetchRoleDetail(role.id));
-    // Modules are needed for PermMatrix — fetch lazily if not yet loaded
-    if (modules.length === 0) dispatch(fetchRbacModules());
   };
-
-  const handleBack = () => {
-    setSelectedRole(null);
+  const closeEditor = () => {
+    setOpenRole(null);
     dispatch(clearRoleDetail());
   };
 
-  const handleViewModules = () => {
-    dispatch(fetchRbacModules());
-    setPageView('modules');
-  };
-  const handleBackToRoles = () => setPageView('roles');
-
-  const handleSave = async (roleId, add, remove) => {
-    const result = await dispatch(patchRolePermissions({ roleId, add, remove }));
-    if (patchRolePermissions.fulfilled.match(result)) {
-      // The save only merges the roles list — re-fetch the role detail so the permission
-      // matrix redraws with the just-saved grants (no page refresh needed)…
-      dispatch(fetchRoleDetail(roleId));
-      // …and if this role governs the signed-in admin, refresh their sidebar gating too.
-      dispatch(refreshCurrentUser());
-    }
-    return result;
+  const refresh = () => {
+    dispatch(fetchRbacRoles({ force: true }));
+    dispatch(fetchRbacModules({ force: true }));
+    if (openRole) dispatch(fetchRoleDetail(openRole.id));
   };
 
   const handleCreate = async (payload) => {
-    const result = await dispatch(createRbacRole(payload));
-    if (!result.error) {
-      setShowCreateModal(false);
-      // Re-fetch the roles list so the new role appears immediately — with its real
-      // user/module/perm counts — instead of only after a page refresh.
-      dispatch(fetchRbacRoles());
+    const res = await dispatch(createRbacRole(payload));
+    if (createRbacRole.fulfilled.match(res)) {
+      setShowCreate(false);
+      toast.success(`Role ${payload.name} created`);
+      dispatch(fetchRbacRoles({ force: true }));
     }
   };
 
-  const handleEditOpen  = (role) => { dispatch(clearUpdateError()); setEditingRole(role); };
-  const handleEditClose = ()     => setEditingRole(null);
-  const handleEditSubmit = async (roleId, updates) => {
-    const result = await dispatch(updateRbacRole({ roleId, ...updates }));
-    if (!result.error) setEditingRole(null);
-  };
-
-  const handleDeleteOpen  = (role) => { dispatch(clearDeleteError()); setDeletingRole(role); };
-  const handleDeleteClose = ()     => setDeletingRole(null);
-  const handleDeleteConfirm = async (roleId) => {
-    const result = await dispatch(deleteRbacRole(roleId));
-    if (!result.error) {
+  const handleDelete = async (roleId) => {
+    const res = await dispatch(deleteRbacRole(roleId));
+    if (deleteRbacRole.fulfilled.match(res)) {
       setDeletingRole(null);
-      if (selectedRole?.id === roleId) handleBack();
+      toast.success('Role deleted');
+      if (openRole?.id === roleId) closeEditor();
     }
   };
 
-  const handleAssignOpen  = (user) => { dispatch(clearAssignError()); setAssigningUser(user); };
-  const handleAssignClose = ()     => setAssigningUser(null);
-  const handleAssignSubmit = async (roleId, payload) => {
-    const result = await dispatch(assignRbacRole({ roleId, ...payload }));
-    if (!result.error) {
-      setAssigningUser(null);
-      dispatch(fetchRoleDetail(roleId));
-      // Reassigning a role may have changed the signed-in admin's own access — refresh live.
-      dispatch(refreshCurrentUser());
+  const handleUpdateModule = async (moduleId, changes) => {
+    const res = await dispatch(updateRbacModule({ moduleId, ...changes }));
+    if (updateRbacModule.fulfilled.match(res)) {
+      setEditingModule(null);
+      toast.success('Module updated');
+      dispatch(fetchRbacModules({ force: true }));
     }
   };
 
-  const handleCreateModuleOpen  = () => { dispatch(clearCreateModuleError()); setShowCreateModuleModal(true); };
-  const handleCreateModuleClose = () => setShowCreateModuleModal(false);
-  const handleCreateModuleSubmit = async (payload) => {
-    const result = await dispatch(createRbacModule(payload));
-    if (!result.error) setShowCreateModuleModal(false);
+  const handleDeleteModule = async (moduleId) => {
+    const res = await dispatch(deleteRbacModule(moduleId));
+    if (deleteRbacModule.fulfilled.match(res)) {
+      setDeletingModuleItem(null);
+      toast.success('Module deleted');
+    }
   };
 
-  const handleDeleteModuleOpen  = (mod) => { dispatch(clearDeleteModuleError()); setDeletingModuleItem(mod); };
-  const handleDeleteModuleClose = ()    => setDeletingModuleItem(null);
-  const handleDeleteModuleConfirm = async (moduleId) => {
-    const result = await dispatch(deleteRbacModule(moduleId));
-    if (!result.error) setDeletingModuleItem(null);
-  };
-
-  const systemRoles = roles.filter(r => r.is_system);
-  const totalUsers  = roles.reduce((acc, r) => acc + (r.user_count ?? 0), 0);
+  const systemCount = roles.filter(r => r.is_system).length;
+  const totalAdmins = roles.reduce((n, r) => n + (r.user_count ?? 0), 0);
+  const counts = useMemo(() => roles.reduce((acc, r) => {
+    if (r.is_active === false) acc.inactive += 1;
+    const c = accessCounts(r.permissions);
+    acc.act += c.act;
+    return acc;
+  }, { inactive: 0, act: 0 }), [roles]);
 
   return (
     <div className="rbac-page">
-
       {/* ── Hero ── */}
       <div className="rb-hero">
         <div className="rb-hero-glow" />
         <div className="rb-hero-left">
           <div className="rb-hero-icon"><ShieldIcon /></div>
           <div>
-            <h1 className="rb-hero-title">RBAC</h1>
-            <p className="rb-hero-sub">Manage roles, permissions, and module access controls across the platform.</p>
+            <h1 className="rb-hero-title">Roles & Permissions</h1>
+            <p className="rb-hero-sub">A role can do exactly what is ticked: View opens a page, Act changes things. Superadmin always has full access.</p>
           </div>
         </div>
         <div className="rb-hero-right">
-          <button className="rb-refresh-btn" onClick={() => {
-            dispatch(fetchRbacRoles());
-            if (pageView === 'modules' || modules.length > 0) dispatch(fetchRbacModules());
-          }}>
-            <RefreshIcon /> Refresh
-          </button>
+          <button className="rb-refresh-btn" onClick={refresh}><RefreshIcon /> Refresh</button>
           {roles.length > 0 && (
-            <ExportButton
-              onExportPDF={() => exportRbacToPDF(roles)}
-              onExportExcel={() => exportRbacToExcel(roles)}
-            />
+            <ExportButton onExportPDF={() => exportRbacToPDF(roles)} onExportExcel={() => exportRbacToExcel(roles)} />
           )}
         </div>
       </div>
@@ -1801,146 +1095,83 @@ export default function RbacPage() {
       {/* ── Stats ── */}
       <div className="rb-stats">
         <div className="rb-stat-card" style={{ '--sc': '#6366f1' }}>
-          <div className="rb-stat-icon" style={{ color:'#818cf8', background:'rgba(99,102,241,0.12)', border:'1px solid rgba(99,102,241,0.25)' }}><ShieldIcon /></div>
-          <div><div className="rb-stat-val">{roles.length}</div><div className="rb-stat-lbl">Total Roles</div></div>
-        </div>
-        <div className="rb-stat-card" style={{ '--sc': '#f59e0b' }}>
-          <div className="rb-stat-icon" style={{ color:'#fbbf24', background:'rgba(251,191,36,0.12)', border:'1px solid rgba(251,191,36,0.25)' }}><StarIcon /></div>
-          <div><div className="rb-stat-val">{systemRoles.length}</div><div className="rb-stat-lbl">System Roles</div></div>
+          <div className="rb-stat-icon" style={{ color: '#818cf8', background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)' }}><ShieldIcon /></div>
+          <div><div className="rb-stat-val">{roles.length}</div><div className="rb-stat-lbl">Roles ({systemCount} system)</div></div>
         </div>
         <div className="rb-stat-card" style={{ '--sc': '#06b6d4' }}>
-          <div className="rb-stat-icon" style={{ color:'#22d3ee', background:'rgba(6,182,212,0.12)', border:'1px solid rgba(6,182,212,0.25)' }}><UsersIcon /></div>
-          <div><div className="rb-stat-val">{totalUsers}</div><div className="rb-stat-lbl">Total Users</div></div>
+          <div className="rb-stat-icon" style={{ color: '#22d3ee', background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.25)' }}><UsersIcon /></div>
+          <div><div className="rb-stat-val">{totalAdmins}</div><div className="rb-stat-lbl">Admins on roles</div></div>
+        </div>
+        <div className="rb-stat-card" style={{ '--sc': '#f59e0b' }}>
+          <div className="rb-stat-icon" style={{ color: '#fbbf24', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.25)' }}><WarningIcon /></div>
+          <div><div className="rb-stat-val">{counts.inactive}</div><div className="rb-stat-lbl">Inactive roles</div></div>
         </div>
         <div className="rb-stat-card" style={{ '--sc': '#10b981' }}>
-          <div className="rb-stat-icon" style={{ color:'#34d399', background:'rgba(16,185,129,0.12)', border:'1px solid rgba(16,185,129,0.25)' }}><LayersIcon /></div>
-          <div><div className="rb-stat-val">{modules.length}</div><div className="rb-stat-lbl">Modules</div></div>
+          <div className="rb-stat-icon" style={{ color: '#34d399', background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)' }}><LayersIcon /></div>
+          <div><div className="rb-stat-val">{gridModules.length}</div><div className="rb-stat-lbl">Modules</div></div>
         </div>
       </div>
 
       {/* ── Main panel ── */}
-      {rolesError ? (
-        <div className="rb-error">⚠ {rolesError}</div>
-      ) : (
-        <div className="rb-main-panel">
-          {selectedRole ? (
-            /* ── Permission matrix / assigned users view ── */
-            <PermMatrix
-              role={selectedRole}
-              modules={modules}
-              saving={saving}
-              saveError={saveError}
-              onBack={handleBack}
-              onSave={handleSave}
-              detail={roleDetail}
-              detailLoading={roleDetailLoading}
-              detailError={roleDetailError}
-              onAssign={handleAssignOpen}
-            />
-          ) : pageView === 'modules' ? (
-            /* ── Modules view — GET /admin/rbac/modules ── */
-            <ModulesView
-              modules={modules}
-              loading={modulesLoading}
-              error={modulesError}
-              onBack={handleBackToRoles}
-              onRegister={handleCreateModuleOpen}
-              onDelete={handleDeleteModuleOpen}
-            />
-          ) : (
-            /* ── Roles list view ── */
-            <>
-              <div className="rb-panel-head">
-                <div className="rb-panel-head-left">
-                  <span className="rb-panel-title">All Roles</span>
-                  <span className="rb-panel-count">{roles.length}</span>
-                </div>
-                <div className="rb-panel-head-actions">
-                  <button className="rb-module-btn" onClick={handleViewModules}>
-                    <LayersIcon /> View Modules
-                  </button>
-                  <button className="rb-create-btn" onClick={() => { dispatch(clearCreateError()); setShowCreateModal(true); }}>
-                    <PlusIcon /> Create Role
-                  </button>
-                </div>
+      <div className="rb-main-panel">
+        {openRole ? (
+          <RoleEditor
+            key={openRole.id}
+            roleSummary={roles.find(r => r.id === openRole.id) || openRole}
+            modules={gridModules}
+            modulesLoading={modulesLoading}
+            modulesError={modulesError}
+            focusAdmins={focusAdmins}
+            onBack={closeEditor}
+            onDelete={(r) => { dispatch(clearDeleteError()); setDeletingRole(r); }}
+          />
+        ) : (
+          <>
+            <div className="rb-panel-head">
+              <div className="rb-tabs" role="tablist">
+                <button role="tab" aria-selected={tab === 'roles'} className={`rb-tab${tab === 'roles' ? ' active' : ''}`} onClick={() => setTab('roles')}>
+                  Roles <span className="rb-panel-count">{roles.length}</span>
+                </button>
+                <button role="tab" aria-selected={tab === 'modules'} className={`rb-tab${tab === 'modules' ? ' active' : ''}`} onClick={() => setTab('modules')}>
+                  Modules <span className="rb-panel-count">{modules.length}</span>
+                </button>
               </div>
-              <RolesTable
-                roles={roles}
-                loading={rolesLoading}
-                onSelect={handleSelectRole}
-                onEdit={handleEditOpen}
-                onDelete={handleDeleteOpen}
-              />
-            </>
-          )}
-        </div>
+              <div className="rb-panel-head-actions">
+                <button className="rb-create-btn" onClick={() => { dispatch(clearCreateError()); setShowCreate(true); }}>
+                  <PlusIcon /> New role
+                </button>
+              </div>
+            </div>
+            {tab === 'roles' ? (
+              <RolesTab roles={roles} loading={rolesLoading} error={rolesError}
+                onOpen={(r) => openEditor(r)}
+                onDelete={(r) => { dispatch(clearDeleteError()); setDeletingRole(r); }} />
+            ) : (
+              <ModulesTab modules={modules} loading={modulesLoading} error={modulesError}
+                onEdit={(m) => { dispatch(clearUpdateModuleError()); setEditingModule(m); }}
+                onDelete={(m) => { dispatch(clearDeleteModuleError()); setDeletingModuleItem(m); }} />
+            )}
+          </>
+        )}
+      </div>
+
+      {showCreate && (
+        <CreateRoleModal roles={roles} modules={gridModules} modulesLoading={modulesLoading} modulesError={modulesError}
+          creating={creating} createError={createError}
+          onClose={() => setShowCreate(false)} onSubmit={handleCreate} />
       )}
-
-
-      {/* ── Create role modal ── */}
-      {showCreateModal && (
-        <CreateRoleModal
-          modules={modules}
-          creating={creating}
-          createError={createError}
-          onClose={() => setShowCreateModal(false)}
-          onSubmit={handleCreate}
-        />
-      )}
-
-      {/* ── Edit role modal ── */}
-      {editingRole && (
-        <EditRoleModal
-          role={editingRole}
-          updating={updating}
-          updateError={updateError}
-          onClose={handleEditClose}
-          onSubmit={handleEditSubmit}
-        />
-      )}
-
-      {/* ── Delete confirm modal ── */}
       {deletingRole && (
-        <DeleteConfirmModal
-          role={deletingRole}
-          deleting={deleting}
-          deleteError={deleteError}
-          onClose={handleDeleteClose}
-          onConfirm={handleDeleteConfirm}
-        />
+        <DeleteRoleModal role={deletingRole} deleting={deleting} deleteError={deleteError}
+          onClose={() => setDeletingRole(null)} onConfirm={handleDelete}
+          onShowAdmins={(r) => { setDeletingRole(null); openEditor(r, { admins: true }); }} />
       )}
-
-      {/* ── Change role modal ── */}
-      {assigningUser && selectedRole && (
-        <AssignUserModal
-          currentRole={selectedRole}
-          user={assigningUser}
-          assigning={assigning}
-          assignError={assignError}
-          onClose={handleAssignClose}
-          onSubmit={handleAssignSubmit}
-        />
+      {editingModule && (
+        <EditModuleModal module={editingModule} busy={updatingModule} error={updateModuleError}
+          onClose={() => setEditingModule(null)} onSubmit={handleUpdateModule} />
       )}
-
-      {/* ── Register module modal ── */}
-      {showCreateModuleModal && (
-        <CreateModuleModal
-          creatingModule={creatingModule}
-          createModuleError={createModuleError}
-          onClose={handleCreateModuleClose}
-          onSubmit={handleCreateModuleSubmit}
-        />
-      )}
-
-      {/* ── Delete module confirm modal ── */}
       {deletingModuleItem && (
-        <DeleteModuleModal
-          module={deletingModuleItem}
-          deletingModule={deletingModule}
-          deleteModuleError={deleteModuleError}
-          onClose={handleDeleteModuleClose}
-          onConfirm={handleDeleteModuleConfirm}
-        />
+        <DeleteModuleModal module={deletingModuleItem} busy={deletingModule} error={deleteModuleError}
+          onClose={() => setDeletingModuleItem(null)} onConfirm={handleDeleteModule} />
       )}
     </div>
   );

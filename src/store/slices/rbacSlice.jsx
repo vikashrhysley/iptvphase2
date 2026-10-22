@@ -7,32 +7,31 @@ import {
   apiPatchRbacRole,
   apiDeleteRbacRole,
   apiPutRbacRolePermissions,
-  apiPatchRbacRolePermissions,
   apiAssignRbacRole,
-  apiCreateRbacModule,
+  apiPatchRbacModule,
   apiDeleteRbacModule,
-  apiGetAssignableRoles,
 } from '../../services/api';
 
+// Cached after the first load; pass { force: true } to refetch after a change.
 export const fetchRbacRoles = createAsyncThunk('rbac/fetchRoles',
-  async (_, { getState, rejectWithValue }) => {
+  async (_arg, { getState, rejectWithValue }) => {
     try { return await apiGetRbacRoles(getState().auth.accessToken); }
     catch (err) { return rejectWithValue(err.message); }
   },
-  { condition: (_, { getState }) => {
+  { condition: (arg, { getState }) => {
     const { rolesLoading, roles } = getState().rbac;
-    return !rolesLoading && roles.length === 0;
+    return !rolesLoading && (arg?.force || roles.length === 0);
   }}
 );
 
 export const fetchRbacModules = createAsyncThunk('rbac/fetchModules',
-  async (_, { getState, rejectWithValue }) => {
+  async (_arg, { getState, rejectWithValue }) => {
     try { return await apiGetRbacModules(getState().auth.accessToken); }
     catch (err) { return rejectWithValue(err.message); }
   },
-  { condition: (_, { getState }) => {
+  { condition: (arg, { getState }) => {
     const { modulesLoading, modules } = getState().rbac;
-    return !modulesLoading && modules.length === 0;
+    return !modulesLoading && (arg?.force || modules.length === 0);
   }}
 );
 
@@ -50,6 +49,7 @@ export const fetchRoleDetail = createAsyncThunk('rbac/fetchRoleDetail',
   }
 );
 
+// PATCH /admin/rbac/roles/{id} — name / description / is_active, only what changed (C4).
 export const updateRbacRole = createAsyncThunk('rbac/updateRole',
   async ({ roleId, ...updates }, { getState, rejectWithValue }) => {
     try { return await apiPatchRbacRole(getState().auth.accessToken, roleId, updates); }
@@ -64,16 +64,10 @@ export const deleteRbacRole = createAsyncThunk('rbac/deleteRole',
   }
 );
 
+// PUT /admin/rbac/roles/{id}/permissions — the whole grid in one call (C5).
 export const putRolePermissions = createAsyncThunk('rbac/putRolePermissions',
   async ({ roleId, permissions }, { getState, rejectWithValue }) => {
     try { return await apiPutRbacRolePermissions(getState().auth.accessToken, roleId, permissions); }
-    catch (err) { return rejectWithValue(err.message); }
-  }
-);
-
-export const patchRolePermissions = createAsyncThunk('rbac/patchRolePermissions',
-  async ({ roleId, add, remove }, { getState, rejectWithValue }) => {
-    try { return await apiPatchRbacRolePermissions(getState().auth.accessToken, roleId, { add, remove }); }
     catch (err) { return rejectWithValue(err.message); }
   }
 );
@@ -85,9 +79,9 @@ export const assignRbacRole = createAsyncThunk('rbac/assignRole',
   }
 );
 
-export const createRbacModule = createAsyncThunk('rbac/createModule',
-  async (payload, { getState, rejectWithValue }) => {
-    try { return await apiCreateRbacModule(getState().auth.accessToken, payload); }
+export const updateRbacModule = createAsyncThunk('rbac/updateModule',
+  async ({ moduleId, ...updates }, { getState, rejectWithValue }) => {
+    try { return await apiPatchRbacModule(getState().auth.accessToken, moduleId, updates); }
     catch (err) { return rejectWithValue(err.message); }
   }
 );
@@ -99,17 +93,15 @@ export const deleteRbacModule = createAsyncThunk('rbac/deleteModule',
   }
 );
 
-export const fetchAssignableRoles = createAsyncThunk('rbac/fetchAssignableRoles',
-  async (_, { getState, rejectWithValue }) => {
-    try { return await apiGetAssignableRoles(getState().auth.accessToken); }
-    catch (err) { return rejectWithValue(err.message); }
-  }
-);
-
 const mergeRole = (roles, updated) => {
   if (!updated?.id) return;
   const idx = roles.findIndex(r => r.id === updated.id);
   if (idx !== -1) roles[idx] = { ...roles[idx], ...updated };
+};
+
+// Keep the open role editor in step with a role-shaped response (save / rename / toggle).
+const mergeDetail = (s, updated) => {
+  if (updated?.id && s.roleDetail?.id === updated.id) s.roleDetail = { ...s.roleDetail, ...updated };
 };
 
 const rbacSlice = createSlice({
@@ -123,16 +115,16 @@ const rbacSlice = createSlice({
     updating: false, updateError: null,
     deleting: false, deleteError: null,
     assigning: false, assignError: null,
-    creatingModule: false, createModuleError: null,
+    updatingModule: false, updateModuleError: null,
     deletingModule: false, deleteModuleError: null,
-    assignableRoles: [], assignableRolesLoading: false, assignableRolesError: null,
   },
   reducers: {
     clearCreateError:       s => { s.createError = null; },
     clearUpdateError:       s => { s.updateError = null; },
+    clearSaveError:         s => { s.saveError = null; },
     clearDeleteError:       s => { s.deleteError = null; },
     clearAssignError:       s => { s.assignError = null; },
-    clearCreateModuleError: s => { s.createModuleError = null; },
+    clearUpdateModuleError: s => { s.updateModuleError = null; },
     clearDeleteModuleError: s => { s.deleteModuleError = null; },
     clearRoleDetail:        s => { s.roleDetail = null; s.roleDetailError = null; },
   },
@@ -154,32 +146,41 @@ const rbacSlice = createSlice({
      .addCase(fetchRoleDetail.rejected,  (s, a) => { s.roleDetailLoading = false; s.roleDetailError = a.payload ?? 'Failed'; });
 
     b.addCase(updateRbacRole.pending,   s => { s.updating = true;  s.updateError = null; })
-     .addCase(updateRbacRole.fulfilled, (s, a) => { s.updating = false; mergeRole(s.roles, a.payload?.data ?? a.payload); })
+     .addCase(updateRbacRole.fulfilled, (s, a) => {
+       s.updating = false;
+       const r = a.payload?.data ?? a.payload;
+       mergeRole(s.roles, r);
+       mergeDetail(s, r);
+     })
      .addCase(updateRbacRole.rejected,  (s, a) => { s.updating = false; s.updateError = a.payload ?? 'Failed to update role'; });
 
     b.addCase(deleteRbacRole.pending,   s => { s.deleting = true;  s.deleteError = null; })
      .addCase(deleteRbacRole.fulfilled, (s, a) => { s.deleting = false; s.roles = s.roles.filter(r => r.id !== a.payload); })
      .addCase(deleteRbacRole.rejected,  (s, a) => { s.deleting = false; s.deleteError = a.payload ?? 'Failed to delete role'; });
 
+    // The API silently ignores unknown modules/actions, so the grid is redrawn from the
+    // permissions in the response — never from what was sent (C5).
     b.addCase(putRolePermissions.pending,   s => { s.saving = true;  s.saveError = null; })
-     .addCase(putRolePermissions.fulfilled, (s, a) => { s.saving = false; mergeRole(s.roles, a.payload?.data ?? a.payload); })
-     .addCase(putRolePermissions.rejected,  (s, a) => { s.saving = false; s.saveError = a.payload ?? 'Failed'; });
-
-    b.addCase(patchRolePermissions.pending,   s => { s.saving = true;  s.saveError = null; })
-     .addCase(patchRolePermissions.fulfilled, (s, a) => { s.saving = false; mergeRole(s.roles, a.payload?.data ?? a.payload); })
-     .addCase(patchRolePermissions.rejected,  (s, a) => { s.saving = false; s.saveError = a.payload ?? 'Failed'; });
+     .addCase(putRolePermissions.fulfilled, (s, a) => {
+       s.saving = false;
+       const r = a.payload?.data ?? a.payload;
+       mergeRole(s.roles, r);
+       mergeDetail(s, r);
+     })
+     .addCase(putRolePermissions.rejected,  (s, a) => { s.saving = false; s.saveError = a.payload ?? 'Failed to save permissions'; });
 
     b.addCase(assignRbacRole.pending,   s => { s.assigning = true;  s.assignError = null; })
      .addCase(assignRbacRole.fulfilled, s => { s.assigning = false; })
      .addCase(assignRbacRole.rejected,  (s, a) => { s.assigning = false; s.assignError = a.payload ?? 'Failed to assign role'; });
 
-    b.addCase(createRbacModule.pending,   s => { s.creatingModule = true;  s.createModuleError = null; })
-     .addCase(createRbacModule.fulfilled, (s, a) => {
-       s.creatingModule = false;
+    b.addCase(updateRbacModule.pending,   s => { s.updatingModule = true;  s.updateModuleError = null; })
+     .addCase(updateRbacModule.fulfilled, (s, a) => {
+       s.updatingModule = false;
        const m = a.payload?.data ?? a.payload;
-       if (m?.name) s.modules.push(m);
+       const idx = s.modules.findIndex(x => x.id === m?.id);
+       if (idx !== -1) s.modules[idx] = { ...s.modules[idx], ...m };
      })
-     .addCase(createRbacModule.rejected,  (s, a) => { s.creatingModule = false; s.createModuleError = a.payload ?? 'Failed to register module'; });
+     .addCase(updateRbacModule.rejected,  (s, a) => { s.updatingModule = false; s.updateModuleError = a.payload ?? 'Failed to update module'; });
 
     b.addCase(deleteRbacModule.pending,   s => { s.deletingModule = true;  s.deleteModuleError = null; })
      .addCase(deleteRbacModule.fulfilled, (s, a) => {
@@ -188,15 +189,11 @@ const rbacSlice = createSlice({
        s.modules = s.modules.filter(m => m.id !== id && m.name !== id);
      })
      .addCase(deleteRbacModule.rejected,  (s, a) => { s.deletingModule = false; s.deleteModuleError = a.payload ?? 'Failed to delete module'; });
-
-    b.addCase(fetchAssignableRoles.pending,   s => { s.assignableRolesLoading = true;  s.assignableRolesError = null; })
-     .addCase(fetchAssignableRoles.fulfilled, (s, a) => { s.assignableRolesLoading = false; s.assignableRoles = Array.isArray(a.payload) ? a.payload : []; })
-     .addCase(fetchAssignableRoles.rejected,  (s, a) => { s.assignableRolesLoading = false; s.assignableRolesError = a.payload ?? 'Failed to load roles'; });
   },
 });
 
 export const {
-  clearCreateError, clearUpdateError, clearDeleteError,
-  clearAssignError, clearCreateModuleError, clearDeleteModuleError, clearRoleDetail,
+  clearCreateError, clearUpdateError, clearSaveError, clearDeleteError,
+  clearAssignError, clearUpdateModuleError, clearDeleteModuleError, clearRoleDetail,
 } = rbacSlice.actions;
 export default rbacSlice.reducer;

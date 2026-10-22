@@ -4,8 +4,12 @@ import toast from 'react-hot-toast';
 import { fetchDeviceDetail, clearDeviceDetail, fetchDeviceOwnershipHistory } from '../../store/slices/deviceSlice';
 import DeviceActivity    from './DeviceActivity';
 import DeviceLoginHistory from './DeviceLoginHistory';
+import { SingleLogoutDialog } from './ForceLogout';
+import { isSignedIn } from './deviceUsage';
 import './DeviceDetail.css';
 
+import { isPermissionDenied } from '../../services/permissionErrors';
+import { AccessDenied } from '../../components/common/PermissionDenied';
 /* ── Icons ─────────────────────────────────────────────── */
 const BackIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -95,8 +99,15 @@ const isBackfilledTenure = (entry) => entry.start_reason === 'backfill' || entry
 
 // Audit Trail (§6): actions arrive as raw strings (e.g. "device.admin_blocked") — humanize
 // without a full per-action phrase map, per the guide's explicit fallback.
+// Force logout audit actions have fixed labels (Remote Device Logout build guide Part E).
+const ACTION_LABELS = {
+  'device.admin_logout':       'Signed out by admin',
+  'device.admin_logout_multi': 'Signed out several devices',
+  'user.admin_logout_all':     'Signed out of all devices',
+};
 const humanizeAction = (action) => {
   if (!action) return 'Unknown action';
+  if (ACTION_LABELS[action]) return ACTION_LABELS[action];
   return action.replace(/^device\./, '').replace(/_/g, ' ');
 };
 
@@ -133,14 +144,16 @@ function SectionCard({ title, children, collapsible, defaultOpen = true }) {
 }
 
 /* ── Main ───────────────────────────────────────────────── */
-export default function DeviceDetail({ deviceId, onBack }) {
+export default function DeviceDetail({ deviceId, onBack, onLoggedOut }) {
   const dispatch = useDispatch();
   const {
     selectedDevice: d, detailLoading, detailError,
     ownershipHistoryItems, ownershipHistoryLoading, ownershipHistoryError,
   } = useSelector(s => s.devices);
+  const accessToken = useSelector(s => s.auth.accessToken);
   const [showActivity,     setShowActivity]     = useState(false);
   const [showLoginHistory, setShowLoginHistory] = useState(false);
+  const [showLogout,       setShowLogout]       = useState(false);
 
   useEffect(() => {
     dispatch(fetchDeviceDetail(deviceId));
@@ -188,14 +201,36 @@ export default function DeviceDetail({ deviceId, onBack }) {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               Login History
             </button>
+            {/* Force logout — signed-in devices only. No role check: the backend gates it on devices · Act. */}
+            {isSignedIn(dev.usage_state) && (
+              <button className="fl-trigger" onClick={() => setShowLogout(true)} title="Sign this device out (does not block it)">
+                ⏏ Force logout
+              </button>
+            )}
           </div>
         )}
       </div>
 
+      {showLogout && (
+        <SingleLogoutDialog
+          accessToken={accessToken}
+          device={{ device_id: dev.device_id || deviceId, device_name: dev.device_name, user_email: owner?.email }}
+          onClose={() => setShowLogout(false)}
+          onDone={() => {
+            // Activity → Signed out, MAC seat cleared, new audit entry; list + stats behind us too.
+            dispatch(fetchDeviceDetail(deviceId));
+            onLoggedOut?.();
+          }}
+        />
+      )}
+
       {detailLoading && (
         <div className="dd-loading"><span className="dd-spinner" /> Loading device details…</div>
       )}
-      {detailError && !detailLoading && (
+      {detailError && !detailLoading && isPermissionDenied(detailError) && (
+        <AccessDenied message={detailError} />
+      )}
+      {detailError && !detailLoading && !isPermissionDenied(detailError) && (
         <div className="dd-error">
           <div className="dd-error-msg">{detailError}</div>
           <div className="dd-error-hint">
@@ -410,7 +445,7 @@ export default function DeviceDetail({ deviceId, onBack }) {
             {ownershipHistoryLoading ? (
               <div className="dd-empty-section">Loading ownership history…</div>
             ) : ownershipHistoryError ? (
-              <div className="dd-error" style={{ margin: 0 }}>{ownershipHistoryError}</div>
+(isPermissionDenied(ownershipHistoryError) ? <AccessDenied message={ownershipHistoryError} compact /> : <div className="dd-error" style={{ margin: 0 }}>{ownershipHistoryError}</div>)
             ) : ownershipHistoryItems.length === 0 ? (
               // Empty state matters here: until the ownership-history migration runs this is the
               // normal state for every device, not an error and not a loading flicker (§6.3.5).

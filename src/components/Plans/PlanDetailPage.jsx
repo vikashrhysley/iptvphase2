@@ -8,6 +8,8 @@ import {
 import './PlansPage.css';
 import './PlanDetailPage.css';
 import toast from "react-hot-toast";
+import { isPermissionDenied } from '../../services/permissionErrors';
+import { AccessDenied } from '../common/PermissionDenied';
 
 const fmtDateTime = (iso) => {
   if (!iso) return '—';
@@ -241,7 +243,7 @@ function EditPlanModal({ plan, onClose }) {
           </label>
         </div>
 
-        {(localError || updateError) && (
+        {(localError || (updateError && !isPermissionDenied(updateError))) && (
           <div className="pdp-modal-error">{localError || updateError}</div>
         )}
         {updateSuccess && (
@@ -296,7 +298,7 @@ function TogglePlanStatusModal({ plan, onClose }) {
             : <>This will deactivate <strong>{plan.name || plan.plan_code}</strong>. It will no longer be available for new subscriptions, but existing subscribers are unaffected.</>}
         </p>
 
-        {toggleError && (
+        {toggleError && !isPermissionDenied(toggleError) && (
           <div className="pdp-modal-error">{toggleError}</div>
         )}
         {toggleSuccess && (
@@ -321,10 +323,8 @@ function TogglePlanStatusModal({ plan, onClose }) {
 export default function PlanDetailPage({ planId, onBack }) {
   const dispatch = useDispatch();
   const { selectedPlan: plan, detailLoading, detailError } = useSelector((s) => s.plans);
-  const { user: me } = useSelector((s) => s.auth);
   const [showToggle, setShowToggle] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
-  const isSuperAdmin = me?.role === 'superadmin';
 
   useEffect(() => {
     dispatch(fetchPlanDetail(planId));
@@ -349,7 +349,8 @@ export default function PlanDetailPage({ planId, onBack }) {
     <div className="pdp-page">
       <div className="pdp-topbar">
         <button className="pdp-back-btn" onClick={onBack}><BackIcon /> Back to Plans</button>
-        {plan && isSuperAdmin && (
+        {/* Always visible — the backend gates edits on subscription_plans · Act. */}
+        {plan && (
           <div className="pdp-topbar-actions">
             <button className="pdp-edit-btn" onClick={() => setShowEdit(true)}>
               <EditIcon /> Edit Plan
@@ -369,7 +370,9 @@ export default function PlanDetailPage({ planId, onBack }) {
       )}
 
       {detailError && !detailLoading && (
-        <div className="pdp-error">{detailError}</div>
+        isPermissionDenied(detailError)
+          ? <AccessDenied message={detailError} />
+          : <div className="pdp-error">{detailError}</div>
       )}
 
       {plan && !detailLoading && !detailError && (

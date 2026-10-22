@@ -8,8 +8,12 @@ import {
 } from '../../store/slices/deviceSlice';
 import { apiFetchAdminDevices, apiBlockDevice, apiUnblockDevice } from '../../services/api';
 import DeviceDetail from './DeviceDetail';
+import { ForceLogoutModal, SingleLogoutDialog } from './ForceLogout';
+import { isSignedIn } from './deviceUsage';
 import './DevicePage.css';
 
+import { isPermissionDenied } from '../../services/permissionErrors';
+import { AccessDenied } from '../../components/common/PermissionDenied';
 /* ── Icons ─────────────────────────────────────────────── */
 const SearchIcon  = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
 const CopyIcon    = () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>;
@@ -348,7 +352,8 @@ function Toast() {
   useEffect(() => {
     if (toast) { const t = setTimeout(() => dispatch(clearToast()), 3200); return () => clearTimeout(t); }
   }, [toast, dispatch]);
-  if (!toast) return null;
+  // A refused action (403) is explained by the global pop-up — don't repeat it as a toast.
+  if (!toast || (toast.type !== 'success' && isPermissionDenied(toast.msg))) return null;
   return (
     <div className={`device-toast ${toast.type}`}>
       {toast.type === 'success' ? '✓' : '✕'} {toast.msg}
@@ -408,7 +413,7 @@ const PLATFORM_ICON_META = {
 };
 const DEFAULT_PLATFORM_ICON = { icon: '📦', bg: 'rgba(100,116,139,0.1)' };
 
-function DeviceTableRow({ device, canEdit, actionLoading, onRowClick, onBlock, onUnblock }) {
+function DeviceTableRow({ device, actionLoading, onRowClick, onBlock, onUnblock, onForceLogout }) {
   const id   = device.device_id || device.id;
   const busy = actionLoading === id;
   const pIcon = PLATFORM_ICON_META[device.platform] || DEFAULT_PLATFORM_ICON;
@@ -467,7 +472,13 @@ function DeviceTableRow({ device, canEdit, actionLoading, onRowClick, onBlock, o
       <td onClick={e => e.stopPropagation()}>
         <div className="dt-actions">
           <button type="button" className="dt-view-btn" onClick={onRowClick}>View</button>
-          {canEdit && <DeviceAccessButton device={device} busy={busy} onBlock={onBlock} onUnblock={onUnblock} compact />}
+          <DeviceAccessButton device={device} busy={busy} onBlock={onBlock} onUnblock={onUnblock} compact />
+          {/* Force logout — only on rows that are actually signed in (Online now / Idle). */}
+          {isSignedIn(device.usage_state) && (
+            <button type="button" className="fl-row-btn" onClick={() => onForceLogout(device)} title="Sign this device out (does not block it)">
+              Force logout
+            </button>
+          )}
         </div>
       </td>
     </tr>
@@ -478,8 +489,11 @@ function DeviceTableRow({ device, canEdit, actionLoading, onRowClick, onBlock, o
 export default function DevicePage() {
   const dispatch = useDispatch();
   const { devices, total, page, pageSize, loading, error, actionLoading, stats, statsLoading, filters, detailError } = useSelector(s => s.devices);
-  const { user: me, accessToken } = useSelector(s => s.auth);
-  const canEdit = me?.role === 'superadmin' || me?.role === 'admin';
+  const { accessToken } = useSelector(s => s.auth);
+  // No role checks: every button is shown to every admin and the backend answers 403 when the
+  // admin's role lacks devices · Act (Roles & Permissions build guide, READ THIS FIRST).
+  const [forceLogoutOpen, setForceLogoutOpen] = useState(false);
+  const [logoutTarget,    setLogoutTarget]    = useState(null); // single device row action
 
   const [detailId,      setDetailId]     = useState(
     () => sessionStorage.getItem('deviceDetailId') || null
@@ -639,6 +653,7 @@ export default function DevicePage() {
   // 400 (already/not blocked, or risk ≥ 90 → superadmin route) and 404 are informational and
   // want a card refresh; anything else is a hard error.
   const handleAccessError = (err) => {
+    if (isPermissionDenied(err)) return;   // the global pop-up already explained it
     if (err.status === 400 || err.status === 404) {
       toast(err.message || (err.status === 404 ? 'Device not found — refreshing the list.' : 'Action not allowed in the current state.'),
         { icon: 'ℹ️', duration: 7000 });
@@ -666,8 +681,15 @@ export default function DevicePage() {
     }
   };
 
+  // After any successful sign-out: same page/tab/search/filter list + the stats cards (Logged
+  // in ↓ / Logged out ↑). Device status never changes, so nothing else needs refreshing.
+  const refreshAfterLogout = () => {
+    refreshDevices();
+    dispatch(fetchDeviceStats());
+  };
+
   if (detailId) {
-    return <DeviceDetail deviceId={detailId} onBack={closeDetail} />;
+    return <DeviceDetail deviceId={detailId} onBack={closeDetail} onLoggedOut={refreshAfterLogout} />;
   }
 
   const datestamp = () => new Date().toISOString().slice(0, 10);
@@ -998,6 +1020,12 @@ export default function DevicePage() {
             ))}
           </select>
 
+          {/* Force logout — independent of the table: ignores tab/search/filter/page and always
+              opens the same empty pop-up. */}
+          <button type="button" className="fl-trigger" onClick={() => setForceLogoutOpen(true)}>
+            ⏏ Force logout
+          </button>
+
           {/* Active filter chip — shows any status set from a card click, with a clear (x) */}
           {filters.status && (
             <span className="dv-filter-chip">
@@ -1015,7 +1043,7 @@ export default function DevicePage() {
           Loading devices…
         </div>
       ) : error ? (
-        <div className="device-empty" style={{ color: '#f87171' }}>{error}</div>
+(isPermissionDenied(error) ? <AccessDenied message={error} /> : <div className="device-empty" style={{ color: '#f87171' }}>{error}</div>)
       ) : devices.length === 0 ? (
         <div className="device-empty">
           <span className="device-empty-icon">📭</span>
@@ -1041,9 +1069,10 @@ export default function DevicePage() {
               </thead>
               <tbody>
                 {devices.map(d => (
-                  <DeviceTableRow key={d.device_id || d.id} device={d} canEdit={canEdit}
+                  <DeviceTableRow key={d.device_id || d.id} device={d}
                     actionLoading={accessBusy ? (accessTarget?.device?.device_id || accessTarget?.device?.id) : null}
-                    onRowClick={() => openDetail(d.device_id || d.id)} onBlock={openBlock} onUnblock={openUnblock} />
+                    onRowClick={() => openDetail(d.device_id || d.id)} onBlock={openBlock} onUnblock={openUnblock}
+                    onForceLogout={setLogoutTarget} />
                 ))}
               </tbody>
             </table>
@@ -1060,6 +1089,27 @@ export default function DevicePage() {
           busy={accessBusy}
           onClose={closeAccess}
           onConfirm={doAccess}
+        />
+      )}
+
+      {forceLogoutOpen && (
+        <ForceLogoutModal
+          accessToken={accessToken}
+          onClose={() => setForceLogoutOpen(false)}
+          onDone={refreshAfterLogout}
+        />
+      )}
+
+      {logoutTarget && (
+        <SingleLogoutDialog
+          accessToken={accessToken}
+          device={{
+            device_id:   logoutTarget.device_id || logoutTarget.id,
+            device_name: logoutTarget.device_name,
+            user_email:  logoutTarget.current_user_email,
+          }}
+          onClose={() => setLogoutTarget(null)}
+          onDone={refreshAfterLogout}
         />
       )}
     </div>

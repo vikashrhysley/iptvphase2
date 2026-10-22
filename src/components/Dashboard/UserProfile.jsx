@@ -96,9 +96,6 @@ export default function UserProfile({ user, onBack }) {
   const { user: me }      = useSelector(s => s.auth);
   const liveUser = useSelector(s => s.dashboard.users.find(u => u.id === user.id) || user);
 
-  const role    = me?.role;
-  const canEdit = role === 'superadmin';
-
   const [showEdit,   setShowEdit]   = useState(false);
   const [showRevoke, setShowRevoke] = useState(false);
   const [form, setForm] = useState({
@@ -189,20 +186,18 @@ export default function UserProfile({ user, onBack }) {
     updateBtn: {
       display: 'inline-flex', alignItems: 'center', gap: 7,
       padding: '9px 18px', borderRadius: T.r2, fontSize: '0.85rem',
-      fontWeight: 600, fontFamily: T.ff, cursor: canEdit ? 'pointer' : 'not-allowed',
-      border: 'none', background: canEdit
-        ? 'linear-gradient(135deg,#00c4ef,#0070d4)'
-        : 'rgba(255,255,255,0.05)',
-      color: canEdit ? '#fff' : T.t3,
+      fontWeight: 600, fontFamily: T.ff, cursor: 'pointer',
+      border: 'none', background: 'linear-gradient(135deg,#00c4ef,#0070d4)',
+      color: '#fff',
       opacity: isBusy ? 0.5 : 1,
       transition: 'all 0.2s',
     },
     revokeBtn: {
       display: 'inline-flex', alignItems: 'center', gap: 7,
       padding: '9px 18px', borderRadius: T.r2, fontSize: '0.85rem',
-      fontWeight: 600, fontFamily: T.ff, cursor: canEdit ? 'pointer' : 'not-allowed',
+      fontWeight: 600, fontFamily: T.ff, cursor: 'pointer',
       background: T.dangerBg, border: `1px solid ${T.dangerBdr}`,
-      color: canEdit ? '#f87171' : T.t3, opacity: isBusy ? 0.5 : 1,
+      color: '#f87171', opacity: isBusy ? 0.5 : 1,
       transition: 'all 0.2s',
     },
     grid: {
@@ -257,14 +252,6 @@ export default function UserProfile({ user, onBack }) {
           {Ico.back} Back to Dashboard
         </button>
 
-        {/* Permission notice for non-superadmin */}
-        {!canEdit && (
-          <div style={S.permNote}>
-            {Ico.info}
-            {role === 'admin' ? 'Admin view — read only, no edit or revoke permissions.' : 'Viewer access — profile is read only.'}
-          </div>
-        )}
-
         {/* Hero card */}
         <div style={S.hero}>
           <div style={S.heroAccentBar} />
@@ -287,16 +274,16 @@ export default function UserProfile({ user, onBack }) {
           {!isRevoked && (
             <div style={S.actions}>
               <button style={S.updateBtn} disabled={isBusy}
-                onClick={() => { if (!canEdit) return; setShowEdit(s => !s); setShowRevoke(false); }}
-                title={canEdit ? 'Update profile' : 'No permission'}
-                onMouseEnter={e => { if (canEdit && !isBusy) e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,196,239,0.3)'; }}
+                onClick={() => { setShowEdit(s => !s); setShowRevoke(false); }}
+                title="Update profile"
+                onMouseEnter={e => { if (!isBusy) e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,196,239,0.3)'; }}
                 onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; }}>
                 {Ico.edit} Update Profile
               </button>
               <button style={S.revokeBtn} disabled={isBusy}
-                onClick={() => { if (!canEdit) return; setShowRevoke(s => !s); setShowEdit(false); }}
-                title={canEdit ? 'Revoke account' : 'No permission'}
-                onMouseEnter={e => { if (canEdit && !isBusy) e.currentTarget.style.background = 'rgba(239,68,68,0.18)'; }}
+                onClick={() => { setShowRevoke(s => !s); setShowEdit(false); }}
+                title="Revoke account"
+                onMouseEnter={e => { if (!isBusy) e.currentTarget.style.background = 'rgba(239,68,68,0.18)'; }}
                 onMouseLeave={e => { e.currentTarget.style.background = T.dangerBg; }}>
                 {Ico.revoke} Revoke
               </button>
@@ -398,7 +385,6 @@ export default function UserProfile({ user, onBack }) {
             <Field label="Account"       value={isRevoked ? 'Revoked' : 'Active'}  color={isRevoked ? '#f87171' : '#34d399'} />
             <Field label="Device Status" value={liveUser.device === 'active' ? 'Active' : 'Inactive'} color={liveUser.device === 'active' ? '#34d399' : '#f87171'} />
             <Field label="Viewed By"     value={me?.name}   color={T.t3} />
-            <Field label="Permission"    value={role === 'superadmin' ? 'Full Access' : role === 'admin' ? 'Read Only' : 'View Only'} color={T.t3} />
           </Card>
 
           <Card icon={Ico.device} title="Device Info">

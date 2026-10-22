@@ -224,8 +224,8 @@ export const logoutUser = createAsyncThunk('auth/logoutUser',
 );
 
 // Re-fetch the signed-in admin's own profile (role + permissions) and refresh it in place.
-// Dispatch this after a permission edit so anything driven by auth.user.permissions — the
-// sidebar page gating in particular — updates live, with no page reload.
+// Dispatch this after a permission edit so the "My access" view on the profile page updates
+// live. Nothing hides or disables UI from these permissions — the backend decides per call.
 export const refreshCurrentUser = createAsyncThunk('auth/refreshCurrentUser',
   async (_, { getState, rejectWithValue }) => {
     const { accessToken } = getState().auth;

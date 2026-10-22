@@ -13,6 +13,8 @@ import {
   setFilters,
   updateAdminUser,
 } from '../../store/slices/adminUsersSlice';
+import { isPermissionDenied } from '../../services/permissionErrors';
+import { AccessDenied } from '../common/PermissionDenied';
 import './AdminUsersPage.css';
 import { Eye } from "lucide-react";
 import { Button } from "react-bootstrap";
@@ -95,20 +97,20 @@ const relativeTime = (iso) => {
   return isPast ? `${val} ${unit}${plural} ago` : `in ${val} ${unit}${plural}`;
 };
 
+// Display label only — never used to decide access. Admins show role_display (role is null for
+// portal-made roles); role-picker options show their own display name when the API sends one.
 const roleBadgeText = (role) => {
   if (!role) return '—';
   if (role === 'superadmin') return 'Super Admin';
   if (role === 'admin') return 'Admin';
   if (role === 'viewer') return 'Viewer';
-  return role;
+  return role.replace(/_/g, ' ');
 };
-
-// Used until /admin/users/roles has loaded (or if it fails)
-const FALLBACK_ROLES = [
-  { id: 'viewer', name: 'viewer' },
-  { id: 'admin', name: 'admin' },
-  { id: 'superadmin', name: 'superadmin' },
-];
+const adminRoleLabel = (u) => u?.role_display || roleBadgeText(u?.role || u?.role_name);
+const roleOptionLabel = (r) => r?.role_display || r?.display_name || roleBadgeText(r?.name);
+// The role NAME an admin is on (PATCH /admin/users/{id} takes the name). role is null for
+// portal-made roles, so fall back to role_name when the API sends it.
+const currentRoleName = (u) => u?.role || u?.role_name || '';
 
 const statusBadgeClass = (status) => {
   if (status === 'active') return 'active';
@@ -201,12 +203,12 @@ function Pagination({ current, totalPages, totalItems, pageSize, onPage }) {
 
 function CreateAdminUserModal({ onClose, onCreated }) {
   const dispatch = useDispatch();
-  const { createLoading, createError, assignableRoles, assignableRolesLoading } =
+  const { createLoading, createError, assignableRoles, assignableRolesLoading, assignableRolesError } =
     useSelector((s) => s.adminUsers);
   const [form, setForm] = useState({
     full_name: '',
     email: '',
-    role: 'admin',
+    role: '',
   });
   const [localError, setLocalError] = useState('');
 
@@ -216,7 +218,8 @@ function CreateAdminUserModal({ onClose, onCreated }) {
     dispatch(fetchAssignableRoles({ force: true }));
   }, [dispatch]);
 
-  const roleOptions = assignableRoles.length ? assignableRoles : FALLBACK_ROLES;
+  // GET /admin/users/roles — never includes the app-user "user" role (guide C9).
+  const roleOptions = assignableRoles;
   const selectedRole = assignableRoles.find((r) => r.name === form.role);
 
   const updateField = (key, value) => {
@@ -294,19 +297,24 @@ function CreateAdminUserModal({ onClose, onCreated }) {
               onChange={(e) => updateField('role', e.target.value)}
               disabled={createLoading || assignableRolesLoading}
             >
+              <option value="">{assignableRolesLoading ? 'Loading roles…' : 'Select a role'}</option>
               {roleOptions.map((r) => (
                 <option key={r.id || r.name} value={r.name}>
-                  {roleBadgeText(r.name)}
+                  {roleOptionLabel(r)}
                 </option>
               ))}
             </select>
             {selectedRole?.description && (
               <span className="au-form-hint">{selectedRole.description}</span>
             )}
+            {assignableRolesError && !assignableRolesLoading && (
+              <span className="au-form-hint">Couldn't load roles: {assignableRolesError}</span>
+            )}
           </label>
         </div>
 
-        {(localError || createError) && (
+        {/* A refused create (403, incl. SUPERADMIN_REQUIRED) is explained by the global pop-up. */}
+        {(localError || (createError && !isPermissionDenied(createError))) && (
           <div className="au-modal-error">{localError || createError}</div>
         )}
 
@@ -325,7 +333,7 @@ function CreateAdminUserModal({ onClose, onCreated }) {
   );
 }
 
-function AdminUserDetailModal({ userId, onClose, isSuperAdmin, currentUserEmail }) {
+function AdminUserDetailModal({ userId, onClose }) {
   const dispatch = useDispatch();
   const {
     selectedUser, detailLoading, detailError, updateLoading, updateError, updateSuccess,
@@ -335,8 +343,9 @@ function AdminUserDetailModal({ userId, onClose, isSuperAdmin, currentUserEmail 
   const [editRole, setEditRole] = useState('');
   const [editStatus, setEditStatus] = useState('');
 
-  const roleOptions = assignableRoles.length ? assignableRoles : FALLBACK_ROLES;
+  const roleOptions = assignableRoles;
   const selectedRole = assignableRoles.find((r) => r.name === editRole);
+  const originalRole = currentRoleName(selectedUser);
 
   useEffect(() => {
     dispatch(fetchAdminUserDetail(userId));
@@ -345,7 +354,7 @@ function AdminUserDetailModal({ userId, onClose, isSuperAdmin, currentUserEmail 
 
   useEffect(() => {
     if (selectedUser) {
-      setEditRole(selectedUser.role || 'admin');
+      setEditRole(currentRoleName(selectedUser));
       setEditStatus(selectedUser.status || 'active');
     }
   }, [selectedUser]);
@@ -354,15 +363,10 @@ function AdminUserDetailModal({ userId, onClose, isSuperAdmin, currentUserEmail 
     if (updateSuccess) dispatch(clearUpdateState());
   }, [updateSuccess, dispatch]);
 
-  const canEdit =
-    isSuperAdmin &&
-    selectedUser &&
-    selectedUser.email !== currentUserEmail;
-
   const handleSave = () => {
     if (!selectedUser) return;
     const changes = {};
-    if (editRole !== selectedUser.role) changes.role = editRole;
+    if (editRole && editRole !== originalRole) changes.role = editRole;
     if (editStatus !== selectedUser.status) changes.status = editStatus;
     if (!Object.keys(changes).length) return;
     dispatch(clearUpdateState());
@@ -394,7 +398,9 @@ function AdminUserDetailModal({ userId, onClose, isSuperAdmin, currentUserEmail 
         )}
 
         {detailError && !detailLoading && (
-          <div className="au-detail-error">{detailError}</div>
+          isPermissionDenied(detailError)
+            ? <AccessDenied message={detailError} compact />
+            : <div className="au-detail-error">{detailError}</div>
         )}
 
         {selectedUser && !detailLoading && (
@@ -406,7 +412,7 @@ function AdminUserDetailModal({ userId, onClose, isSuperAdmin, currentUserEmail 
                 <div className="au-detail-email">{selectedUser.email}</div>
                 <div className="au-detail-badges">
                   <span className={`au-role-pill role-${(selectedUser.role || 'viewer').toLowerCase()}`}>
-                    {selectedUser.role_display || roleBadgeText(selectedUser.role)}
+                    {adminRoleLabel(selectedUser)}
                   </span>
                   <span className={`au-status-pill ${statusBadgeClass(selectedUser.status)}`}>
                     {selectedUser.status || '—'}
@@ -460,8 +466,9 @@ function AdminUserDetailModal({ userId, onClose, isSuperAdmin, currentUserEmail 
               </div>
             </div>
 
-            {canEdit && (
-              <>
+            {/* Always shown — the backend gates edits on admin_users · Act; editing a superadmin
+                also needs the caller to be one (403 SUPERADMIN_REQUIRED → the global pop-up). */}
+            <>
                 <div className="au-detail-section-title" style={{ marginTop: 24 }}>Edit Account</div>
                 <div className="au-detail-edit-row">
                   <label className="au-modal-field" style={{ flex: 1 }}>
@@ -471,9 +478,13 @@ function AdminUserDetailModal({ userId, onClose, isSuperAdmin, currentUserEmail 
                       onChange={(e) => { setEditRole(e.target.value); dispatch(clearUpdateState()); }}
                       disabled={updateLoading || assignableRolesLoading}
                     >
+                      {/* Keep the admin's current role selectable even if it isn't listed. */}
+                      {!roleOptions.some((r) => r.name === editRole) && (
+                        <option value={editRole}>{editRole ? adminRoleLabel(selectedUser) : 'Select a role'}</option>
+                      )}
                       {roleOptions.map((r) => (
                         <option key={r.id || r.name} value={r.name}>
-                          {roleBadgeText(r.name)}
+                          {roleOptionLabel(r)}
                         </option>
                       ))}
                     </select>
@@ -494,7 +505,7 @@ function AdminUserDetailModal({ userId, onClose, isSuperAdmin, currentUserEmail 
                   </label>
                 </div>
 
-                {updateError && (
+                {updateError && !isPermissionDenied(updateError) && (
                   <div className="au-modal-error" style={{ marginTop: 10 }}>{updateError}</div>
                 )}
                 {updateSuccess && (
@@ -513,23 +524,14 @@ function AdminUserDetailModal({ userId, onClose, isSuperAdmin, currentUserEmail 
                     onClick={handleSave}
                     disabled={
                       updateLoading ||
-                      (editRole === selectedUser.role && editStatus === selectedUser.status)
+                      (editRole === originalRole && editStatus === selectedUser.status)
                     }
                   >
                     {updateLoading ? <span className="au-mini-spin" /> : null}
                     {updateLoading ? 'Saving…' : 'Save Changes'}
                   </button>
                 </div>
-              </>
-            )}
-
-            {!canEdit && (
-              <div className="au-modal-actions" style={{ marginTop: 24 }}>
-                <button type="button" className="au-cancel-btn" onClick={onClose}>
-                  Close
-                </button>
-              </div>
-            )}
+            </>
           </>
         )}
       </div>
@@ -540,13 +542,10 @@ function AdminUserDetailModal({ userId, onClose, isSuperAdmin, currentUserEmail 
 
 export default function AdminUsersPage() {
   const dispatch = useDispatch();
-  const { user: me } = useSelector((s) => s.auth);
   const { users, total, page, pageSize, stats, loading, error, statsLoading, statsError, filters } = useSelector(
     (s) => s.adminUsers
   );
-  const canView = true; // access viewer+; enforced via backend
-  const canCreate = me?.role === 'superadmin';
-  const isSuperAdmin = me?.role === 'superadmin';
+  const { assignableRoles } = useSelector((s) => s.adminUsers);
   const [showCreate, setShowCreate] = useState(false);
   const [toast, setToast] = useState(null);
   const [search, setSearch] = useState('');
@@ -612,8 +611,6 @@ export default function AdminUsersPage() {
   }, [dispatch]);
 
   useEffect(() => {
-    if (!canView) return;
-
     dispatch(
       fetchAdminUsers({
         role: filters.role !== 'all' ? filters.role : undefined,
@@ -622,7 +619,7 @@ export default function AdminUsersPage() {
         page_size: filters.page_size,
       })
     );
-  }, [dispatch, filters.role, filters.status, filters.page, filters.page_size, canView]);
+  }, [dispatch, filters.role, filters.status, filters.page, filters.page_size]);
 
   const handleRole = (value) => {
     dispatch(setFilters({ role: value, page: 1 }));
@@ -633,7 +630,7 @@ export default function AdminUsersPage() {
   };
 
   const refreshCurrentPage = () => {
-    dispatch(fetchAdminUsersStats());
+    dispatch(fetchAdminUsersStats({ force: true }));
     dispatch(
       fetchAdminUsers({
         role: filters.role !== 'all' ? filters.role : undefined,
@@ -676,18 +673,19 @@ export default function AdminUsersPage() {
             dispatch(clearCreateState());
             setShowCreate(true);
           }}
-          disabled={!canCreate}
-          title={canCreate ? 'Create new admin user' : 'Only Super Admin can create admin users'}
+          title="Create new admin user"
         >
           <PlusIcon /> Create New User
         </button>
       </div>
 
       <div className="au-stats-grid">
-        {statsLoading ? (
+        {statsLoading && !stats ? (
           <div className="au-loading-row">Loading stats…</div>
         ) : statsError ? (
-          <div className="au-error-row">Failed to load stats: {statsError}</div>
+          isPermissionDenied(statsError)
+            ? <AccessDenied message={statsError} compact />
+            : <div className="au-error-row">Failed to load stats: {statsError}</div>
         ) : (
           statsCards.map((c) => (
             <StatsGroupCard
@@ -725,9 +723,10 @@ export default function AdminUsersPage() {
               className="au-select"
             >
               <option value="all">All</option>
-              <option value="viewer">Viewer</option>
-              <option value="admin">Admin</option>
-              <option value="superadmin">Super Admin</option>
+              {/* Every portal role, including ones made on Roles & Permissions. */}
+              {assignableRoles.map((r) => (
+                <option key={r.id || r.name} value={r.name}>{roleOptionLabel(r)}</option>
+              ))}
             </select>
           </div>
 
@@ -750,7 +749,7 @@ export default function AdminUsersPage() {
         {loading ? (
           <div className="au-loading-wrap">Loading admin users…</div>
         ) : error ? (
-          <div className="au-error-wrap">{error}</div>
+          isPermissionDenied(error) ? <AccessDenied message={error} /> : <div className="au-error-wrap">{error}</div>
         ) : (
           <div className="au-table-scroll">
             <table className="au-table">
@@ -790,7 +789,7 @@ export default function AdminUsersPage() {
                       </td>
                       <td>
                         <span className={`au-role-pill role-${(u.role || 'viewer').toLowerCase()}`}>
-                          {roleBadgeText(u.role)}
+                          {adminRoleLabel(u)}
                         </span>
                       </td>
                       <td>
@@ -853,8 +852,6 @@ export default function AdminUsersPage() {
       {detailUserId && (
         <AdminUserDetailModal
           userId={detailUserId}
-          isSuperAdmin={isSuperAdmin}
-          currentUserEmail={me?.email}
           onClose={() => setDetailUserId(null)}
         />
       )}
