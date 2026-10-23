@@ -372,6 +372,7 @@ export default function Sidebar({
                     return (
                       <button
                         key={subItem.id}
+                        title={subItem.label}
                         className={`nav-subitem${activeSub === subItem.id ? ' active' : ''}`}
                         onClick={() => {
                           if (item.id === 'home') { onNavigate(item.page); onDashboardTabChange(subItem.id); }

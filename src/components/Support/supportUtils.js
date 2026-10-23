@@ -64,17 +64,20 @@ export const SLA_META = {
   met:      { label: 'Met',      tone: 'green' },
 };
 
+// Each entry is a queue preset; `preset` overrides the default { view: id }.
 export const SAVED_VIEWS = [
-  { id: 'all_open',       label: 'All open',          countKey: 'open',           icon: 'inbox' },
-  { id: 'mine',           label: 'My tickets',        countKey: 'mine',           icon: 'user' },
-  { id: 'unassigned',     label: 'Unassigned',        countKey: 'unassigned',     icon: 'userPlus' },
-  { id: 'awaiting_user',  label: 'Awaiting user',     countKey: 'awaiting_user',  icon: 'hourglass' },
-  { id: 'on_hold',        label: 'On hold',           countKey: 'on_hold',        icon: 'pause' },
-  { id: 'sla_breached',   label: 'SLA breached',      countKey: 'sla_breached',   icon: 'alert', alert: true },
-  { id: 'recovery',       label: 'Recovery requests', icon: 'shield' },
-  { id: 'resolved_today', label: 'Resolved today',    countKey: 'resolved_today', icon: 'check' },
-  { id: 'resolved',       label: 'Resolved',          icon: 'checkCircle' },
-  { id: 'closed',         label: 'Closed',            icon: 'archive' },
+  { id: 'all_open',       label: 'All open',          countKey: 'open',           icon: 'inbox',     hint: 'Every active ticket' },
+  { id: 'mine',           label: 'My tickets',        countKey: 'mine',           icon: 'user',      hint: 'Assigned to you' },
+  { id: 'unassigned',     label: 'Unassigned',        countKey: 'unassigned',     icon: 'userPlus',  hint: 'Needs an owner' },
+  { id: 'awaiting_user',  label: 'Awaiting user',     countKey: 'awaiting_user',  icon: 'hourglass', hint: 'Waiting on the user — SLA clock paused' },
+  { id: 'on_hold',        label: 'On hold',           countKey: 'on_hold',        icon: 'pause',     hint: 'Blocked internally — SLA clock paused' },
+  { id: 'sla_at_risk',    label: 'SLA at risk',       countKey: 'sla_at_risk',    icon: 'clock',     hint: 'Close to the SLA deadline', warn: true,
+    preset: { view: 'all_open', sla_state: 'at_risk' } },
+  { id: 'sla_breached',   label: 'SLA breached',      countKey: 'sla_breached',   icon: 'alert',     hint: 'Past the SLA deadline', alert: true },
+  { id: 'recovery',       label: 'Recovery requests', icon: 'shield',      hint: 'Device and account recovery requests' },
+  { id: 'resolved_today', label: 'Resolved today',    countKey: 'resolved_today', icon: 'check',     hint: 'Resolved since midnight' },
+  { id: 'resolved',       label: 'Resolved',          icon: 'checkCircle', hint: 'Fixed — closes automatically later' },
+  { id: 'closed',         label: 'Closed',            icon: 'archive',     hint: 'Final' },
 ];
 
 export const SORT_OPTIONS = [
@@ -143,11 +146,14 @@ export const fmtDate = (iso) => {
   return new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
+// The year is left out for this year's dates so the value fits on one line in narrow panels.
 export const fmtDateTime = (iso) => {
   const t = toMs(iso);
   if (Number.isNaN(t)) return '—';
-  return new Date(t).toLocaleString(undefined, {
-    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  const d = new Date(t);
+  return d.toLocaleString(undefined, {
+    day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+    ...(d.getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' }),
   });
 };
 

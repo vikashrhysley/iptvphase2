@@ -80,7 +80,7 @@ function CustomerContext({ ticket, now, onOpenTicket }) {
         )}
       >
         <div className="gh-ctx-person">
-          <Avatar name={name} size={40} />
+          <Avatar name={name} size={30} />
           <div className="gh-ctx-person-text">
             <div className="gh-ctx-name">{name}</div>
             {email && (

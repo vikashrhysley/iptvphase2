@@ -127,7 +127,7 @@ function MessageItem({ message: m, mentionNames, onRetry, retrying, onOpenAttach
   const name = m.author_name || (kind === 'user' ? 'User' : 'Support');
   return (
     <div className={`gh-msg gh-msg-${kind}`}>
-      <Avatar name={name} size={32} tone={kind === 'note' ? 'amber' : kind === 'admin' ? 'blue' : undefined} className="gh-msg-avatar" />
+      <Avatar name={name} size={24} tone={kind === 'note' ? 'amber' : kind === 'admin' ? 'blue' : undefined} className="gh-msg-avatar" />
       <div className="gh-msg-main">
         <div className="gh-msg-head">
           {kind === 'note' && <span className="gh-note-tag"><LockIcon size={11} /> Internal note</span>}

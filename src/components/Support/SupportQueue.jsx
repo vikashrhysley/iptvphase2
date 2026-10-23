@@ -1,4 +1,4 @@
-// Get Help — ticket queue: KPI strip, saved views, search / filters, table, bulk actions.
+// Get Help — ticket queue: saved views (with KPI counts), search / filters, table, bulk actions.
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import toast from 'react-hot-toast';
@@ -16,8 +16,8 @@ import {
   typeLabel, useNow, useVisibleInterval,
 } from './supportUtils';
 import {
-  Avatar, Badge, EmptyState, ErrorBanner, Field, Menu, MenuDivider, MenuItem, MenuLabel, Modal,
-  PriorityBadge, PriorityBars, SkeletonLines, SlaChip, Spinner, StatusBadge, TypeBadge,
+  Avatar, EmptyState, ErrorBanner, Field, Menu, MenuDivider, MenuItem, MenuLabel, Modal,
+  PriorityBadge, PriorityBars, SkeletonLines, SlaChip, Spinner, StatusBadge,
 } from './SupportUi';
 import {
   AlertOctagonIcon, ArchiveIcon, CheckCircleIcon, CheckIcon, ChevronDownIcon, ChevronLeftIcon,
@@ -32,21 +32,13 @@ const VIEW_ICONS = {
   userPlus: UserPlusIcon,
   hourglass: HourglassIcon,
   pause: PauseIcon,
+  clock: ClockIcon,
   alert: AlertOctagonIcon,
   shield: ShieldIcon,
   check: CheckIcon,
   checkCircle: CheckCircleIcon,
   archive: ArchiveIcon,
 };
-
-const KPI_TILES = [
-  { key: 'open',           label: 'Open',           tone: 'blue',   Icon: InboxIcon,        preset: { view: 'all_open' },                       hint: 'Every active ticket' },
-  { key: 'unassigned',     label: 'Unassigned',     tone: 'violet', Icon: UserPlusIcon,     preset: { view: 'unassigned' },                     hint: 'Needs an owner' },
-  { key: 'awaiting_user',  label: 'Awaiting user',  tone: 'cyan',   Icon: HourglassIcon,    preset: { view: 'awaiting_user' },                  hint: 'SLA clock paused' },
-  { key: 'sla_at_risk',    label: 'SLA at risk',    tone: 'amber',  Icon: ClockIcon,        preset: { view: 'all_open', sla_state: 'at_risk' }, hint: 'Close to the deadline' },
-  { key: 'sla_breached',   label: 'SLA breached',   tone: 'red',    Icon: AlertOctagonIcon, preset: { view: 'sla_breached' },                   hint: 'Past the deadline' },
-  { key: 'resolved_today', label: 'Resolved today', tone: 'green',  Icon: CheckCircleIcon,  preset: { view: 'resolved_today' },                 hint: 'Fixed since midnight' },
-];
 
 const FILTER_KEYS = ['status', 'priority', 'ticket_type', 'category', 'assignee', 'sla_state', 'date_from', 'date_to'];
 const activeFilterCount = (f) => FILTER_KEYS.filter((k) => !!f[k]).length;
@@ -142,7 +134,7 @@ export default function SupportQueue() {
   const dispatch = useDispatch();
   const accessToken = useSelector((s) => s.auth.accessToken);
   const {
-    filters, tickets, total, totalPages, loading, error, summary, summaryLoading, assignees,
+    filters, tickets, total, totalPages, loading, error, summary, assignees,
   } = useSelector((s) => s.support);
   const now = useNow(30_000);
 
@@ -262,51 +254,32 @@ export default function SupportQueue() {
     return <AccessDenied message={error} />;
   }
 
-  const tileActive = (preset) => filters.view === preset.view && (filters.sla_state || '') === (preset.sla_state || '');
+  // A view is a preset of { view, sla_state }; "SLA at risk" is All open narrowed to at-risk.
+  const presetOf = (v) => v.preset || { view: v.id };
+  const isActiveView = (v) => {
+    const p = presetOf(v);
+    return filters.view === p.view && (filters.sla_state || '') === (p.sla_state || '');
+  };
 
   return (
     <div className="gh-queue">
-      {/* KPI strip */}
-      <section className="gh-kpis" aria-label="Ticket summary">
-        {KPI_TILES.map(({ key, label, tone, Icon, preset, hint }) => {
-          const value = summary?.[key];
-          return (
-            <button
-              key={key}
-              type="button"
-              className={`gh-kpi tone-${tone}${tileActive(preset) ? ' active' : ''}`}
-              onClick={() => applyPreset(preset)}
-              title={`Show ${label.toLowerCase()} tickets`}
-            >
-              <span className="gh-kpi-icon"><Icon size={17} /></span>
-              <span className="gh-kpi-body">
-                <span className="gh-kpi-label">{label}</span>
-                <span className="gh-kpi-value">
-                  {value == null ? (summaryLoading ? <span className="gh-kpi-skel" /> : '—') : fmtNum(value)}
-                </span>
-                <span className="gh-kpi-hint">{hint}</span>
-              </span>
-            </button>
-          );
-        })}
-      </section>
-
       <div className="gh-queue-layout">
-        {/* Saved views */}
+        {/* Saved views — the counts here are the KPI summary */}
         <nav className="gh-rail" aria-label="Saved views">
           <div className="gh-rail-title">Views</div>
           {SAVED_VIEWS.map((v) => {
             const Icon = VIEW_ICONS[v.icon] || InboxIcon;
             const count = v.countKey ? summary?.[v.countKey] : null;
-            const active = filters.view === v.id && !filters.sla_state;
+            const active = isActiveView(v);
             return (
               <button
                 key={v.id}
                 type="button"
-                className={`gh-rail-item${active ? ' active' : ''}${v.alert && count > 0 ? ' alert' : ''}`}
-                onClick={() => applyPreset({ view: v.id }, { keepSearch: true })}
+                className={`gh-rail-item${active ? ' active' : ''}${v.alert && count > 0 ? ' alert' : ''}${v.warn && count > 0 ? ' warn' : ''}`}
+                onClick={() => applyPreset(presetOf(v), { keepSearch: true })}
+                title={v.hint}
               >
-                <Icon size={15} />
+                <Icon size={13} />
                 <span className="gh-rail-label">{v.label}</span>
                 {count != null && <span className="gh-rail-count">{fmtNum(count)}</span>}
               </button>
@@ -327,13 +300,13 @@ export default function SupportQueue() {
           {/* Toolbar */}
           <div className="gh-toolbar">
             <div className="gh-search">
-              <SearchIcon size={15} />
+              <SearchIcon size={13} />
               <input
                 type="search"
                 value={searchInput}
                 maxLength={200}
                 onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Search ticket #, email, name or subject"
+                placeholder="Search ticket no., email, name or subject"
                 aria-label="Search tickets"
               />
               {searchInput && (
@@ -348,8 +321,9 @@ export default function SupportQueue() {
                 className={`gh-btn subtle${filters.unread_only ? ' on' : ''}`}
                 onClick={() => updateFilters({ unread_only: !filters.unread_only })}
                 aria-pressed={filters.unread_only}
+                title="Only tickets that are new, or where the user replied since the team last opened them"
               >
-                <span className="gh-unread-dot" /> Unread only
+                <span className="gh-unread-dot" /> Unread
               </button>
               <button
                 type="button"
@@ -357,7 +331,7 @@ export default function SupportQueue() {
                 onClick={() => setFiltersOpen((o) => !o)}
                 aria-expanded={filtersOpen}
               >
-                <FilterIcon size={14} /> Filters
+                <FilterIcon size={12} /> Filters
                 {filterCount > 0 && <span className="gh-count-pill">{filterCount}</span>}
               </button>
               <label className="gh-sort">
@@ -542,7 +516,9 @@ export default function SupportQueue() {
                 ) : null}
               />
             ) : (
-              <table className="gh-table">
+              // The ticket type sits under the subject; on narrower screens Priority folds into small
+              // bars beside the ticket number, and below 760px every row becomes a stacked card.
+              <table className="gh-table gh-queue-table">
                 <thead>
                   <tr>
                     <th className="gh-col-check">
@@ -555,22 +531,23 @@ export default function SupportQueue() {
                         aria-label="Select all on this page"
                       />
                     </th>
-                    <th>Ticket</th>
-                    <th>Subject</th>
-                    <th>Requester</th>
-                    <th>Type</th>
-                    <th>Priority</th>
-                    <th>Status</th>
-                    <th>Assignee</th>
-                    <th>SLA</th>
-                    <th className="gh-col-right">Last activity</th>
+                    <th className="gh-c-ticket" title="Ticket number and when it last changed">Ticket</th>
+                    <th className="gh-c-subject">Subject</th>
+                    <th className="gh-c-user" title="The app user who asked for help">User</th>
+                    <th className="gh-c-pri">Priority</th>
+                    <th className="gh-c-status">Status</th>
+                    <th className="gh-c-assignee" title="Admin handling the ticket">Assigned to</th>
+                    <th className="gh-c-sla" title="Time left before the SLA deadline. Green = on track, amber = at risk, red = overdue, grey = paused while waiting on the user / on hold">SLA</th>
                   </tr>
                 </thead>
                 <tbody>
                   {tickets.map((t) => {
                     const isSel = selected.has(t.ticket_number);
                     const requester = t.user?.name || t.contact_email || '—';
-                    const reason = [t.reason_label || humanize(t.reason), t.category && humanize(t.category)].filter(Boolean).join(' · ');
+                    // "Device recovery · Device Blocked" — type first, duplicates (reason = category) dropped.
+                    const about = [typeLabel(t.ticket_type), t.reason_label || humanize(t.reason), t.category && humanize(t.category)]
+                      .filter((v, i, all) => v && all.findIndex((x) => x && x.toLowerCase() === v.toLowerCase()) === i)
+                      .join(' · ');
                     return (
                       <tr
                         key={t.ticket_number}
@@ -578,6 +555,7 @@ export default function SupportQueue() {
                         onClick={() => openTicket(t.ticket_number)}
                         onKeyDown={(e) => { if (e.key === 'Enter') openTicket(t.ticket_number); }}
                         tabIndex={0}
+                        title={t.is_unread ? 'Unread — new, or the user replied' : undefined}
                       >
                         <td className="gh-col-check" onClick={(e) => e.stopPropagation()}>
                           <input
@@ -588,41 +566,45 @@ export default function SupportQueue() {
                             aria-label={`Select ${t.ticket_number}`}
                           />
                         </td>
-                        <td>
+                        <td className="gh-c-ticket">
                           <div className="gh-ticket-no">
-                            {t.is_unread && <span className="gh-unread-dot" title="Unread — new, or the user replied" />}
+                            {t.is_unread && <span className="gh-unread-dot" />}
                             <span className="gh-mono">{t.ticket_number}</span>
+                            <span
+                              className={`gh-pri-inline gh-tone-text tone-${PRIORITY_META[t.priority]?.tone || 'muted'}`}
+                              title={`${priorityLabel(t.priority)} priority`}
+                            >
+                              <PriorityBars priority={t.priority} />
+                            </span>
                           </div>
-                          <div className="gh-sub" title={fmtDateTime(t.created_at)}>Opened {relTime(t.created_at, now)}</div>
+                          <div className="gh-sub" title={`Opened ${fmtDateTime(t.created_at)} · last activity ${fmtDateTime(t.last_activity_at)}`}>
+                            {relTime(t.last_activity_at || t.created_at, now)}
+                          </div>
                         </td>
-                        <td className="gh-col-subject">
-                          <div className="gh-subject">{t.subject || '(no subject)'}</div>
-                          <div className="gh-sub">{reason || '—'}</div>
+                        <td className="gh-c-subject">
+                          <div className="gh-subject" title={t.subject || ''}>{t.subject || '(no subject)'}</div>
+                          <div className="gh-sub" title={about}>{about || '—'}</div>
                         </td>
-                        <td>
+                        <td className="gh-c-user">
                           <div className="gh-person">
-                            <Avatar name={requester} size={26} />
+                            <Avatar name={requester} size={22} />
                             <div className="gh-person-text">
                               <div className="gh-person-name">{requester}</div>
                               <div className="gh-sub">{t.user ? (t.user.email || t.contact_email) : 'No account'}</div>
                             </div>
                           </div>
                         </td>
-                        <td><TypeBadge type={t.ticket_type} /></td>
-                        <td><PriorityBadge priority={t.priority} /></td>
-                        <td>
+                        <td className="gh-c-pri"><PriorityBadge priority={t.priority} /></td>
+                        <td className="gh-c-status">
                           <StatusBadge status={t.status} />
                           {t.resolution_code && <div className="gh-sub">{humanize(t.resolution_code)}</div>}
                         </td>
-                        <td>
+                        <td className="gh-c-assignee">
                           {t.assignee
-                            ? <span className="gh-assignee"><Avatar name={t.assignee.name} size={22} />{t.assignee.name}</span>
-                            : <Badge tone="muted">Unassigned</Badge>}
+                            ? <span className="gh-assignee"><Avatar name={t.assignee.name} size={18} />{t.assignee.name}</span>
+                            : <span className="gh-unassigned">Unassigned</span>}
                         </td>
-                        <td><SlaChip sla={t.sla} now={now} /></td>
-                        <td className="gh-col-right gh-nowrap" title={fmtDateTime(t.last_activity_at)}>
-                          {relTime(t.last_activity_at, now)}
-                        </td>
+                        <td className="gh-c-sla"><SlaChip sla={t.sla} now={now} /></td>
                       </tr>
                     );
                   })}
@@ -636,6 +618,13 @@ export default function SupportQueue() {
             <span className="gh-pager-info">
               {total ? <>Showing <strong>{from}–{to}</strong> of <strong>{fmtNum(total)}</strong></> : 'No tickets'}
             </span>
+            <span className="gh-legend-inline" aria-label="Colour key">
+              <span><span className="gh-unread-dot" /> Unread</span>
+              <span><span className="gh-dot tone-green" /> On track</span>
+              <span><span className="gh-dot tone-amber" /> At risk</span>
+              <span><span className="gh-dot tone-red" /> Overdue</span>
+              <span><span className="gh-dot tone-slate" /> Paused</span>
+            </span>
             <div className="gh-pager-right">
               <label className="gh-sort">
                 <span>Rows</span>
@@ -648,7 +637,7 @@ export default function SupportQueue() {
                 disabled={page <= 1 || loading}
                 onClick={() => updateFilters({ page: page - 1 })}
               >
-                <ChevronLeftIcon size={14} />
+                <ChevronLeftIcon size={12} />
               </button>
               <span className="gh-pager-page">Page {page} of {totalPages}</span>
               <button
@@ -656,7 +645,7 @@ export default function SupportQueue() {
                 disabled={page >= totalPages || loading}
                 onClick={() => updateFilters({ page: page + 1 })}
               >
-                <ChevronRightIcon size={14} />
+                <ChevronRightIcon size={12} />
               </button>
             </div>
           </footer>

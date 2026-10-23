@@ -30,8 +30,8 @@ const T = {
   r1:         '6px',
   r2:         '10px',
   r3:         '16px',
-  ff:         "'Syne', sans-serif",
-  fb:         "'DM Sans', sans-serif",
+  ff:         "'Poppins', sans-serif",
+  fb:         "'Poppins', sans-serif",
 };
 
 // ── Icons ─────────────────────────────────────────────────

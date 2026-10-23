@@ -375,7 +375,7 @@ export default function SupportTicketDetail({ ticketNumber }) {
             width={260}
             busy={busy === 'assign'}
             value={assigneeLabel
-              ? <span className="gh-assignee"><Avatar name={assigneeLabel} size={20} />{assigneeLabel}</span>
+              ? <span className="gh-assignee"><Avatar name={assigneeLabel} size={16} />{assigneeLabel}</span>
               : <span className="gh-muted">Unassigned</span>}
           >
             {({ close }) => (

@@ -26,16 +26,12 @@ export default function SupportPage({ tab = 'queue', onTabChange }) {
   const showDetail = current === 'queue' && !!activeTicket;
 
   return (
-    <div className="gh-scope gh-page">
+    // The Inbox list fills exactly one screen (no page scroll); other views scroll normally.
+    <div className={`gh-scope gh-page${current === 'queue' && !showDetail ? ' is-queue' : ''}`}>
       {!showDetail && (
         <header className="gh-hero">
-          <div className="gh-hero-left">
-            <span className="gh-hero-icon"><LifeBuoyIcon size={22} /></span>
-            <div>
-              <h1 className="gh-title">Support Ticket</h1>
-              <p className="gh-subtitle">{TAB_COPY[current]}</p>
-            </div>
-          </div>
+          {/* The top header already shows "Support Ticket / <tab>" — keep this row slim. */}
+          <h1 className="gh-sr-only">Support Ticket</h1>
           <nav className="gh-tabs" role="tablist" aria-label="Support Ticket sections">
             {SUPPORT_TABS.map((t) => {
               const Icon = TAB_ICONS[t.id];
@@ -48,13 +44,16 @@ export default function SupportPage({ tab = 'queue', onTabChange }) {
                   className={current === t.id ? 'active' : ''}
                   onClick={() => onTabChange?.(t.id)}
                 >
-                  <Icon size={14} />
+                  <Icon size={12} />
                   <span>{t.label}</span>
                   {t.id === 'queue' && unread > 0 && <span className="gh-tab-badge">{fmtNum(unread)}</span>}
                 </button>
               );
             })}
           </nav>
+          <p className="gh-subtitle" title={TAB_COPY[current]}>
+            <LifeBuoyIcon size={12} /><span>{TAB_COPY[current]}</span>
+          </p>
         </header>
       )}
 

@@ -46,7 +46,7 @@ function VolumeChart({ points }) {
   const [hover, setHover] = useState(null);
   const [asTable, setAsTable] = useState(false);
 
-  const H = 250;
+  const H = 200;
   const pad = { l: 40, r: 18, t: 14, b: 30 };
   const n = points.length;
   const totals = points.reduce((acc, p) => ({ created: acc.created + p.created, resolved: acc.resolved + p.resolved }), { created: 0, resolved: 0 });
@@ -116,7 +116,8 @@ function VolumeChart({ points }) {
                   </g>
                 );
               })}
-              {points.map((p, i) => (i % labelEvery === 0 || i === n - 1) && (
+              {/* Regular ticks plus the last day — a regular tick too close to the last one is skipped. */}
+              {points.map((p, i) => (i === n - 1 || (i % labelEvery === 0 && n - 1 - i >= Math.ceil(labelEvery / 2))) && (
                 <text key={p.date} x={x(i)} y={H - 8} className="gh-axis" textAnchor={i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'}>
                   {shortDate(p.date)}
                 </text>
@@ -303,21 +304,21 @@ export default function SupportAnalytics() {
         <div className={loading ? 'gh-dim' : ''}>
           {/* Headline stats */}
           <section className="gh-stats">
-            <StatTile icon={<InboxIcon size={16} />} tone="blue" label="Created" value={fmtNum(d.created)} sub="New tickets in range" />
-            <StatTile icon={<CheckCircleIcon size={16} />} tone="green" label="Resolved" value={fmtNum(d.resolved)} sub="Resolved in range" />
+            <StatTile icon={<InboxIcon size={14} />} tone="blue" label="Created" value={fmtNum(d.created)} sub="New tickets in range" />
+            <StatTile icon={<CheckCircleIcon size={14} />} tone="green" label="Resolved" value={fmtNum(d.resolved)} sub="Resolved in range" />
             <StatTile
-              icon={<ClockIcon size={16} />} tone="violet" label="First response · avg"
+              icon={<ClockIcon size={14} />} tone="violet" label="Avg first reply"
               value={fmtMinutes(d.first_response?.avg_minutes)}
               sub={`Median ${fmtMinutes(d.first_response?.median_minutes)} · ${fmtNum(d.first_response?.count ?? 0)} tickets`}
             />
             <StatTile
-              icon={<ClockIcon size={16} />} tone="cyan" label="Resolution · avg"
+              icon={<ClockIcon size={14} />} tone="cyan" label="Avg time to resolve"
               value={fmtMinutes(d.resolution?.avg_minutes)}
-              sub={`Median ${fmtMinutes(d.resolution?.median_minutes)} · excludes time waiting on the user`}
+              sub={`Median ${fmtMinutes(d.resolution?.median_minutes)} · excl. waiting on user`}
             />
             <ComplianceTile label="First-response SLA" pct={d.sla?.first_response_compliance_pct} />
             <ComplianceTile label="Resolution SLA" pct={d.sla?.resolution_compliance_pct} />
-            <StatTile icon={<RetryIcon size={16} />} tone="orange" label="Reopen rate" value={fmtPct(d.reopen_rate_pct)} sub="Resolved tickets the user reopened" />
+            <StatTile icon={<RetryIcon size={14} />} tone="orange" label="Reopen rate" value={fmtPct(d.reopen_rate_pct)} sub="Users who reopened" />
           </section>
 
           <div className="gh-an-grid two">
