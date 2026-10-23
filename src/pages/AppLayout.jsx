@@ -12,6 +12,7 @@ import { setLicenseFilters } from '../store/slices/licenseSlice';
 import { setFilters as setAdminUsersFilters } from '../store/slices/adminUsersSlice';
 import { setLogFilters as setHeartbeatLogFilters } from '../store/slices/heartbeatSlice';
 import { setAuditFilters } from '../store/slices/auditSlice';
+import { setActiveSupportTicket } from '../store/slices/supportSlice';
 
 const DashboardTable     = React.lazy(() => import('../components/Dashboard/DashboardTable'));
 const DevicePage         = React.lazy(() => import('../components/Device/DevicePage'));
@@ -31,6 +32,7 @@ const RiskPage           = React.lazy(() => import('../components/Risk/RiskPage'
 const InfraPage          = React.lazy(() => import('../components/Infra/InfraPage'));
 const MonitoringPage     = React.lazy(() => import('../components/Monitoring/MonitoringPage'));
 const NotificationsPage  = React.lazy(() => import('../components/Notifications/NotificationsPage'));
+const SupportPage        = React.lazy(() => import('../components/Support/SupportPage'));
 
 import './AppLayout.css';
 
@@ -96,6 +98,9 @@ export default function AppLayout() {
   );
   const [monitoringSection, setMonitoringSection] = useState(
     () => sessionStorage.getItem('monitoringSection') || null
+  );
+  const [supportTab, setSupportTab] = useState(
+    () => sessionStorage.getItem('supportTab') || 'queue'
   );
 
   // Client-side polling for the notification bell (unread-count + summary), paused on hidden tabs.
@@ -238,6 +243,14 @@ export default function AppLayout() {
     else sessionStorage.setItem('monitoringSection', sec);
   };
 
+  // Get Help tabs (Inbox / Analytics / Templates / Settings). Picking Inbox from the menu also
+  // closes an open ticket so it always lands on the queue.
+  const handleSupportTabChange = (tab, { fromMenu = false } = {}) => {
+    if (fromMenu && tab === 'queue') dispatch(setActiveSupportTicket(null));
+    setSupportTab(tab);
+    sessionStorage.setItem('supportTab', tab);
+  };
+
   const renderPage = () => {
     switch (activePage) {
       case 'home':    return <DashboardTable activeDashboardTab={dashboardTab}  setActivePage={setActivePage} setCollapsed={setCollapsed}/>;
@@ -258,6 +271,7 @@ export default function AppLayout() {
       case 'monitoring':       return <MonitoringPage view={monitoringSection} />;
       case 'notifications':    return <NotificationsPage />;
       case 'infra':            return <InfraPage view={infraSection} />;
+      case 'support':          return <SupportPage tab={supportTab} onTabChange={handleSupportTabChange} />;
       default:        return <DashboardTable />;
 
     }
@@ -279,12 +293,15 @@ export default function AppLayout() {
         onInfraSectionChange={handleInfraSectionChange}
         monitoringSection={monitoringSection}
         onMonitoringSectionChange={handleMonitoringSectionChange}
+        supportTab={supportTab}
+        onSupportTabChange={(tab) => handleSupportTabChange(tab, { fromMenu: true })}
         onNavigate={handleNavigate}
       />
       <Header
         activePage={activePage}
         dashboardTab={dashboardTab}
         analyticsTab={analyticsTab}
+        supportTab={supportTab}
         sidebarCollapsed={collapsed}
         onMenuToggle={() => setMobileNavOpen(o => !o)}
         onNavigate={handleNavigate}

@@ -18,6 +18,7 @@ import riskReducer       from './slices/riskSlice';
 import infraReducer      from './slices/infraSlice';
 import monitoringReducer from './slices/monitoringSlice';
 import notificationsReducer from './slices/notificationsSlice';
+import supportReducer    from './slices/supportSlice';
 
 export const store = configureStore({
   reducer: {
@@ -39,6 +40,7 @@ export const store = configureStore({
     infra:      infraReducer,
     monitoring: monitoringReducer,
     notifications: notificationsReducer,
+    support:    supportReducer,
   },
 });
 

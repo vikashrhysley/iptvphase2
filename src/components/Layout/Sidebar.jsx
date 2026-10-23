@@ -127,6 +127,17 @@ const MonitoringIcon = () => (
   </svg>
 );
 
+const GetHelpIcon = () => (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <circle cx="12" cy="12" r="10" />
+    <circle cx="12" cy="12" r="4" />
+    <line x1="4.93" y1="4.93" x2="9.17" y2="9.17" />
+    <line x1="14.83" y1="14.83" x2="19.07" y2="19.07" />
+    <line x1="14.83" y1="9.17" x2="19.07" y2="4.93" />
+    <line x1="4.93" y1="19.07" x2="9.17" y2="14.83" />
+  </svg>
+);
+
 const PlansIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" />
@@ -197,6 +208,15 @@ const MONITORING_SUB_ITEMS = [
   { id: 'alerts', label: 'Alerts' },
 ];
 
+const SUPPORT_SUB_ITEMS = [
+  { id: 'queue', label: 'Inbox' },
+  { id: 'analytics', label: 'Analytics' },
+  { id: 'templates', label: 'Templates' },
+  { id: 'settings', label: 'Settings' },
+];
+
+const PAGES_WITH_SUBMENU = new Set(['home', 'analytics', 'infra', 'monitoring', 'support']);
+
 const NAV_ITEMS = [
   { id: 'home', label: 'Dashboard', icon: <HomeIcon />, page: 'home', subItems: DASHBOARD_SUB_ITEMS },
   { id: 'admin_users', label: 'Admin Users', icon: <LockIconForSidebar />, page: 'admin_users' },
@@ -215,6 +235,7 @@ const NAV_ITEMS = [
   { id: 'infra', label: 'Infra', icon: <InfraIcon />, page: 'infra', subItems: INFRA_SUB_ITEMS },
   { id: 'audit', label: 'Audit Logs', icon: <AuditIcon />, page: 'audit' },
   { id: 'rbac', label: 'Roles & Permissions', icon: <RbacIcon />, page: 'rbac' },
+  { id: 'support', label: 'Support Ticket', icon: <GetHelpIcon />, page: 'support', subItems: SUPPORT_SUB_ITEMS },
 ];
 
 const roleLabel = (role) => {
@@ -247,23 +268,25 @@ export default function Sidebar({
   onInfraSectionChange,
   monitoringSection,
   onMonitoringSectionChange,
+  supportTab,
+  onSupportTabChange,
   onNavigate,
-  
+
 }) {
   const dispatch = useDispatch();
   const { user, loading: logoutLoading } = useSelector(s => s.auth);
+  // Unread Get Help tickets, from the console's last KPI fetch (0 until the page has loaded once).
+  const supportUnread = useSelector(s => s.support?.summary?.unread) || 0;
   // Wordmark comes in two cuts — light artwork for the dark theme, dark artwork for light.
   const { theme } = useTheme();
   const vodeonaiLogo = theme === 'dark' ? logoDark : logoLight;
   // Restore open submenu on page refresh based on which page is active
   const [openSubmenu, setOpenSubmenu] = useState(() => {
-    const pagesWithSubmenu = new Set(['home', 'analytics', 'infra', 'monitoring']);
-    return pagesWithSubmenu.has(activePage) ? activePage : null;
+    return PAGES_WITH_SUBMENU.has(activePage) ? activePage : null;
   });
 
   useEffect(() => {
-    const pagesWithSubmenu = new Set(['home', 'analytics', 'infra', 'monitoring']);
-    setOpenSubmenu(pagesWithSubmenu.has(activePage) ? activePage : null);
+    setOpenSubmenu(PAGES_WITH_SUBMENU.has(activePage) ? activePage : null);
   }, [activePage]);
 
   const profileUser = user || {};
@@ -325,8 +348,16 @@ export default function Sidebar({
                   onNavigate(item.page);
                 }}
               >
-                <span className="nav-icon">{item.icon}</span>
+                <span className="nav-icon">
+                  {item.icon}
+                  {item.id === 'support' && supportUnread > 0 && effectiveCollapsed && <span className="nav-dot" />}
+                </span>
                 <span className="nav-label">{item.label}</span>
+                {item.id === 'support' && supportUnread > 0 && !effectiveCollapsed && (
+                  <span className="nav-count" title={`${supportUnread} unread ticket${supportUnread === 1 ? '' : 's'}`}>
+                    {supportUnread > 99 ? '99+' : supportUnread}
+                  </span>
+                )}
                 {item.subItems && !effectiveCollapsed && (
                   <span className={`nav-caret${openSubmenu === item.id ? ' open' : ''}`}>
                     {openSubmenu === item.id ? <ChevronDownIcon /> : <ChevronRightIcon />}
@@ -337,16 +368,18 @@ export default function Sidebar({
               {item.subItems && openSubmenu === item.id && !effectiveCollapsed && (
                 <div className="nav-submenu">
                   {item.subItems.map(subItem => {
-                    const activeSub = item.id === 'home' ? dashboardTab : item.id === 'analytics' ? analyticsTab : item.id === 'infra' ? infraSection : item.id === 'monitoring' ? monitoringSection : null;
+                    const activeSub = item.id === 'home' ? dashboardTab : item.id === 'analytics' ? analyticsTab : item.id === 'infra' ? infraSection : item.id === 'monitoring' ? monitoringSection : item.id === 'support' ? supportTab : null;
                     return (
                       <button
                         key={subItem.id}
+                        title={subItem.label}
                         className={`nav-subitem${activeSub === subItem.id ? ' active' : ''}`}
                         onClick={() => {
                           if (item.id === 'home') { onNavigate(item.page); onDashboardTabChange(subItem.id); }
                           else if (item.id === 'analytics') { onNavigate(item.page); onAnalyticsTabChange(subItem.id); }
                           else if (item.id === 'infra') { onInfraSectionChange(subItem.id); }
                           else if (item.id === 'monitoring') { onMonitoringSectionChange(subItem.id); }
+                          else if (item.id === 'support') { onNavigate(item.page); onSupportTabChange?.(subItem.id); }
                         }}
                       >
                         {subItem.label}

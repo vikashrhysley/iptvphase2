@@ -31,7 +31,7 @@
   --shadow-elevated: 0 8px 48px rgba(0, 0, 0, 0.6);
   --shadow-glow: 0 0 24px rgba(0, 212, 255, 0.2);
 
-  --sidebar-width: 230px;
+  --sidebar-width: 212px;
   --sidebar-collapsed: 64px; /* fits the logo mark + collapse toggle side by side */
   --header-height: 60px;
 
@@ -43,8 +43,11 @@
   --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
 
-  --font-display: 'Raleway', sans-serif;
-  --font-body: 'Lato', sans-serif;
+  /* One typeface across the app (loaded in index.html). Bootstrap components read the --bs-* pair. */
+  --font-display: 'Poppins', sans-serif;
+  --font-body: 'Poppins', sans-serif;
+  --bs-body-font-family: 'Poppins', sans-serif;
+  --bs-font-sans-serif: 'Poppins', sans-serif;
 }
 /* ── Light mode overrides ────────────────────────────── */
 [data-theme="light"] {
@@ -97,7 +100,7 @@
 html { font-size: 16px; }
 
 body {
-  font-family: var(--font-body);
+  font-family: 'Poppins', sans-serif;
   background: var(--bg-void);
   color: var(--text-primary);
   line-height: 1.6;

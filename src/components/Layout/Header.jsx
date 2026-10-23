@@ -29,6 +29,14 @@ const PAGE_TITLES = {
   audit:           'Audit Logs',
   rbac:            'RBAC',
   notifications:   'Notifications',
+  support:         'Support Ticket',
+};
+
+const SUPPORT_TAB_TITLES = {
+  queue:     'Inbox',
+  analytics: 'Analytics',
+  templates: 'Templates',
+  settings:  'Settings',
 };
 
 const BellIcon = () => (
@@ -85,7 +93,7 @@ const MenuIcon = () => (
   </svg>
 );
 
-export default function Header({ activePage, dashboardTab, analyticsTab, sidebarCollapsed, onMenuToggle, onNavigate }) {
+export default function Header({ activePage, dashboardTab, analyticsTab, supportTab, sidebarCollapsed, onMenuToggle, onNavigate }) {
   const { user }   = useSelector(s => s.auth);
   const dispatch   = useDispatch();
   const { theme, toggleTheme } = useTheme();
@@ -139,6 +147,8 @@ export default function Header({ activePage, dashboardTab, analyticsTab, sidebar
     ? `/${dashboardTab === 'revenue' ? ' Revenue' : dashboardTab === 'overview' ? ' Overview' : ' Live Stats'}`
     : activePage === 'analytics'
     ? `/${analyticsTab === 'revenue' ? ' Revenue' : analyticsTab === 'users' ? ' Users' : analyticsTab === 'devices' ? ' Devices' : analyticsTab === 'licenses' ? ' Licenses' : analyticsTab === 'funnel' ? ' Funnel' : analyticsTab === 'churn' ? ' Churn' : ' Overview'}`
+    : activePage === 'support'
+    ? `/ ${SUPPORT_TAB_TITLES[supportTab] || 'Inbox'}`
     : '';
 
   return (
