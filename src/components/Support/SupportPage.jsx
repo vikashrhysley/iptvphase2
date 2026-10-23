@@ -32,11 +32,11 @@ export default function SupportPage({ tab = 'queue', onTabChange }) {
           <div className="gh-hero-left">
             <span className="gh-hero-icon"><LifeBuoyIcon size={22} /></span>
             <div>
-              <h1 className="gh-title">Get Help</h1>
+              <h1 className="gh-title">Support Ticket</h1>
               <p className="gh-subtitle">{TAB_COPY[current]}</p>
             </div>
           </div>
-          <nav className="gh-tabs" role="tablist" aria-label="Get Help sections">
+          <nav className="gh-tabs" role="tablist" aria-label="Support Ticket sections">
             {SUPPORT_TABS.map((t) => {
               const Icon = TAB_ICONS[t.id];
               return (

@@ -235,7 +235,7 @@ const NAV_ITEMS = [
   { id: 'infra', label: 'Infra', icon: <InfraIcon />, page: 'infra', subItems: INFRA_SUB_ITEMS },
   { id: 'audit', label: 'Audit Logs', icon: <AuditIcon />, page: 'audit' },
   { id: 'rbac', label: 'Roles & Permissions', icon: <RbacIcon />, page: 'rbac' },
-  { id: 'support', label: 'Get Help', icon: <GetHelpIcon />, page: 'support', subItems: SUPPORT_SUB_ITEMS },
+  { id: 'support', label: 'Support Ticket', icon: <GetHelpIcon />, page: 'support', subItems: SUPPORT_SUB_ITEMS },
 ];
 
 const roleLabel = (role) => {

@@ -29,7 +29,7 @@ const PAGE_TITLES = {
   audit:           'Audit Logs',
   rbac:            'RBAC',
   notifications:   'Notifications',
-  support:         'Get Help',
+  support:         'Support Ticket',
 };
 
 const SUPPORT_TAB_TITLES = {
